@@ -15,6 +15,7 @@ final class AppModel {
     var selectedProfileID: UUID?
     var apiKeyDraft = ""
     var settingsErrorMessage: String?
+    private var environmentStateRevision = 0
 
     private let launchAtLoginService: LaunchAtLoginService
     private var onboardingWindowController: NSWindowController?
@@ -69,11 +70,21 @@ final class AppModel {
     }
 
     var hasAPIKey: Bool {
-        keychainService.hasAPIKey()
+        _ = environmentStateRevision
+        return keychainService.hasAPIKey()
     }
 
     var accessibilityGranted: Bool {
-        accessibilityService.isTrusted(prompt: false)
+        _ = environmentStateRevision
+        return accessibilityService.isTrusted(prompt: false)
+    }
+
+    var appBundlePath: String {
+        Bundle.main.bundlePath
+    }
+
+    var isRunningFromDerivedData: Bool {
+        appBundlePath.contains("/DerivedData/")
     }
 
     func start() {
@@ -92,13 +103,15 @@ final class AppModel {
     func openOnboarding() {
         let rootView = OnboardingView(model: self)
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 460),
-            styleMask: [.titled, .closable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 860, height: 620),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.center()
         window.title = "Welcome to BuddyGrammar"
+        window.minSize = NSSize(width: 760, height: 560)
+        window.collectionBehavior.insert(.fullScreenPrimary)
         window.contentViewController = NSHostingController(rootView: rootView)
         window.isReleasedWhenClosed = false
 
@@ -118,6 +131,14 @@ final class AppModel {
         accessibilityService.openAccessibilitySettings()
     }
 
+    func revealCurrentAppInFinder() {
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: appBundlePath)
+    }
+
+    func refreshEnvironmentState() {
+        environmentStateRevision += 1
+    }
+
     func saveAPIKey() {
         do {
             let trimmed = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -130,6 +151,7 @@ final class AppModel {
         } catch {
             settingsErrorMessage = error.localizedDescription
         }
+        refreshEnvironmentState()
     }
 
     func runProfile(id: UUID) {

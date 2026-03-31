@@ -9,6 +9,7 @@ final class SettingsStoreTests: XCTestCase {
         let store = SettingsStore(defaults: suite)
 
         XCTAssertEqual(store.profiles.first?.id, PromptProfile.grammarProfileID)
+        XCTAssertEqual(store.profiles.first?.hotkey, PromptProfile.defaultGrammarHotkey)
     }
 
     func testProfilesPersistOrdering() {
@@ -21,5 +22,25 @@ final class SettingsStoreTests: XCTestCase {
 
         let reloaded = SettingsStore(defaults: suite)
         XCTAssertEqual(reloaded.profiles.first?.id, addedID)
+    }
+
+    func testGrammarProfileMigratesLegacyShortcut() throws {
+        let suite = UserDefaults(suiteName: #function)!
+        suite.removePersistentDomain(forName: #function)
+
+        let legacyProfile = PromptProfile(
+            id: PromptProfile.grammarProfileID,
+            name: "Grammar",
+            instruction: PromptProfile.grammar.instruction,
+            hotkey: PromptProfile.legacyGrammarHotkey,
+            isEnabled: true,
+            isBuiltIn: true
+        )
+
+        let data = try JSONEncoder().encode([legacyProfile])
+        suite.set(data, forKey: "BuddyGrammar.profiles")
+
+        let store = SettingsStore(defaults: suite)
+        XCTAssertEqual(store.profiles.first?.hotkey, PromptProfile.defaultGrammarHotkey)
     }
 }

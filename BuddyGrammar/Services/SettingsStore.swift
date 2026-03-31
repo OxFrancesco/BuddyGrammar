@@ -97,8 +97,26 @@ final class SettingsStore {
     }
 
     private func ensureBuiltInProfile() {
-        if !profiles.contains(where: { $0.id == PromptProfile.grammarProfileID }) {
+        guard let index = profiles.firstIndex(where: { $0.id == PromptProfile.grammarProfileID }) else {
             profiles.insert(.grammar, at: 0)
+            return
+        }
+
+        var grammarProfile = profiles[index]
+        var didChange = false
+
+        if !grammarProfile.isBuiltIn {
+            grammarProfile.isBuiltIn = true
+            didChange = true
+        }
+
+        if grammarProfile.hotkey == PromptProfile.legacyGrammarHotkey {
+            grammarProfile.hotkey = PromptProfile.defaultGrammarHotkey
+            didChange = true
+        }
+
+        if didChange {
+            profiles[index] = grammarProfile
         }
     }
 

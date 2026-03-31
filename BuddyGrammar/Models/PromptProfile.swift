@@ -9,6 +9,8 @@ struct PromptProfile: Identifiable, Codable, Hashable, Sendable {
     var isBuiltIn: Bool
 
     static let grammarProfileID = UUID(uuidString: "B48FDF75-0C5D-4A96-B48D-29D160C6B470")!
+    static let legacyGrammarHotkey = HotkeyDescriptor(keyCode: 5, modifiers: [.control, .option])
+    static let defaultGrammarHotkey = HotkeyDescriptor(keyCode: 3, modifiers: [.command, .shift])
 
     static let grammar = PromptProfile(
         id: grammarProfileID,
@@ -19,7 +21,7 @@ struct PromptProfile: Identifiable, Codable, Hashable, Sendable {
         Do not add explanations, quotes, prefixes, or suffixes.
         Return only the corrected text.
         """,
-        hotkey: HotkeyDescriptor(keyCode: 5, modifiers: [.control, .option]),
+        hotkey: defaultGrammarHotkey,
         isEnabled: true,
         isBuiltIn: true
     )
