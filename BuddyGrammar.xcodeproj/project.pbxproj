@@ -1,0 +1,551 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0B7F656BF22C2AC524E68726 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291281F679C782F42041C75E /* AppModel.swift */; };
+		104FD1525CED1C300068FE03 /* ProfileEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D5E9835860FA5DBCDCBD143 /* ProfileEditorView.swift */; };
+		368ED8DFF5DCC5B4DEEA74B8 /* PromptProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24BA96E7C16D49B0538BBC5E /* PromptProfile.swift */; };
+		3A55A9C309A5E73EA7BC1CDA /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C125CE81237FFB6068CFDB14 /* AppSettings.swift */; };
+		3B9B1FBAAF7B13D48C015D04 /* OpenRouterClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCBEA522FD27E02CB88EBC28 /* OpenRouterClient.swift */; };
+		40D5DF0FE19BE2B06B156381 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F8D7B0C705CBCF54997E43 /* AppDelegate.swift */; };
+		4899645D8A827F264EEBB648 /* BuddyGrammarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04514728AF25CFA7FA9F0BC3 /* BuddyGrammarApp.swift */; };
+		49B49CFBC90EFC16324F63B4 /* RewriteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9D411F40A1135B9000949C /* RewriteModels.swift */; };
+		4EA356080911925F32ABCCE0 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C3D7C55DF68CEF737684E5 /* KeychainService.swift */; };
+		5BD0701B1303A98F60F123C2 /* OverlayState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 145A2BECAE724E6725F145E1 /* OverlayState.swift */; };
+		5F908ED77C7C74941F817CE5 /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E074A18A6634D312DCDA6CE /* TestSupport.swift */; };
+		5FB9EE1C8AAD0B97CB65D604 /* HotkeyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 908D2AE224565B3F3CC3BFE1 /* HotkeyService.swift */; };
+		611CF422C61FE0FBAF278C9E /* LaunchAtLoginService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A305BF4FE3856ADA021A9EBF /* LaunchAtLoginService.swift */; };
+		73E4DCAD79C8ADB2EDA6C197 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FE7D0958D7D5C83B13F9AA4 /* OnboardingView.swift */; };
+		7C7E0FB9BD289CAD0FDAD1AF /* HotkeyDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9D6DCC3348591F36FDF1B6E /* HotkeyDescriptor.swift */; };
+		958FCD7EC13E388035C0E8FE /* OpenRouterClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB0B551AD0F880B1B6A02F6 /* OpenRouterClientTests.swift */; };
+		A558BD0E79E39A87BDFEE94D /* EventSimulationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E719D6E75F8753806BDAD870 /* EventSimulationService.swift */; };
+		AC47538A2BEA764099F9D971 /* ClipboardServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16271B2FC5E5812D9E39483F /* ClipboardServiceTests.swift */; };
+		BDFB82EF1ADBB4095AD163B8 /* HotkeyRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E2A8E0743E33B2844ED3BC /* HotkeyRecorderView.swift */; };
+		C186FDD2DB20A13F76A9E1B4 /* OverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909F4A991187056F8A28D562 /* OverlayView.swift */; };
+		C57558F1909DBA8252C90311 /* ClipboardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFEA136271E55DAC4050C406 /* ClipboardService.swift */; };
+		CCD857BCF97A72903A464F4E /* RewriteCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27B6991402183AD0E62F477B /* RewriteCoordinator.swift */; };
+		CEDB1DE8AD85213CA49FC868 /* HotkeyValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF316B8B882E8CB4E96F0FB1 /* HotkeyValidationTests.swift */; };
+		D7BB2F9D089560CC33096C4E /* AccessibilityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110A9F0B5791E5FE0B6EA441 /* AccessibilityService.swift */; };
+		E843FEC9D65A4AC948E59ED8 /* OverlayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 004D00B94408E1E96E35C2B2 /* OverlayManager.swift */; };
+		F6BE25C6B825DB0E6E010CE4 /* SelectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3160C56650E7901F8C3AFD52 /* SelectionService.swift */; };
+		F7BA2453E5647C3764E106D4 /* MenuBarContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2989CD27D097BBE591F008C2 /* MenuBarContentView.swift */; };
+		F911FD8A63BA95578E152E05 /* SettingsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98B9E4EC78C0C9DFA06298B4 /* SettingsStoreTests.swift */; };
+		FA7525C631D031AEA5750C0D /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95A76C2E024B8D9A5FAC2506 /* SettingsStore.swift */; };
+		FC7E9C4025A1BEED2A99716E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07C21333CC71CEBF1B10F536 /* SettingsView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		FF0025799D6E005BB800F38A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 04C5E9CF81BEF2259796D14E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2B83EFBBF5CD825E5C6A9216;
+			remoteInfo = BuddyGrammar;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		004D00B94408E1E96E35C2B2 /* OverlayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayManager.swift; sourceTree = "<group>"; };
+		04514728AF25CFA7FA9F0BC3 /* BuddyGrammarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyGrammarApp.swift; sourceTree = "<group>"; };
+		07C21333CC71CEBF1B10F536 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		110A9F0B5791E5FE0B6EA441 /* AccessibilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityService.swift; sourceTree = "<group>"; };
+		145A2BECAE724E6725F145E1 /* OverlayState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayState.swift; sourceTree = "<group>"; };
+		16271B2FC5E5812D9E39483F /* ClipboardServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardServiceTests.swift; sourceTree = "<group>"; };
+		24BA96E7C16D49B0538BBC5E /* PromptProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptProfile.swift; sourceTree = "<group>"; };
+		27B6991402183AD0E62F477B /* RewriteCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteCoordinator.swift; sourceTree = "<group>"; };
+		291281F679C782F42041C75E /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		2989CD27D097BBE591F008C2 /* MenuBarContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContentView.swift; sourceTree = "<group>"; };
+		3160C56650E7901F8C3AFD52 /* SelectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionService.swift; sourceTree = "<group>"; };
+		3E9D411F40A1135B9000949C /* RewriteModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteModels.swift; sourceTree = "<group>"; };
+		4EB0B551AD0F880B1B6A02F6 /* OpenRouterClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterClientTests.swift; sourceTree = "<group>"; };
+		5FE7D0958D7D5C83B13F9AA4 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		6E074A18A6634D312DCDA6CE /* TestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
+		908D2AE224565B3F3CC3BFE1 /* HotkeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyService.swift; sourceTree = "<group>"; };
+		909F4A991187056F8A28D562 /* OverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayView.swift; sourceTree = "<group>"; };
+		9161826D72F8255096E1EE40 /* BuddyGrammarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BuddyGrammarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		95A76C2E024B8D9A5FAC2506 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
+		98B9E4EC78C0C9DFA06298B4 /* SettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStoreTests.swift; sourceTree = "<group>"; };
+		98E2A8E0743E33B2844ED3BC /* HotkeyRecorderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderView.swift; sourceTree = "<group>"; };
+		9D5E9835860FA5DBCDCBD143 /* ProfileEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditorView.swift; sourceTree = "<group>"; };
+		9E0527CF127B6BAF75D21411 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A2C3D7C55DF68CEF737684E5 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
+		A305BF4FE3856ADA021A9EBF /* LaunchAtLoginService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginService.swift; sourceTree = "<group>"; };
+		B3FEDFF340325A43F2BC7FC6 /* BuddyGrammar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BuddyGrammar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B9F8D7B0C705CBCF54997E43 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		C125CE81237FFB6068CFDB14 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		CCBEA522FD27E02CB88EBC28 /* OpenRouterClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterClient.swift; sourceTree = "<group>"; };
+		CF316B8B882E8CB4E96F0FB1 /* HotkeyValidationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyValidationTests.swift; sourceTree = "<group>"; };
+		D9D6DCC3348591F36FDF1B6E /* HotkeyDescriptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyDescriptor.swift; sourceTree = "<group>"; };
+		E719D6E75F8753806BDAD870 /* EventSimulationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventSimulationService.swift; sourceTree = "<group>"; };
+		FFEA136271E55DAC4050C406 /* ClipboardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardService.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		32B09A2FB96D88288465CF3D /* BuddyGrammarTests */ = {
+			isa = PBXGroup;
+			children = (
+				16271B2FC5E5812D9E39483F /* ClipboardServiceTests.swift */,
+				CF316B8B882E8CB4E96F0FB1 /* HotkeyValidationTests.swift */,
+				4EB0B551AD0F880B1B6A02F6 /* OpenRouterClientTests.swift */,
+				98B9E4EC78C0C9DFA06298B4 /* SettingsStoreTests.swift */,
+				6E074A18A6634D312DCDA6CE /* TestSupport.swift */,
+			);
+			path = BuddyGrammarTests;
+			sourceTree = "<group>";
+		};
+		3DFED1958B350236BCC27CDF /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				9E0527CF127B6BAF75D21411 /* Info.plist */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		461278B094F178401E53718E /* App */ = {
+			isa = PBXGroup;
+			children = (
+				B9F8D7B0C705CBCF54997E43 /* AppDelegate.swift */,
+				291281F679C782F42041C75E /* AppModel.swift */,
+				04514728AF25CFA7FA9F0BC3 /* BuddyGrammarApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		4A82F77EFBBD8D9F4F5D20BA /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				98E2A8E0743E33B2844ED3BC /* HotkeyRecorderView.swift */,
+				2989CD27D097BBE591F008C2 /* MenuBarContentView.swift */,
+				5FE7D0958D7D5C83B13F9AA4 /* OnboardingView.swift */,
+				909F4A991187056F8A28D562 /* OverlayView.swift */,
+				9D5E9835860FA5DBCDCBD143 /* ProfileEditorView.swift */,
+				07C21333CC71CEBF1B10F536 /* SettingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		78A7869774D78CE0D6A49591 /* BuddyGrammar */ = {
+			isa = PBXGroup;
+			children = (
+				461278B094F178401E53718E /* App */,
+				A469794AC213015BA889750A /* Models */,
+				C0696BE4726F5FDEAF4627CA /* Services */,
+				3DFED1958B350236BCC27CDF /* Support */,
+				4A82F77EFBBD8D9F4F5D20BA /* Views */,
+			);
+			path = BuddyGrammar;
+			sourceTree = "<group>";
+		};
+		A469794AC213015BA889750A /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				C125CE81237FFB6068CFDB14 /* AppSettings.swift */,
+				D9D6DCC3348591F36FDF1B6E /* HotkeyDescriptor.swift */,
+				145A2BECAE724E6725F145E1 /* OverlayState.swift */,
+				24BA96E7C16D49B0538BBC5E /* PromptProfile.swift */,
+				3E9D411F40A1135B9000949C /* RewriteModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		C0696BE4726F5FDEAF4627CA /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				110A9F0B5791E5FE0B6EA441 /* AccessibilityService.swift */,
+				FFEA136271E55DAC4050C406 /* ClipboardService.swift */,
+				E719D6E75F8753806BDAD870 /* EventSimulationService.swift */,
+				908D2AE224565B3F3CC3BFE1 /* HotkeyService.swift */,
+				A2C3D7C55DF68CEF737684E5 /* KeychainService.swift */,
+				A305BF4FE3856ADA021A9EBF /* LaunchAtLoginService.swift */,
+				CCBEA522FD27E02CB88EBC28 /* OpenRouterClient.swift */,
+				004D00B94408E1E96E35C2B2 /* OverlayManager.swift */,
+				27B6991402183AD0E62F477B /* RewriteCoordinator.swift */,
+				3160C56650E7901F8C3AFD52 /* SelectionService.swift */,
+				95A76C2E024B8D9A5FAC2506 /* SettingsStore.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		DD3D94A659C6A0C5673CA5AE /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B3FEDFF340325A43F2BC7FC6 /* BuddyGrammar.app */,
+				9161826D72F8255096E1EE40 /* BuddyGrammarTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		F590677B8ADA65F06BDBB16F = {
+			isa = PBXGroup;
+			children = (
+				78A7869774D78CE0D6A49591 /* BuddyGrammar */,
+				32B09A2FB96D88288465CF3D /* BuddyGrammarTests */,
+				DD3D94A659C6A0C5673CA5AE /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0A2DA624B95E71A135BB902A /* BuddyGrammarTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 651AB47E85168083BFE229C1 /* Build configuration list for PBXNativeTarget "BuddyGrammarTests" */;
+			buildPhases = (
+				E312D77B536F12683D32664C /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				10FA5EEDD6B34BF512EE26BC /* PBXTargetDependency */,
+			);
+			name = BuddyGrammarTests;
+			packageProductDependencies = (
+			);
+			productName = BuddyGrammarTests;
+			productReference = 9161826D72F8255096E1EE40 /* BuddyGrammarTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		2B83EFBBF5CD825E5C6A9216 /* BuddyGrammar */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FD94AC696F160F45DF2E223F /* Build configuration list for PBXNativeTarget "BuddyGrammar" */;
+			buildPhases = (
+				FF5A3A27A90F60E483170343 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BuddyGrammar;
+			packageProductDependencies = (
+			);
+			productName = BuddyGrammar;
+			productReference = B3FEDFF340325A43F2BC7FC6 /* BuddyGrammar.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		04C5E9CF81BEF2259796D14E /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					0A2DA624B95E71A135BB902A = {
+						ProvisioningStyle = Automatic;
+					};
+					2B83EFBBF5CD825E5C6A9216 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = F60A2FB5E57D7D3F1D168566 /* Build configuration list for PBXProject "BuddyGrammar" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = F590677B8ADA65F06BDBB16F;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				2B83EFBBF5CD825E5C6A9216 /* BuddyGrammar */,
+				0A2DA624B95E71A135BB902A /* BuddyGrammarTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E312D77B536F12683D32664C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AC47538A2BEA764099F9D971 /* ClipboardServiceTests.swift in Sources */,
+				CEDB1DE8AD85213CA49FC868 /* HotkeyValidationTests.swift in Sources */,
+				958FCD7EC13E388035C0E8FE /* OpenRouterClientTests.swift in Sources */,
+				F911FD8A63BA95578E152E05 /* SettingsStoreTests.swift in Sources */,
+				5F908ED77C7C74941F817CE5 /* TestSupport.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FF5A3A27A90F60E483170343 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D7BB2F9D089560CC33096C4E /* AccessibilityService.swift in Sources */,
+				40D5DF0FE19BE2B06B156381 /* AppDelegate.swift in Sources */,
+				0B7F656BF22C2AC524E68726 /* AppModel.swift in Sources */,
+				3A55A9C309A5E73EA7BC1CDA /* AppSettings.swift in Sources */,
+				4899645D8A827F264EEBB648 /* BuddyGrammarApp.swift in Sources */,
+				C57558F1909DBA8252C90311 /* ClipboardService.swift in Sources */,
+				A558BD0E79E39A87BDFEE94D /* EventSimulationService.swift in Sources */,
+				7C7E0FB9BD289CAD0FDAD1AF /* HotkeyDescriptor.swift in Sources */,
+				BDFB82EF1ADBB4095AD163B8 /* HotkeyRecorderView.swift in Sources */,
+				5FB9EE1C8AAD0B97CB65D604 /* HotkeyService.swift in Sources */,
+				4EA356080911925F32ABCCE0 /* KeychainService.swift in Sources */,
+				611CF422C61FE0FBAF278C9E /* LaunchAtLoginService.swift in Sources */,
+				F7BA2453E5647C3764E106D4 /* MenuBarContentView.swift in Sources */,
+				73E4DCAD79C8ADB2EDA6C197 /* OnboardingView.swift in Sources */,
+				3B9B1FBAAF7B13D48C015D04 /* OpenRouterClient.swift in Sources */,
+				E843FEC9D65A4AC948E59ED8 /* OverlayManager.swift in Sources */,
+				5BD0701B1303A98F60F123C2 /* OverlayState.swift in Sources */,
+				C186FDD2DB20A13F76A9E1B4 /* OverlayView.swift in Sources */,
+				104FD1525CED1C300068FE03 /* ProfileEditorView.swift in Sources */,
+				368ED8DFF5DCC5B4DEEA74B8 /* PromptProfile.swift in Sources */,
+				CCD857BCF97A72903A464F4E /* RewriteCoordinator.swift in Sources */,
+				49B49CFBC90EFC16324F63B4 /* RewriteModels.swift in Sources */,
+				F6BE25C6B825DB0E6E010CE4 /* SelectionService.swift in Sources */,
+				FA7525C631D031AEA5750C0D /* SettingsStore.swift in Sources */,
+				FC7E9C4025A1BEED2A99716E /* SettingsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		10FA5EEDD6B34BF512EE26BC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2B83EFBBF5CD825E5C6A9216 /* BuddyGrammar */;
+			targetProxy = FF0025799D6E005BB800F38A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		3675B7F731D30B3A0125F695 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.francescooddo.BuddyGrammarTests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BuddyGrammar.app/Contents/MacOS/BuddyGrammar";
+			};
+			name = Release;
+		};
+		4DDBF6885486170D62409885 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		72D9EC00671FDDA480EC8A26 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BuddyGrammar/Support/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.francescooddo.BuddyGrammar;
+				PRODUCT_NAME = BuddyGrammar;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		B0B5B73945901E3BC8E7DDA4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.francescooddo.BuddyGrammarTests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BuddyGrammar.app/Contents/MacOS/BuddyGrammar";
+			};
+			name = Debug;
+		};
+		D24C6BB14EA2E3E94F6BBD4D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		EE3B10565C79F24B18EC52CE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BuddyGrammar/Support/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.francescooddo.BuddyGrammar;
+				PRODUCT_NAME = BuddyGrammar;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		651AB47E85168083BFE229C1 /* Build configuration list for PBXNativeTarget "BuddyGrammarTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B0B5B73945901E3BC8E7DDA4 /* Debug */,
+				3675B7F731D30B3A0125F695 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F60A2FB5E57D7D3F1D168566 /* Build configuration list for PBXProject "BuddyGrammar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D24C6BB14EA2E3E94F6BBD4D /* Debug */,
+				4DDBF6885486170D62409885 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FD94AC696F160F45DF2E223F /* Build configuration list for PBXNativeTarget "BuddyGrammar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EE3B10565C79F24B18EC52CE /* Debug */,
+				72D9EC00671FDDA480EC8A26 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 04C5E9CF81BEF2259796D14E /* Project object */;
+}
