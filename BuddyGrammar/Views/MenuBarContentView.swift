@@ -18,9 +18,10 @@ struct MenuBarContentView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack(spacing: 8) {
-                Image(systemName: "sparkles.rectangle.stack")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(primary)
+                Image("BrandLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 16, height: 16)
                 Text("BuddyGrammar")
                     .font(.system(size: 13, weight: .black, design: .rounded))
                     .foregroundStyle(fg)
@@ -129,5 +130,4 @@ private struct ProfileButton: View {
         .onHover { isHovered = $0 }
     }
 }
-
 
