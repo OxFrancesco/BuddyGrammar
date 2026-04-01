@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1C0A1A6A4F5B001100000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1C0A1A6A4F5B001100000002 /* Assets.xcassets */; };
 		0B7F656BF22C2AC524E68726 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291281F679C782F42041C75E /* AppModel.swift */; };
 		104FD1525CED1C300068FE03 /* ProfileEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D5E9835860FA5DBCDCBD143 /* ProfileEditorView.swift */; };
 		368ED8DFF5DCC5B4DEEA74B8 /* PromptProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24BA96E7C16D49B0538BBC5E /* PromptProfile.swift */; };
@@ -54,6 +55,7 @@
 		04514728AF25CFA7FA9F0BC3 /* BuddyGrammarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyGrammarApp.swift; sourceTree = "<group>"; };
 		07C21333CC71CEBF1B10F536 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		110A9F0B5791E5FE0B6EA441 /* AccessibilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityService.swift; sourceTree = "<group>"; };
+		1C0A1A6A4F5B001100000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		145A2BECAE724E6725F145E1 /* OverlayState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayState.swift; sourceTree = "<group>"; };
 		16271B2FC5E5812D9E39483F /* ClipboardServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardServiceTests.swift; sourceTree = "<group>"; };
 		24BA96E7C16D49B0538BBC5E /* PromptProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptProfile.swift; sourceTree = "<group>"; };
@@ -133,6 +135,7 @@
 			isa = PBXGroup;
 			children = (
 				461278B094F178401E53718E /* App */,
+				1C0A1A6A4F5B001100000002 /* Assets.xcassets */,
 				A469794AC213015BA889750A /* Models */,
 				C0696BE4726F5FDEAF4627CA /* Services */,
 				3DFED1958B350236BCC27CDF /* Support */,
@@ -214,6 +217,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = FD94AC696F160F45DF2E223F /* Build configuration list for PBXNativeTarget "BuddyGrammar" */;
 			buildPhases = (
+				1C0A1A6A4F5B001100000003 /* Resources */,
 				FF5A3A27A90F60E483170343 /* Sources */,
 			);
 			buildRules = (
@@ -265,6 +269,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1C0A1A6A4F5B001100000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1C0A1A6A4F5B001100000001 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		E312D77B536F12683D32664C /* Sources */ = {
