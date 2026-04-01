@@ -11,6 +11,7 @@ final class AppModel {
     let accessibilityService: AccessibilityService
     let hotkeyService: HotkeyService
     let rewriteCoordinator: RewriteCoordinator
+    let menuBarStatus: MenuBarStatusModel
 
     var selectedProfileID: UUID?
     var apiKeyDraft = ""
@@ -26,8 +27,7 @@ final class AppModel {
         let accessibilityService = AccessibilityService()
         let clipboardService = ClipboardService()
         let eventSimulationService = EventSimulationService()
-        let overlayModel = OverlayModel()
-        let overlayManager = OverlayManager(model: overlayModel)
+        let menuBarStatus = MenuBarStatusModel()
         let selectionService = SelectionService(
             accessibilityService: accessibilityService,
             clipboardService: clipboardService,
@@ -43,7 +43,7 @@ final class AppModel {
             clipboardService: clipboardService,
             eventSimulationService: eventSimulationService,
             openRouterClient: openRouterClient,
-            overlayManager: overlayManager
+            menuBarStatus: menuBarStatus
         )
 
         self.settingsStore = settingsStore
@@ -52,6 +52,7 @@ final class AppModel {
         self.hotkeyService = hotkeyService
         self.launchAtLoginService = launchAtLoginService
         self.rewriteCoordinator = rewriteCoordinator
+        self.menuBarStatus = menuBarStatus
         self.selectedProfileID = settingsStore.profiles.first?.id
         self.apiKeyDraft = keychainService.loadAPIKey() ?? ""
 
@@ -96,8 +97,12 @@ final class AppModel {
     }
 
     func openSettings() {
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate()
+        if #available(macOS 14, *) {
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        } else {
+            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+        }
     }
 
     func openOnboarding() {

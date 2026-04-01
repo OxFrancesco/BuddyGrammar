@@ -43,4 +43,25 @@ final class SettingsStoreTests: XCTestCase {
         let store = SettingsStore(defaults: suite)
         XCTAssertEqual(store.profiles.first?.hotkey, PromptProfile.defaultGrammarHotkey)
     }
+
+    func testSettingsLoadWhenLegacyOverlayMotionModeIsPresent() throws {
+        let suite = UserDefaults(suiteName: #function)!
+        suite.removePersistentDomain(forName: #function)
+
+        let legacyJSON = """
+        {
+          "outputMode": "copyToClipboard",
+          "launchAtLogin": true,
+          "overlayMotionMode": "full",
+          "hasCompletedOnboarding": true
+        }
+        """
+
+        suite.set(Data(legacyJSON.utf8), forKey: "BuddyGrammar.settings")
+
+        let store = SettingsStore(defaults: suite)
+        XCTAssertEqual(store.appSettings.outputMode, .copyToClipboard)
+        XCTAssertTrue(store.appSettings.launchAtLogin)
+        XCTAssertTrue(store.appSettings.hasCompletedOnboarding)
+    }
 }

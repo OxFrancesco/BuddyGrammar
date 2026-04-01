@@ -12,9 +12,12 @@ struct BuddyGrammarApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("BuddyGrammar", systemImage: "text.redaction") {
+        MenuBarExtra {
             MenuBarContentView(model: model)
+        } label: {
+            MenuBarStatusLabel(status: model.menuBarStatus)
         }
+        .menuBarExtraStyle(.window)
 
         Settings {
             SettingsView(model: model)

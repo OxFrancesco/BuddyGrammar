@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
 
+// MARK: - OnboardingView
+
 struct OnboardingView: View {
     enum Step: Int, CaseIterable, Identifiable {
         case welcome
@@ -65,59 +67,89 @@ struct OnboardingView: View {
     @State private var accessibilitySecondsUntilRetry = 0
 
     var body: some View {
-        HStack(spacing: 28) {
+        HStack(spacing: 0) {
             progressRail
-                .frame(width: 220)
+                .frame(width: 230)
+                .padding(20)
 
-            VStack(alignment: .leading, spacing: 24) {
+            Divider()
+                .frame(width: NeoTheme.borderWidth)
+                .background(NeoTheme.foreground)
+                .padding(.vertical, 20)
+
+            VStack(alignment: .leading, spacing: 0) {
                 header
+                    .padding(.horizontal, 28)
+                    .padding(.top, 24)
+                    .padding(.bottom, 20)
+
+                Divider()
+                    .frame(height: NeoTheme.borderWidth)
+                    .background(NeoTheme.border)
+                    .padding(.horizontal, 28)
 
                 ZStack {
                     stepContent
                         .id(currentStep)
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                        .transition(.opacity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(28)
+
+                Divider()
+                    .frame(height: NeoTheme.borderWidth)
+                    .background(NeoTheme.border)
+                    .padding(.horizontal, 28)
 
                 footer
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 16)
             }
+            .frame(maxWidth: .infinity)
         }
-        .padding(28)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color(red: 0.14, green: 0.16, blue: 0.23),
-                    Color(red: 0.08, green: 0.10, blue: 0.14)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .foregroundStyle(.white)
-        .animation(.easeInOut(duration: 0.22), value: currentStep)
+        .background(NeoTheme.background)
+        .foregroundStyle(NeoTheme.foreground)
+        .animation(.easeInOut(duration: 0.18), value: currentStep)
         .onAppear {
             model.refreshEnvironmentState()
         }
     }
 
+    // MARK: - Header
+
     private var header: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("BuddyGrammar")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-            Text(currentStep.title)
-                .font(.system(size: 28, weight: .semibold, design: .rounded))
-            Text(currentStep.detail)
-                .font(.title3)
-                .foregroundStyle(.white.opacity(0.72))
+        HStack(spacing: 12) {
+            Image(systemName: currentStep.symbol)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(NeoTheme.primary)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(currentStep.title)
+                    .font(.system(size: 22, weight: .black, design: .rounded))
+                    .tracking(-0.3)
+                Text(currentStep.detail)
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(NeoTheme.mutedForeground)
+            }
         }
     }
 
+    // MARK: - Progress Rail
+
     private var progressRail: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("BuddyGrammar")
+                .font(.system(size: 18, weight: .black, design: .rounded))
+                .tracking(-0.3)
+                .foregroundStyle(NeoTheme.foreground)
+
             Text("Setup")
-                .font(.headline)
-                .foregroundStyle(.white.opacity(0.82))
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .tracking(1.2)
+                .textCase(.uppercase)
+                .foregroundStyle(NeoTheme.mutedForeground)
+                .padding(.top, 4)
 
             ForEach(Step.allCases) { step in
                 Button {
@@ -125,36 +157,50 @@ struct OnboardingView: View {
                         currentStep = step
                     }
                 } label: {
-                    HStack(alignment: .top, spacing: 12) {
+                    HStack(spacing: 10) {
                         ZStack {
-                            Circle()
+                            RoundedRectangle(cornerRadius: 4)
                                 .fill(stepAccentColor(step))
-                                .frame(width: 30, height: 30)
+                                .frame(width: 28, height: 28)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(NeoTheme.foreground, lineWidth: NeoTheme.borderWidth)
+                                )
                             Image(systemName: stepIcon(step))
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(stepIconColor(step))
                         }
 
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 1) {
                             Text(step.title)
-                                .font(.headline)
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
                             Text(step.detail)
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.65))
+                                .font(.system(size: 10, design: .rounded))
+                                .foregroundStyle(NeoTheme.mutedForeground)
+                                .lineLimit(2)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
-                    .background(.white.opacity(currentStep == step ? 0.14 : 0.06), in: RoundedRectangle(cornerRadius: 18))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 18)
-                            .strokeBorder(.white.opacity(currentStep == step ? 0.16 : 0.08))
-                    }
+                    .padding(10)
+                    .background(currentStep == step ? NeoTheme.muted : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                            .stroke(
+                                currentStep == step ? NeoTheme.foreground : Color.clear,
+                                lineWidth: currentStep == step ? NeoTheme.borderWidth : 0
+                            )
+                    )
                 }
                 .buttonStyle(.plain)
                 .disabled(!canJump(to: step))
             }
+
+            Spacer()
         }
     }
+
+    // MARK: - Step Content
 
     @ViewBuilder
     private var stepContent: some View {
@@ -172,164 +218,92 @@ struct OnboardingView: View {
         }
     }
 
+    // MARK: - Welcome
+
     private var welcomeStep: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            onboardingPanel {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("BuddyGrammar lives in the menu bar, grabs the text you selected, sends it to OpenRouter, and gives you back cleaner writing in a single shortcut.")
-                        .font(.title3)
+        neoCard {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Grab selected text, fix it with AI, paste it back — one shortcut.")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
 
-                    HStack(spacing: 14) {
-                        featurePill(symbol: "keyboard", title: "Default shortcut", detail: "⌘⇧F")
-                        featurePill(symbol: "arrow.trianglehead.2.clockwise.rotate.90", title: "Fixed model", detail: "openai/gpt-5.4-nano")
-                        featurePill(symbol: "sparkles.rectangle.stack", title: "Overlay", detail: "Top live status")
-                    }
-
-                    Text("This setup will walk through the required permissions first, then show the basic rewrite flow.")
-                        .foregroundStyle(.white.opacity(0.74))
+                HStack(spacing: 12) {
+                    featurePill(symbol: "keyboard", label: "⌘⇧F")
+                    featurePill(symbol: "cpu", label: "gpt-5.4-nano")
+                    featurePill(symbol: "menubar.rectangle", label: "Menu bar")
                 }
             }
         }
     }
+
+    // MARK: - API Key
 
     private var apiKeyStep: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            onboardingPanel {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Paste your OpenRouter API key. BuddyGrammar stores it in Keychain and uses it for every prompt profile.")
-                        .font(.title3)
+        neoCard {
+            VStack(alignment: .leading, spacing: 14) {
+                SecureField("OpenRouter API Key", text: $model.apiKeyDraft)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .padding(10)
+                    .background(NeoTheme.muted)
+                    .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                            .stroke(NeoTheme.foreground, lineWidth: NeoTheme.borderWidth)
+                    )
 
-                    SecureField("OpenRouter API Key", text: $model.apiKeyDraft)
-                        .textFieldStyle(.roundedBorder)
+                Button("Save Key") {
+                    model.saveAPIKey()
+                }
+                .buttonStyle(NeoBrutalistButton())
 
-                    HStack(spacing: 12) {
-                        Button("Save Key") {
-                            model.saveAPIKey()
-                        }
-                        .buttonStyle(.borderedProminent)
+                if model.hasAPIKey {
+                    neoStatusBadge(text: "Key saved", icon: "checkmark.circle.fill", color: NeoTheme.green)
+                } else {
+                    neoStatusBadge(text: "No key yet", icon: "exclamationmark.triangle.fill", color: NeoTheme.orange)
+                }
 
-                        Button("Open Settings") {
-                            model.openSettings()
-                        }
-                        .buttonStyle(.bordered)
-                    }
-
-                    if model.hasAPIKey {
-                        Label("API key saved in Keychain.", systemImage: "checkmark.shield.fill")
-                            .foregroundStyle(.green)
-                    } else {
-                        Label("No API key saved yet.", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                    }
-
-                    if let settingsErrorMessage = model.settingsErrorMessage {
-                        Text(settingsErrorMessage)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    Text("Provider and model are fixed in v1: OpenRouter + `openai/gpt-5.4-nano`.")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.68))
+                if let settingsErrorMessage = model.settingsErrorMessage {
+                    neoStatusBadge(text: settingsErrorMessage, icon: "xmark.circle.fill", color: NeoTheme.destructive)
                 }
             }
         }
     }
 
+    // MARK: - Accessibility
+
     private var accessibilityStep: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            onboardingPanel {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("BuddyGrammar needs Accessibility permission to read selected text from other apps and paste corrected text back when replace mode is enabled.")
-                        .font(.title3)
+        neoCard {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Enable Accessibility so BuddyGrammar can read and replace selected text.")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        permissionRow(
-                            title: "Accessibility",
-                            detail: "Required. Lets BuddyGrammar read selected text and replace it in other apps."
-                        )
-                        permissionRow(
-                            title: "Network access",
-                            detail: "Used to send the selected text to OpenRouter for rewriting."
-                        )
-                        permissionRow(
-                            title: "Keychain storage",
-                            detail: "Used to store your OpenRouter API key securely on this Mac."
-                        )
+                HStack(spacing: 10) {
+                    Button("Open Accessibility Settings") {
+                        model.openAccessibilitySettings()
+                        accessibilityCheckTrigger += 1
                     }
+                    .buttonStyle(NeoBrutalistButton())
 
-                    HStack(spacing: 12) {
-                        Button("Open Accessibility Settings") {
-                            model.openAccessibilitySettings()
-                            accessibilityCheckTrigger += 1
-                        }
-                        .buttonStyle(.borderedProminent)
-
-                        Button("Check Again") {
-                            accessibilityCheckTrigger += 1
-                        }
-                        .buttonStyle(.bordered)
+                    Button("Check Again") {
+                        accessibilityCheckTrigger += 1
                     }
+                    .buttonStyle(NeoBrutalistButton(isPrimary: false))
+                }
 
-                    if model.accessibilityGranted {
-                        Label("Accessibility permission is enabled.", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                    } else {
-                        Label("Accessibility is still required.", systemImage: "hand.raised.circle.fill")
-                            .foregroundStyle(.orange)
-                    }
+                if model.accessibilityGranted {
+                    neoStatusBadge(text: "Permission enabled", icon: "checkmark.circle.fill", color: NeoTheme.green)
+                } else {
+                    neoStatusBadge(text: "Permission required", icon: "hand.raised.circle.fill", color: NeoTheme.orange)
+                }
 
-                    if isAccessibilityChecking {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label("Waiting for macOS to apply the permission.", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                                .foregroundStyle(.white.opacity(0.88))
-                            Text("BuddyGrammar rechecks automatically when you come back from System Settings.")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.72))
-
-                            if accessibilityCheckAttempt > 0 {
-                                Text("Attempt \(accessibilityCheckAttempt) of 5")
-                                    .font(.caption)
-                                    .foregroundStyle(.white.opacity(0.72))
-                            }
-
-                            if accessibilitySecondsUntilRetry > 0 {
-                                Text("Next retry in \(accessibilitySecondsUntilRetry)s")
-                                    .font(.caption)
-                                    .foregroundStyle(.white.opacity(0.72))
-                            }
-                        }
-                    } else if accessibilityCheckAttempt == 5 && !model.accessibilityGranted {
-                        Text("No change detected after 5 checks. If you just enabled it, wait a second and press Check Again.")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
-
-                    Text("System Settings > Privacy & Security > Accessibility > enable BuddyGrammar.")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.68))
-
-                    if model.isRunningFromDerivedData {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Current app bundle")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.white.opacity(0.82))
-
-                            Text(model.appBundlePath)
-                                .font(.caption.monospaced())
-                                .textSelection(.enabled)
-                                .foregroundStyle(.white.opacity(0.68))
-
-                            Text("This is a debug build running from DerivedData. If you rebuild and reopen a different bundle, macOS can treat it as a different app for Accessibility.")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.68))
-
-                            Button("Reveal Current App in Finder") {
-                                model.revealCurrentAppInFinder()
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                        .padding(.top, 8)
+                if isAccessibilityChecking && !model.accessibilityGranted {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                            .controlSize(.small)
+                        Text("Checking…")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(NeoTheme.mutedForeground)
                     }
                 }
             }
@@ -345,82 +319,62 @@ struct OnboardingView: View {
         }
     }
 
+    // MARK: - Workflow
+
     private var workflowStep: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            onboardingPanel {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Choose what happens after a rewrite, then test the default Grammar profile in any app.")
-                        .font(.title3)
-
-                    Picker("After rewriting", selection: outputModeBinding) {
-                        ForEach(OutputMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
-                        }
+        neoCard {
+            VStack(alignment: .leading, spacing: 14) {
+                Picker("After rewriting", selection: outputModeBinding) {
+                    ForEach(OutputMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
                     }
-                    .pickerStyle(.segmented)
+                }
+                .pickerStyle(.segmented)
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Label("Select text in TextEdit, Notes, Mail, or a browser field.", systemImage: "selection.pin.in.out")
-                        Label("Press `⌘⇧F` to run the built-in Grammar profile.", systemImage: "keyboard")
-                        Label("Watch the top overlay while BuddyGrammar is fixing your text.", systemImage: "sparkles.rectangle.stack")
-                        Label(outputModeBinding.wrappedValue == .replaceSelection ? "The corrected text will paste back into the active app." : "The corrected text will go to the clipboard without changing the original text.", systemImage: "doc.on.clipboard")
-                    }
-                    .font(.headline)
-
-                    HStack(spacing: 12) {
-                        Button("Open Full Settings") {
-                            model.openSettings()
-                        }
-                        .buttonStyle(.bordered)
-
-                        Text("You can add more prompt profiles and give each one its own shortcut later.")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.68))
-                    }
+                VStack(alignment: .leading, spacing: 8) {
+                    workflowItem(icon: "selection.pin.in.out", text: "Select text anywhere.")
+                    workflowItem(icon: "keyboard", text: "Press ⌘⇧F.")
+                    workflowItem(
+                        icon: "doc.on.clipboard",
+                        text: outputModeBinding.wrappedValue == .replaceSelection
+                            ? "Fixed text replaces selection."
+                            : "Fixed text goes to clipboard."
+                    )
                 }
             }
         }
     }
+
+    // MARK: - Finish
 
     private var finishStep: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            onboardingPanel {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("BuddyGrammar is ready once the API key and Accessibility permission are both in place.")
-                        .font(.title3)
-
+        neoCard {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(spacing: 8) {
                     statusRow(
-                        title: "OpenRouter API key",
+                        title: "API key",
                         isComplete: model.hasAPIKey,
-                        successText: "Saved in Keychain",
-                        pendingText: "Still missing"
+                        successText: "Saved",
+                        pendingText: "Missing"
                     )
-
                     statusRow(
-                        title: "Accessibility permission",
+                        title: "Accessibility",
                         isComplete: model.accessibilityGranted,
                         successText: "Enabled",
-                        pendingText: "Still missing"
+                        pendingText: "Missing"
                     )
+                }
 
-                    statusRow(
-                        title: "Default Grammar shortcut",
-                        isComplete: true,
-                        successText: "⌘⇧F",
-                        pendingText: "⌘⇧F"
-                    )
-
-                    if isReadyToFinish {
-                        Label("Setup complete. You can close this window and use BuddyGrammar from any app.", systemImage: "checkmark.seal.fill")
-                            .foregroundStyle(.green)
-                    } else {
-                        Text("Go back and finish the required setup steps before closing onboarding.")
-                            .foregroundStyle(.orange)
-                    }
+                if isReadyToFinish {
+                    neoStatusBadge(text: "Ready to go", icon: "checkmark.seal.fill", color: NeoTheme.green)
+                } else {
+                    neoStatusBadge(text: "Complete the steps above first", icon: "exclamationmark.triangle.fill", color: NeoTheme.orange)
                 }
             }
         }
     }
+
+    // MARK: - Footer
 
     private var footer: some View {
         HStack {
@@ -428,7 +382,7 @@ struct OnboardingView: View {
                 guard let previous = Step(rawValue: currentStep.rawValue - 1) else { return }
                 currentStep = previous
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(NeoBrutalistButton(isPrimary: false, isDisabled: currentStep == .welcome))
             .disabled(currentStep == .welcome)
 
             Spacer()
@@ -437,7 +391,7 @@ struct OnboardingView: View {
                 Button("Start Using BuddyGrammar") {
                     model.completeOnboarding()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(NeoBrutalistButton(isDisabled: !isReadyToFinish))
                 .disabled(!isReadyToFinish)
                 .keyboardShortcut(.defaultAction)
             } else {
@@ -445,12 +399,93 @@ struct OnboardingView: View {
                     guard let next = Step(rawValue: currentStep.rawValue + 1) else { return }
                     currentStep = next
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(NeoBrutalistButton(isDisabled: !canAdvance(from: currentStep)))
                 .disabled(!canAdvance(from: currentStep))
                 .keyboardShortcut(.defaultAction)
             }
         }
     }
+
+    // MARK: - Shared Components
+
+    private func neoCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(NeoBrutalistCard())
+    }
+
+    private func featurePill(symbol: String, label: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(NeoTheme.primary)
+            Text(label)
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundStyle(NeoTheme.accent)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(NeoTheme.muted)
+        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                .stroke(NeoTheme.border, lineWidth: 1)
+        )
+    }
+
+    private func neoStatusBadge(text: String, icon: String, color: Color) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+            Text(text)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(color.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                .stroke(color, lineWidth: NeoTheme.borderWidth)
+        )
+    }
+
+    private func statusRow(title: String, isComplete: Bool, successText: String, pendingText: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+            Spacer()
+            HStack(spacing: 6) {
+                Image(systemName: isComplete ? "checkmark.circle.fill" : "circle.dotted")
+                    .font(.system(size: 12, weight: .bold))
+                Text(isComplete ? successText : pendingText)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+            }
+            .foregroundStyle(isComplete ? NeoTheme.green : NeoTheme.orange)
+        }
+        .padding(10)
+        .background(NeoTheme.muted)
+        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                .stroke(NeoTheme.border, lineWidth: 1)
+        )
+    }
+
+    private func workflowItem(icon: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(NeoTheme.accent)
+                .frame(width: 18)
+            Text(text)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+        }
+    }
+
+    // MARK: - Bindings & Logic
 
     private var outputModeBinding: Binding<OutputMode> {
         Binding(
@@ -484,14 +519,22 @@ struct OnboardingView: View {
 
     private func stepAccentColor(_ step: Step) -> Color {
         if currentStep == step {
-            return Color(red: 0.44, green: 0.72, blue: 1.0)
+            return NeoTheme.primary
         }
-
         if canAdvance(from: step) || step == .finish && isReadyToFinish {
-            return Color.green.opacity(0.88)
+            return NeoTheme.green
         }
+        return NeoTheme.muted
+    }
 
-        return .white.opacity(0.18)
+    private func stepIconColor(_ step: Step) -> Color {
+        if currentStep == step {
+            return .white
+        }
+        if canAdvance(from: step) || step == .finish && isReadyToFinish {
+            return .white
+        }
+        return NeoTheme.mutedForeground
     }
 
     private func stepIcon(_ step: Step) -> String {
@@ -499,63 +542,6 @@ struct OnboardingView: View {
             return "checkmark"
         }
         return step.symbol
-    }
-
-    private func onboardingPanel<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .padding(24)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 24))
-            .overlay {
-                RoundedRectangle(cornerRadius: 24)
-                    .strokeBorder(.white.opacity(0.08))
-            }
-    }
-
-    private func featurePill(symbol: String, title: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Image(systemName: symbol)
-                .font(.system(size: 18, weight: .semibold))
-            Text(title)
-                .font(.headline)
-            Text(detail)
-                .foregroundStyle(.white.opacity(0.74))
-        }
-        .padding(16)
-        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 22))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22)
-                .strokeBorder(.white.opacity(0.08))
-        }
-    }
-
-    private func statusRow(title: String, isComplete: Bool, successText: String, pendingText: String) -> some View {
-        HStack {
-            Text(title)
-                .font(.headline)
-            Spacer()
-            Label(isComplete ? successText : pendingText, systemImage: isComplete ? "checkmark.circle.fill" : "circle.dotted")
-                .foregroundStyle(isComplete ? .green : .orange)
-        }
-        .padding(.vertical, 8)
-    }
-
-    private func permissionRow(title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "checkmark.shield")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.84))
-                .frame(width: 20)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                Text(detail)
-                    .foregroundStyle(.white.opacity(0.7))
-            }
-        }
-        .padding(14)
-        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18))
     }
 
     private func runAccessibilityPolling() async {

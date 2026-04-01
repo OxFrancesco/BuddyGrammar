@@ -9,7 +9,7 @@ BuddyGrammar is a native macOS menu bar utility that rewrites the currently sele
 - Replace selection or copy result to the clipboard
 - Keychain-backed OpenRouter API key storage
 - Accessibility-based text capture with clipboard fallback
-- Animated top overlay styled like a notch/live activity
+- Native menu bar status that shows live rewrite progress
 
 ## Project Structure
 

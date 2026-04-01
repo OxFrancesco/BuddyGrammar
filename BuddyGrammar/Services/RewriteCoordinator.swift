@@ -14,7 +14,7 @@ final class RewriteCoordinator {
     private let clipboardService: ClipboardService
     private let eventSimulationService: EventSimulationService
     private let openRouterClient: OpenRouterClient
-    private let overlayManager: OverlayManager
+    private let menuBarStatus: MenuBarStatusModel
 
     init(
         settingsStore: SettingsStore,
@@ -23,7 +23,7 @@ final class RewriteCoordinator {
         clipboardService: ClipboardService,
         eventSimulationService: EventSimulationService,
         openRouterClient: OpenRouterClient,
-        overlayManager: OverlayManager
+        menuBarStatus: MenuBarStatusModel
     ) {
         self.settingsStore = settingsStore
         self.keychainService = keychainService
@@ -31,7 +31,7 @@ final class RewriteCoordinator {
         self.clipboardService = clipboardService
         self.eventSimulationService = eventSimulationService
         self.openRouterClient = openRouterClient
-        self.overlayManager = overlayManager
+        self.menuBarStatus = menuBarStatus
     }
 
     func run(profile: PromptProfile, accessibilityService: AccessibilityService) {
@@ -55,9 +55,11 @@ final class RewriteCoordinator {
             }
 
             do {
-                overlayManager.present(.capture(profileName: profile.name), motionMode: settingsStore.appSettings.overlayMotionMode)
+                statusMessage = "Reading the current selection..."
+                menuBarStatus.show(.capture(profileName: profile.name))
                 let selectedText = try await selectionService.captureSelectedText()
-                overlayManager.present(.sending(profileName: profile.name), motionMode: settingsStore.appSettings.overlayMotionMode)
+                statusMessage = "Fixing your text with \(profile.name)..."
+                menuBarStatus.show(.sending(profileName: profile.name))
 
                 let result = try await openRouterClient.rewrite(
                     RewriteRequest(profile: profile, selectedText: selectedText),
@@ -68,15 +70,15 @@ final class RewriteCoordinator {
                 case .replaceSelection:
                     try await pasteReplacement(result.rewrittenText)
                     statusMessage = "Replaced selection with \(profile.name.lowercased()) output."
-                    overlayManager.present(.success(profileName: profile.name, message: "Selection replaced"), motionMode: settingsStore.appSettings.overlayMotionMode)
+                    menuBarStatus.show(.success(message: "Selection replaced"))
                 case .copyToClipboard:
                     clipboardService.writeString(result.rewrittenText)
                     statusMessage = "Copied \(profile.name.lowercased()) output to the clipboard."
-                    overlayManager.present(.success(profileName: profile.name, message: "Copied to clipboard"), motionMode: settingsStore.appSettings.overlayMotionMode)
+                    menuBarStatus.show(.success(message: "Copied to clipboard"))
                 }
 
                 lastErrorMessage = nil
-                overlayManager.dismiss(after: .seconds(1.6))
+                menuBarStatus.reset(after: .seconds(1.6))
             } catch let error as RewriteFailure {
                 presentFailure(error)
             } catch {
@@ -102,7 +104,7 @@ final class RewriteCoordinator {
         let message = failure.errorDescription ?? "Something went wrong."
         statusMessage = message
         lastErrorMessage = message
-        overlayManager.present(.failure(message: message), motionMode: settingsStore.appSettings.overlayMotionMode)
-        overlayManager.dismiss(after: .seconds(2.4))
+        menuBarStatus.show(.failure(message: message))
+        menuBarStatus.reset(after: .seconds(2.4))
     }
 }

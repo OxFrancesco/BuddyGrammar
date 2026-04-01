@@ -10,6 +10,8 @@
 		1C0A1A6A4F5B001100000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1C0A1A6A4F5B001100000002 /* Assets.xcassets */; };
 		0B7F656BF22C2AC524E68726 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291281F679C782F42041C75E /* AppModel.swift */; };
 		104FD1525CED1C300068FE03 /* ProfileEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D5E9835860FA5DBCDCBD143 /* ProfileEditorView.swift */; };
+		1F90E38C583EDB73168E9AC5 /* MenuBarStatusModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B84FD445147818F2FF33FB1 /* MenuBarStatusModelTests.swift */; };
+		2935CA82AABB059A3208A2FE /* NeoTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D87DA6B718D13A527DC543A2 /* NeoTheme.swift */; };
 		368ED8DFF5DCC5B4DEEA74B8 /* PromptProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24BA96E7C16D49B0538BBC5E /* PromptProfile.swift */; };
 		3A55A9C309A5E73EA7BC1CDA /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C125CE81237FFB6068CFDB14 /* AppSettings.swift */; };
 		3B9B1FBAAF7B13D48C015D04 /* OpenRouterClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCBEA522FD27E02CB88EBC28 /* OpenRouterClient.swift */; };
@@ -17,7 +19,6 @@
 		4899645D8A827F264EEBB648 /* BuddyGrammarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04514728AF25CFA7FA9F0BC3 /* BuddyGrammarApp.swift */; };
 		49B49CFBC90EFC16324F63B4 /* RewriteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9D411F40A1135B9000949C /* RewriteModels.swift */; };
 		4EA356080911925F32ABCCE0 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C3D7C55DF68CEF737684E5 /* KeychainService.swift */; };
-		5BD0701B1303A98F60F123C2 /* OverlayState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 145A2BECAE724E6725F145E1 /* OverlayState.swift */; };
 		5F908ED77C7C74941F817CE5 /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E074A18A6634D312DCDA6CE /* TestSupport.swift */; };
 		5FB9EE1C8AAD0B97CB65D604 /* HotkeyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 908D2AE224565B3F3CC3BFE1 /* HotkeyService.swift */; };
 		611CF422C61FE0FBAF278C9E /* LaunchAtLoginService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A305BF4FE3856ADA021A9EBF /* LaunchAtLoginService.swift */; };
@@ -27,12 +28,12 @@
 		A558BD0E79E39A87BDFEE94D /* EventSimulationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E719D6E75F8753806BDAD870 /* EventSimulationService.swift */; };
 		AC47538A2BEA764099F9D971 /* ClipboardServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16271B2FC5E5812D9E39483F /* ClipboardServiceTests.swift */; };
 		BDFB82EF1ADBB4095AD163B8 /* HotkeyRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E2A8E0743E33B2844ED3BC /* HotkeyRecorderView.swift */; };
-		C186FDD2DB20A13F76A9E1B4 /* OverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909F4A991187056F8A28D562 /* OverlayView.swift */; };
 		C57558F1909DBA8252C90311 /* ClipboardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFEA136271E55DAC4050C406 /* ClipboardService.swift */; };
 		CCD857BCF97A72903A464F4E /* RewriteCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27B6991402183AD0E62F477B /* RewriteCoordinator.swift */; };
 		CEDB1DE8AD85213CA49FC868 /* HotkeyValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF316B8B882E8CB4E96F0FB1 /* HotkeyValidationTests.swift */; };
 		D7BB2F9D089560CC33096C4E /* AccessibilityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110A9F0B5791E5FE0B6EA441 /* AccessibilityService.swift */; };
-		E843FEC9D65A4AC948E59ED8 /* OverlayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 004D00B94408E1E96E35C2B2 /* OverlayManager.swift */; };
+		DDCFB36CEC7F930B3F450890 /* MenuBarStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B3C9D45BA8F45D03A1B6302 /* MenuBarStatus.swift */; };
+		EBAE14C9FAC0CF63843F8C3C /* MenuBarStatusLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F857916C262F6BADF68E57 /* MenuBarStatusLabel.swift */; };
 		F6BE25C6B825DB0E6E010CE4 /* SelectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3160C56650E7901F8C3AFD52 /* SelectionService.swift */; };
 		F7BA2453E5647C3764E106D4 /* MenuBarContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2989CD27D097BBE591F008C2 /* MenuBarContentView.swift */; };
 		F911FD8A63BA95578E152E05 /* SettingsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98B9E4EC78C0C9DFA06298B4 /* SettingsStoreTests.swift */; };
@@ -51,12 +52,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		004D00B94408E1E96E35C2B2 /* OverlayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayManager.swift; sourceTree = "<group>"; };
 		04514728AF25CFA7FA9F0BC3 /* BuddyGrammarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyGrammarApp.swift; sourceTree = "<group>"; };
 		07C21333CC71CEBF1B10F536 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		110A9F0B5791E5FE0B6EA441 /* AccessibilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityService.swift; sourceTree = "<group>"; };
 		1C0A1A6A4F5B001100000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		145A2BECAE724E6725F145E1 /* OverlayState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayState.swift; sourceTree = "<group>"; };
 		16271B2FC5E5812D9E39483F /* ClipboardServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardServiceTests.swift; sourceTree = "<group>"; };
 		24BA96E7C16D49B0538BBC5E /* PromptProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptProfile.swift; sourceTree = "<group>"; };
 		27B6991402183AD0E62F477B /* RewriteCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteCoordinator.swift; sourceTree = "<group>"; };
@@ -64,11 +63,12 @@
 		2989CD27D097BBE591F008C2 /* MenuBarContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContentView.swift; sourceTree = "<group>"; };
 		3160C56650E7901F8C3AFD52 /* SelectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionService.swift; sourceTree = "<group>"; };
 		3E9D411F40A1135B9000949C /* RewriteModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteModels.swift; sourceTree = "<group>"; };
+		4B3C9D45BA8F45D03A1B6302 /* MenuBarStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatus.swift; sourceTree = "<group>"; };
 		4EB0B551AD0F880B1B6A02F6 /* OpenRouterClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterClientTests.swift; sourceTree = "<group>"; };
 		5FE7D0958D7D5C83B13F9AA4 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		6B84FD445147818F2FF33FB1 /* MenuBarStatusModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusModelTests.swift; sourceTree = "<group>"; };
 		6E074A18A6634D312DCDA6CE /* TestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
 		908D2AE224565B3F3CC3BFE1 /* HotkeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyService.swift; sourceTree = "<group>"; };
-		909F4A991187056F8A28D562 /* OverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayView.swift; sourceTree = "<group>"; };
 		9161826D72F8255096E1EE40 /* BuddyGrammarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BuddyGrammarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		95A76C2E024B8D9A5FAC2506 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
 		98B9E4EC78C0C9DFA06298B4 /* SettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStoreTests.swift; sourceTree = "<group>"; };
@@ -77,11 +77,13 @@
 		9E0527CF127B6BAF75D21411 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A2C3D7C55DF68CEF737684E5 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		A305BF4FE3856ADA021A9EBF /* LaunchAtLoginService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginService.swift; sourceTree = "<group>"; };
+		A5F857916C262F6BADF68E57 /* MenuBarStatusLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusLabel.swift; sourceTree = "<group>"; };
 		B3FEDFF340325A43F2BC7FC6 /* BuddyGrammar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BuddyGrammar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B9F8D7B0C705CBCF54997E43 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C125CE81237FFB6068CFDB14 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		CCBEA522FD27E02CB88EBC28 /* OpenRouterClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterClient.swift; sourceTree = "<group>"; };
 		CF316B8B882E8CB4E96F0FB1 /* HotkeyValidationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyValidationTests.swift; sourceTree = "<group>"; };
+		D87DA6B718D13A527DC543A2 /* NeoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeoTheme.swift; sourceTree = "<group>"; };
 		D9D6DCC3348591F36FDF1B6E /* HotkeyDescriptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyDescriptor.swift; sourceTree = "<group>"; };
 		E719D6E75F8753806BDAD870 /* EventSimulationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventSimulationService.swift; sourceTree = "<group>"; };
 		FFEA136271E55DAC4050C406 /* ClipboardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardService.swift; sourceTree = "<group>"; };
@@ -93,6 +95,7 @@
 			children = (
 				16271B2FC5E5812D9E39483F /* ClipboardServiceTests.swift */,
 				CF316B8B882E8CB4E96F0FB1 /* HotkeyValidationTests.swift */,
+				6B84FD445147818F2FF33FB1 /* MenuBarStatusModelTests.swift */,
 				4EB0B551AD0F880B1B6A02F6 /* OpenRouterClientTests.swift */,
 				98B9E4EC78C0C9DFA06298B4 /* SettingsStoreTests.swift */,
 				6E074A18A6634D312DCDA6CE /* TestSupport.swift */,
@@ -123,8 +126,9 @@
 			children = (
 				98E2A8E0743E33B2844ED3BC /* HotkeyRecorderView.swift */,
 				2989CD27D097BBE591F008C2 /* MenuBarContentView.swift */,
+				A5F857916C262F6BADF68E57 /* MenuBarStatusLabel.swift */,
+				D87DA6B718D13A527DC543A2 /* NeoTheme.swift */,
 				5FE7D0958D7D5C83B13F9AA4 /* OnboardingView.swift */,
-				909F4A991187056F8A28D562 /* OverlayView.swift */,
 				9D5E9835860FA5DBCDCBD143 /* ProfileEditorView.swift */,
 				07C21333CC71CEBF1B10F536 /* SettingsView.swift */,
 			);
@@ -149,7 +153,7 @@
 			children = (
 				C125CE81237FFB6068CFDB14 /* AppSettings.swift */,
 				D9D6DCC3348591F36FDF1B6E /* HotkeyDescriptor.swift */,
-				145A2BECAE724E6725F145E1 /* OverlayState.swift */,
+				4B3C9D45BA8F45D03A1B6302 /* MenuBarStatus.swift */,
 				24BA96E7C16D49B0538BBC5E /* PromptProfile.swift */,
 				3E9D411F40A1135B9000949C /* RewriteModels.swift */,
 			);
@@ -166,7 +170,6 @@
 				A2C3D7C55DF68CEF737684E5 /* KeychainService.swift */,
 				A305BF4FE3856ADA021A9EBF /* LaunchAtLoginService.swift */,
 				CCBEA522FD27E02CB88EBC28 /* OpenRouterClient.swift */,
-				004D00B94408E1E96E35C2B2 /* OverlayManager.swift */,
 				27B6991402183AD0E62F477B /* RewriteCoordinator.swift */,
 				3160C56650E7901F8C3AFD52 /* SelectionService.swift */,
 				95A76C2E024B8D9A5FAC2506 /* SettingsStore.swift */,
@@ -288,6 +291,7 @@
 			files = (
 				AC47538A2BEA764099F9D971 /* ClipboardServiceTests.swift in Sources */,
 				CEDB1DE8AD85213CA49FC868 /* HotkeyValidationTests.swift in Sources */,
+				1F90E38C583EDB73168E9AC5 /* MenuBarStatusModelTests.swift in Sources */,
 				958FCD7EC13E388035C0E8FE /* OpenRouterClientTests.swift in Sources */,
 				F911FD8A63BA95578E152E05 /* SettingsStoreTests.swift in Sources */,
 				5F908ED77C7C74941F817CE5 /* TestSupport.swift in Sources */,
@@ -311,11 +315,11 @@
 				4EA356080911925F32ABCCE0 /* KeychainService.swift in Sources */,
 				611CF422C61FE0FBAF278C9E /* LaunchAtLoginService.swift in Sources */,
 				F7BA2453E5647C3764E106D4 /* MenuBarContentView.swift in Sources */,
+				DDCFB36CEC7F930B3F450890 /* MenuBarStatus.swift in Sources */,
+				EBAE14C9FAC0CF63843F8C3C /* MenuBarStatusLabel.swift in Sources */,
+				2935CA82AABB059A3208A2FE /* NeoTheme.swift in Sources */,
 				73E4DCAD79C8ADB2EDA6C197 /* OnboardingView.swift in Sources */,
 				3B9B1FBAAF7B13D48C015D04 /* OpenRouterClient.swift in Sources */,
-				E843FEC9D65A4AC948E59ED8 /* OverlayManager.swift in Sources */,
-				5BD0701B1303A98F60F123C2 /* OverlayState.swift in Sources */,
-				C186FDD2DB20A13F76A9E1B4 /* OverlayView.swift in Sources */,
 				104FD1525CED1C300068FE03 /* ProfileEditorView.swift in Sources */,
 				368ED8DFF5DCC5B4DEEA74B8 /* PromptProfile.swift in Sources */,
 				CCD857BCF97A72903A464F4E /* RewriteCoordinator.swift in Sources */,
