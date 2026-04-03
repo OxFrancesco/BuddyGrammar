@@ -10,34 +10,43 @@ struct HotkeyRecorderView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            HStack(spacing: 8) {
                 Button {
                     toggleRecording()
                 } label: {
-                    HStack {
+                    HStack(spacing: 6) {
                         Image(systemName: isRecording ? "record.circle.fill" : "keyboard")
+                            .font(.system(size: 12, weight: .semibold))
                         Text(isRecording ? "Press Shortcut" : (hotkey?.displayString ?? "Record Shortcut"))
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .foregroundStyle(isRecording ? Color.white : NeoTheme.foreground)
+                    .background(isRecording ? NeoTheme.primary : NeoTheme.muted)
+                    .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                            .stroke(NeoTheme.foreground, lineWidth: NeoTheme.borderWidth)
+                    )
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.plain)
 
                 Button("Clear") {
                     hotkey = nil
                 }
+                .buttonStyle(NeoBrutalistButton(isPrimary: false, isDisabled: hotkey == nil))
                 .disabled(hotkey == nil)
             }
 
             if let conflictLabel {
                 Text("This shortcut is already used by \(conflictLabel).")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            } else {
-                Text("Use Command, Control, Option, or Shift plus a key.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(NeoTheme.destructive)
             }
         }
+        .focusEffectDisabled()
         .onDisappear {
             stopRecording()
         }

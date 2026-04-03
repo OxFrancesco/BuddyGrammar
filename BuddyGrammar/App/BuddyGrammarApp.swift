@@ -21,7 +21,15 @@ struct BuddyGrammarApp: App {
 
         Settings {
             SettingsView(model: model)
-                .frame(minWidth: 760, minHeight: 520)
+                .frame(minWidth: 660, minHeight: 460)
+                .onAppear {
+                    DispatchQueue.main.async {
+                        for window in NSApp.windows where window.title.contains("Settings") || window.title.contains("Preferences") {
+                            window.styleMask.insert(.resizable)
+                            window.collectionBehavior.insert(.fullScreenPrimary)
+                        }
+                    }
+                }
         }
     }
 }

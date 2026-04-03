@@ -3,6 +3,7 @@ import SwiftUI
 struct MenuBarContentView: View {
     @Bindable var model: AppModel
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openSettings) private var openSettings
 
     private var fg: Color { colorScheme == .dark ? Color(hex: 0xCDD6F4) : Color(hex: 0x4C4F69) }
     private var fgSecondary: Color { colorScheme == .dark ? Color(hex: 0xA6ADC8) : Color(hex: 0x6C6F85) }
@@ -13,15 +14,18 @@ struct MenuBarContentView: View {
     private var green: Color { colorScheme == .dark ? Color(hex: 0xA6E3A1) : Color(hex: 0x40A02B) }
     private var orange: Color { colorScheme == .dark ? Color(hex: 0xFAB387) : Color(hex: 0xFE640B) }
     private var red: Color { colorScheme == .dark ? Color(hex: 0xF38BA8) : Color(hex: 0xD20F39) }
+    private var appIconImage: NSImage { NSApplication.shared.applicationIconImage }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack(spacing: 8) {
-                Image("BrandLogo")
+                Image(nsImage: appIconImage)
+                    .interpolation(.high)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 16, height: 16)
+                    .frame(width: 18, height: 18)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
                 Text("BuddyGrammar")
                     .font(.system(size: 13, weight: .black, design: .rounded))
                     .foregroundStyle(fg)
@@ -62,7 +66,7 @@ struct MenuBarContentView: View {
             // Actions
             HStack(spacing: 10) {
                 neoMenuButton("Updates", icon: "arrow.trianglehead.clockwise") { model.checkForUpdates() }
-                neoMenuButton("Settings", icon: "gearshape") { model.openSettings() }
+                neoMenuButton("Settings", icon: "gearshape") { openSettings() }
                 Spacer()
                 neoMenuButton("Quit", icon: "xmark.circle") { NSApp.terminate(nil) }
             }
@@ -91,6 +95,7 @@ struct MenuBarContentView: View {
             .foregroundStyle(fgSecondary)
         }
         .buttonStyle(.plain)
+        .focusable(false)
     }
 }
 
