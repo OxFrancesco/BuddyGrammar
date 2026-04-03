@@ -4,8 +4,21 @@
     xmlns:dc="http://purl.org/dc/elements/1.1/">
     <channel>
         <title>BuddyGrammar Updates</title>
-        <link>https://github.com/oxfrancesco/buddygrammar/releases</link>
+        <link>https://github.com/OxFrancesco/BuddyGrammar/releases</link>
         <description>Latest BuddyGrammar releases for Sparkle.</description>
         <language>en</language>
+        <item>
+            <title>Version 0.1.0</title>
+            <pubDate>Fri, 03 Apr 2026 11:42:21 +0000</pubDate>
+            <description><![CDATA[BuddyGrammar 0.1.0]]></description>
+            <enclosure
+                url="https://github.com/OxFrancesco/BuddyGrammar/releases/download/v0.1.0/BuddyGrammar-0.1.0.zip"
+                sparkle:version="1"
+                sparkle:shortVersionString="0.1.0"
+                sparkle:minimumSystemVersion="15.0"
+                sparkle:edSignature="kjNHvZBJuug+rRV3VO7VDLw729WEVZ0q2MKliGvWwFcITtMf1Oj+j8MYsmsj88adNUDS0qN3OFcsVFwjvPrWCg=="
+                length="2168703"
+                type="application/octet-stream" />
+        </item>
     </channel>
 </rss>
