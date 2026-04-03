@@ -9,6 +9,7 @@ final class AppModel {
     let settingsStore: SettingsStore
     let keychainService: KeychainService
     let accessibilityService: AccessibilityService
+    let appUpdateService: AppUpdateService
     let hotkeyService: HotkeyService
     let rewriteCoordinator: RewriteCoordinator
     let menuBarStatus: MenuBarStatusModel
@@ -25,6 +26,7 @@ final class AppModel {
         let settingsStore = SettingsStore()
         let keychainService = KeychainService()
         let accessibilityService = AccessibilityService()
+        let appUpdateService = AppUpdateService()
         let clipboardService = ClipboardService()
         let eventSimulationService = EventSimulationService()
         let menuBarStatus = MenuBarStatusModel()
@@ -49,6 +51,7 @@ final class AppModel {
         self.settingsStore = settingsStore
         self.keychainService = keychainService
         self.accessibilityService = accessibilityService
+        self.appUpdateService = appUpdateService
         self.hotkeyService = hotkeyService
         self.launchAtLoginService = launchAtLoginService
         self.rewriteCoordinator = rewriteCoordinator
@@ -144,6 +147,14 @@ final class AppModel {
         environmentStateRevision += 1
     }
 
+    func checkForUpdates() {
+        appUpdateService.checkForUpdates()
+    }
+
+    func openReleasesPage() {
+        appUpdateService.openReleasesPage()
+    }
+
     func saveAPIKey() {
         do {
             let trimmed = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -168,16 +179,16 @@ final class AppModel {
         rewriteCoordinator.run(profile: profile, accessibilityService: accessibilityService)
     }
 
-    func addProfile() {
-        selectedProfileID = settingsStore.addProfile()
+    func addPersonality(template: PersonalityTemplate = .blankCustom) {
+        selectedProfileID = settingsStore.addProfile(template: template)
     }
 
-    func deleteSelectedProfile() {
+    func deleteSelectedPersonality() {
         guard let selectedProfileID else { return }
         settingsStore.removeProfile(id: selectedProfileID)
     }
 
-    func moveSelectedProfile(_ direction: MoveDirection) {
+    func moveSelectedPersonality(_ direction: MoveDirection) {
         guard let selectedProfileID else { return }
         settingsStore.moveProfile(id: selectedProfileID, direction: direction)
     }

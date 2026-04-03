@@ -9,12 +9,20 @@ settings:
     MARKETING_VERSION: 0.1.0
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: G2442WAF29
+    SPARKLE_FEED_URL: https://raw.githubusercontent.com/oxfrancesco/buddygrammar/main/appcast.xml
+    SPARKLE_PUBLIC_ED_KEY: YvlMAWKQ4HQQXIVXWeRI6jCdNrnPFCywBoQNEWNIKTc=
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.7.0
 targets:
   BuddyGrammar:
     type: application
     platform: macOS
     sources:
       - path: BuddyGrammar
+    dependencies:
+      - package: Sparkle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.francescooddo.BuddyGrammar

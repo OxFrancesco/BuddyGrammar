@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		1C0A1A6A4F5B001100000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1C0A1A6A4F5B001100000002 /* Assets.xcassets */; };
+		0503839637AB9EE60F509615 /* AppUpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35DEAED4FF77067FD4CF0D45 /* AppUpdateService.swift */; };
 		0B7F656BF22C2AC524E68726 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291281F679C782F42041C75E /* AppModel.swift */; };
 		104FD1525CED1C300068FE03 /* ProfileEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D5E9835860FA5DBCDCBD143 /* ProfileEditorView.swift */; };
 		1F90E38C583EDB73168E9AC5 /* MenuBarStatusModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B84FD445147818F2FF33FB1 /* MenuBarStatusModelTests.swift */; };
@@ -25,8 +25,10 @@
 		73E4DCAD79C8ADB2EDA6C197 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FE7D0958D7D5C83B13F9AA4 /* OnboardingView.swift */; };
 		7C7E0FB9BD289CAD0FDAD1AF /* HotkeyDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9D6DCC3348591F36FDF1B6E /* HotkeyDescriptor.swift */; };
 		958FCD7EC13E388035C0E8FE /* OpenRouterClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB0B551AD0F880B1B6A02F6 /* OpenRouterClientTests.swift */; };
+		A00CE2D4A05ECB4AAF99C57F /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 9E6F05117AD0CA73E3845A4F /* Sparkle */; };
 		A558BD0E79E39A87BDFEE94D /* EventSimulationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E719D6E75F8753806BDAD870 /* EventSimulationService.swift */; };
 		AC47538A2BEA764099F9D971 /* ClipboardServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16271B2FC5E5812D9E39483F /* ClipboardServiceTests.swift */; };
+		BC7582408A0A9E4753549B9E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 654BDEEFC43D5CBAFAF5173E /* Assets.xcassets */; };
 		BDFB82EF1ADBB4095AD163B8 /* HotkeyRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E2A8E0743E33B2844ED3BC /* HotkeyRecorderView.swift */; };
 		C57558F1909DBA8252C90311 /* ClipboardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFEA136271E55DAC4050C406 /* ClipboardService.swift */; };
 		CCD857BCF97A72903A464F4E /* RewriteCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27B6991402183AD0E62F477B /* RewriteCoordinator.swift */; };
@@ -55,17 +57,18 @@
 		04514728AF25CFA7FA9F0BC3 /* BuddyGrammarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyGrammarApp.swift; sourceTree = "<group>"; };
 		07C21333CC71CEBF1B10F536 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		110A9F0B5791E5FE0B6EA441 /* AccessibilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityService.swift; sourceTree = "<group>"; };
-		1C0A1A6A4F5B001100000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		16271B2FC5E5812D9E39483F /* ClipboardServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardServiceTests.swift; sourceTree = "<group>"; };
 		24BA96E7C16D49B0538BBC5E /* PromptProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptProfile.swift; sourceTree = "<group>"; };
 		27B6991402183AD0E62F477B /* RewriteCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteCoordinator.swift; sourceTree = "<group>"; };
 		291281F679C782F42041C75E /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		2989CD27D097BBE591F008C2 /* MenuBarContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContentView.swift; sourceTree = "<group>"; };
 		3160C56650E7901F8C3AFD52 /* SelectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionService.swift; sourceTree = "<group>"; };
+		35DEAED4FF77067FD4CF0D45 /* AppUpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateService.swift; sourceTree = "<group>"; };
 		3E9D411F40A1135B9000949C /* RewriteModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteModels.swift; sourceTree = "<group>"; };
 		4B3C9D45BA8F45D03A1B6302 /* MenuBarStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatus.swift; sourceTree = "<group>"; };
 		4EB0B551AD0F880B1B6A02F6 /* OpenRouterClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterClientTests.swift; sourceTree = "<group>"; };
 		5FE7D0958D7D5C83B13F9AA4 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		654BDEEFC43D5CBAFAF5173E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6B84FD445147818F2FF33FB1 /* MenuBarStatusModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusModelTests.swift; sourceTree = "<group>"; };
 		6E074A18A6634D312DCDA6CE /* TestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
 		908D2AE224565B3F3CC3BFE1 /* HotkeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyService.swift; sourceTree = "<group>"; };
@@ -88,6 +91,17 @@
 		E719D6E75F8753806BDAD870 /* EventSimulationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventSimulationService.swift; sourceTree = "<group>"; };
 		FFEA136271E55DAC4050C406 /* ClipboardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8C5BC6A3B997BA547D397A83 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00CE2D4A05ECB4AAF99C57F /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		32B09A2FB96D88288465CF3D /* BuddyGrammarTests */ = {
@@ -138,8 +152,8 @@
 		78A7869774D78CE0D6A49591 /* BuddyGrammar */ = {
 			isa = PBXGroup;
 			children = (
+				654BDEEFC43D5CBAFAF5173E /* Assets.xcassets */,
 				461278B094F178401E53718E /* App */,
-				1C0A1A6A4F5B001100000002 /* Assets.xcassets */,
 				A469794AC213015BA889750A /* Models */,
 				C0696BE4726F5FDEAF4627CA /* Services */,
 				3DFED1958B350236BCC27CDF /* Support */,
@@ -164,6 +178,7 @@
 			isa = PBXGroup;
 			children = (
 				110A9F0B5791E5FE0B6EA441 /* AccessibilityService.swift */,
+				35DEAED4FF77067FD4CF0D45 /* AppUpdateService.swift */,
 				FFEA136271E55DAC4050C406 /* ClipboardService.swift */,
 				E719D6E75F8753806BDAD870 /* EventSimulationService.swift */,
 				908D2AE224565B3F3CC3BFE1 /* HotkeyService.swift */,
@@ -220,8 +235,9 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = FD94AC696F160F45DF2E223F /* Build configuration list for PBXNativeTarget "BuddyGrammar" */;
 			buildPhases = (
-				1C0A1A6A4F5B001100000003 /* Resources */,
 				FF5A3A27A90F60E483170343 /* Sources */,
+				F7DED84FDCF5B648462D0A66 /* Resources */,
+				8C5BC6A3B997BA547D397A83 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -229,6 +245,7 @@
 			);
 			name = BuddyGrammar;
 			packageProductDependencies = (
+				9E6F05117AD0CA73E3845A4F /* Sparkle */,
 			);
 			productName = BuddyGrammar;
 			productReference = B3FEDFF340325A43F2BC7FC6 /* BuddyGrammar.app */;
@@ -263,6 +280,9 @@
 			);
 			mainGroup = F590677B8ADA65F06BDBB16F;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5264CF8444B055EBD1A491D2 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
@@ -274,11 +294,11 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		1C0A1A6A4F5B001100000003 /* Resources */ = {
+		F7DED84FDCF5B648462D0A66 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1C0A1A6A4F5B001100000001 /* Assets.xcassets in Resources */,
+				BC7582408A0A9E4753549B9E /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -306,6 +326,7 @@
 				40D5DF0FE19BE2B06B156381 /* AppDelegate.swift in Sources */,
 				0B7F656BF22C2AC524E68726 /* AppModel.swift in Sources */,
 				3A55A9C309A5E73EA7BC1CDA /* AppSettings.swift in Sources */,
+				0503839637AB9EE60F509615 /* AppUpdateService.swift in Sources */,
 				4899645D8A827F264EEBB648 /* BuddyGrammarApp.swift in Sources */,
 				C57558F1909DBA8252C90311 /* ClipboardService.swift in Sources */,
 				A558BD0E79E39A87BDFEE94D /* EventSimulationService.swift in Sources */,
@@ -412,6 +433,8 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SPARKLE_FEED_URL = "https://raw.githubusercontent.com/oxfrancesco/buddygrammar/main/appcast.xml";
+				SPARKLE_PUBLIC_ED_KEY = "YvlMAWKQ4HQQXIVXWeRI6jCdNrnPFCywBoQNEWNIKTc=";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;
@@ -514,6 +537,8 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SPARKLE_FEED_URL = "https://raw.githubusercontent.com/oxfrancesco/buddygrammar/main/appcast.xml";
+				SPARKLE_PUBLIC_ED_KEY = "YvlMAWKQ4HQQXIVXWeRI6jCdNrnPFCywBoQNEWNIKTc=";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
@@ -569,6 +594,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5264CF8444B055EBD1A491D2 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.7.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		9E6F05117AD0CA73E3845A4F /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5264CF8444B055EBD1A491D2 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 04C5E9CF81BEF2259796D14E /* Project object */;
 }

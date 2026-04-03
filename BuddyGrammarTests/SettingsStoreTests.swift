@@ -3,35 +3,37 @@ import XCTest
 
 @MainActor
 final class SettingsStoreTests: XCTestCase {
-    func testDefaultGrammarProfileIsPresent() {
+    func testFreshInstallSeedsStandardPersonality() {
         let suite = UserDefaults(suiteName: #function)!
         suite.removePersistentDomain(forName: #function)
         let store = SettingsStore(defaults: suite)
 
         XCTAssertEqual(store.profiles.first?.id, PromptProfile.grammarProfileID)
-        XCTAssertEqual(store.profiles.first?.hotkey, PromptProfile.defaultGrammarHotkey)
+        XCTAssertEqual(store.profiles.first?.name, "Standard")
+        XCTAssertEqual(store.profiles.first?.hotkey, PromptProfile.defaultStandardHotkey)
     }
 
-    func testProfilesPersistOrdering() {
+    func testStandardPersonalityStaysPinnedFirst() {
         let suite = UserDefaults(suiteName: #function)!
         suite.removePersistentDomain(forName: #function)
         let store = SettingsStore(defaults: suite)
 
-        let addedID = store.addProfile()
+        let addedID = store.addProfile(template: .formal)
         store.moveProfile(id: addedID, direction: .up)
 
         let reloaded = SettingsStore(defaults: suite)
-        XCTAssertEqual(reloaded.profiles.first?.id, addedID)
+        XCTAssertEqual(reloaded.profiles.first?.id, PromptProfile.grammarProfileID)
+        XCTAssertEqual(reloaded.profiles.dropFirst().first?.id, addedID)
     }
 
-    func testGrammarProfileMigratesLegacyShortcut() throws {
+    func testUntouchedLegacyBuiltInBecomesStandardAndPreservesShortcut() throws {
         let suite = UserDefaults(suiteName: #function)!
         suite.removePersistentDomain(forName: #function)
 
         let legacyProfile = PromptProfile(
             id: PromptProfile.grammarProfileID,
             name: "Grammar",
-            instruction: PromptProfile.grammar.instruction,
+            instruction: PromptProfile.standardInstruction,
             hotkey: PromptProfile.legacyGrammarHotkey,
             isEnabled: true,
             isBuiltIn: true
@@ -41,7 +43,79 @@ final class SettingsStoreTests: XCTestCase {
         suite.set(data, forKey: "BuddyGrammar.profiles")
 
         let store = SettingsStore(defaults: suite)
-        XCTAssertEqual(store.profiles.first?.hotkey, PromptProfile.defaultGrammarHotkey)
+        XCTAssertEqual(store.profiles.first?.name, "Standard")
+        XCTAssertEqual(store.profiles.first?.hotkey, PromptProfile.legacyGrammarHotkey)
+    }
+
+    func testCustomizedBuiltInIsPreservedAsCustomAndStandardIsRestored() throws {
+        let suite = UserDefaults(suiteName: #function)!
+        suite.removePersistentDomain(forName: #function)
+
+        let customizedBuiltIn = PromptProfile(
+            id: PromptProfile.grammarProfileID,
+            name: "My Voice",
+            instruction: "Rewrite this in my voice.",
+            hotkey: PromptProfile.legacyGrammarHotkey,
+            isEnabled: true,
+            isBuiltIn: true
+        )
+
+        let data = try JSONEncoder().encode([customizedBuiltIn])
+        suite.set(data, forKey: "BuddyGrammar.profiles")
+
+        let store = SettingsStore(defaults: suite)
+
+        XCTAssertEqual(store.profiles.first?.name, "Standard")
+        XCTAssertNil(store.profiles.first?.hotkey)
+        XCTAssertFalse(store.profiles.first?.isEnabled ?? true)
+        XCTAssertEqual(store.profiles.count, 2)
+        XCTAssertEqual(store.profiles[1].name, "My Voice")
+        XCTAssertEqual(store.profiles[1].hotkey, PromptProfile.legacyGrammarHotkey)
+        XCTAssertFalse(store.profiles[1].isBuiltIn)
+    }
+
+    func testFormalTemplateGetsSuggestedShortcutWhenAvailable() {
+        let suite = UserDefaults(suiteName: #function)!
+        suite.removePersistentDomain(forName: #function)
+        let store = SettingsStore(defaults: suite)
+
+        let id = store.addProfile(template: .formal)
+        let profile = store.profile(id: id)
+
+        XCTAssertEqual(profile?.name, "Formal")
+        XCTAssertEqual(profile?.hotkey, PersonalityTemplate.formal.suggestedHotkey)
+        XCTAssertTrue(profile?.isEnabled ?? false)
+    }
+
+    func testFormalTemplateStartsWithoutShortcutWhenSuggestedSlotIsTaken() {
+        let suite = UserDefaults(suiteName: #function)!
+        suite.removePersistentDomain(forName: #function)
+        let store = SettingsStore(defaults: suite)
+
+        var standard = store.profiles[0]
+        standard.hotkey = PersonalityTemplate.formal.suggestedHotkey
+        standard.isEnabled = true
+        store.update(standard)
+
+        let id = store.addProfile(template: .formal)
+        let profile = store.profile(id: id)
+
+        XCTAssertEqual(profile?.name, "Formal")
+        XCTAssertNil(profile?.hotkey)
+        XCTAssertFalse(profile?.isEnabled ?? true)
+    }
+
+    func testBlankCustomStartsWithoutShortcut() {
+        let suite = UserDefaults(suiteName: #function)!
+        suite.removePersistentDomain(forName: #function)
+        let store = SettingsStore(defaults: suite)
+
+        let id = store.addProfile()
+        let profile = store.profile(id: id)
+
+        XCTAssertEqual(profile?.name, "Blank Custom")
+        XCTAssertNil(profile?.hotkey)
+        XCTAssertFalse(profile?.isEnabled ?? true)
     }
 
     func testSettingsLoadWhenLegacyOverlayMotionModeIsPresent() throws {
