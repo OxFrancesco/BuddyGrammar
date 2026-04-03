@@ -223,14 +223,18 @@ struct OnboardingView: View {
     private var welcomeStep: some View {
         neoCard {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Grab selected text, fix it with AI, paste it back — one shortcut.")
+                Text("Grab selected text, run the Standard personality, and paste it back with one shortcut.")
                     .font(.system(size: 14, weight: .medium, design: .rounded))
 
                 HStack(spacing: 12) {
-                    featurePill(symbol: "keyboard", label: "⌘⇧F")
+                    featurePill(symbol: "keyboard", label: "⌘⇧1")
                     featurePill(symbol: "cpu", label: "gpt-5.4-nano")
                     featurePill(symbol: "menubar.rectangle", label: "Menu bar")
                 }
+
+                Text("You can add more personalities later from starter templates like Formal, Email, and Twitter Post.")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(NeoTheme.mutedForeground)
             }
         }
     }
@@ -333,12 +337,12 @@ struct OnboardingView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     workflowItem(icon: "selection.pin.in.out", text: "Select text anywhere.")
-                    workflowItem(icon: "keyboard", text: "Press ⌘⇧F.")
+                    workflowItem(icon: "keyboard", text: "Press ⌘⇧1 to run Standard.")
                     workflowItem(
                         icon: "doc.on.clipboard",
                         text: outputModeBinding.wrappedValue == .replaceSelection
-                            ? "Fixed text replaces selection."
-                            : "Fixed text goes to clipboard."
+                            ? "The corrected text replaces your selection."
+                            : "The corrected text goes to the clipboard."
                     )
                 }
             }

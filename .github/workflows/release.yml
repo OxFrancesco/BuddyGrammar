@@ -1,0 +1,152 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    env:
+      DERIVED_DATA: ${{ runner.temp }}/BuddyGrammarDerivedData
+      SPARKLE_TOOLS_DERIVED_DATA: ${{ runner.temp }}/SparkleToolsDerivedData
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build release app
+        run: |
+          xcodebuild \
+            -project BuddyGrammar.xcodeproj \
+            -scheme BuddyGrammar \
+            -configuration Release \
+            -derivedDataPath "$DERIVED_DATA" \
+            -destination "generic/platform=macOS" \
+            build
+
+      - name: Build Sparkle signing tool
+        run: |
+          SPARKLE_SOURCE="$DERIVED_DATA/SourcePackages/checkouts/Sparkle"
+          xcodebuild \
+            -project "$SPARKLE_SOURCE/Sparkle.xcodeproj" \
+            -scheme sign_update \
+            -configuration Release \
+            -derivedDataPath "$SPARKLE_TOOLS_DERIVED_DATA" \
+            build
+
+      - name: Package app
+        id: package
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          APP_PATH="$DERIVED_DATA/Build/Products/Release/BuddyGrammar.app"
+          ZIP_NAME="BuddyGrammar-${VERSION}.zip"
+          ZIP_PATH="$RUNNER_TEMP/$ZIP_NAME"
+
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_PATH"
+
+          SHORT_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")
+          BUILD_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Contents/Info.plist")
+          MIN_SYSTEM_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP_PATH/Contents/Info.plist")
+
+          echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
+          echo "zip_path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
+          echo "short_version=$SHORT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_version=$BUILD_VERSION" >> "$GITHUB_OUTPUT"
+          echo "minimum_system_version=$MIN_SYSTEM_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Sign update archive metadata
+        id: sparkle_sign
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "SPARKLE_PRIVATE_KEY secret is required." >&2
+            exit 1
+          fi
+
+          SIGN_TOOL="$SPARKLE_TOOLS_DERIVED_DATA/Build/Products/Release/sign_update"
+          SIGNATURE_LINE=$(printf '%s\n' "$SPARKLE_PRIVATE_KEY" | "$SIGN_TOOL" --ed-key-file - "${{ steps.package.outputs.zip_path }}")
+
+          echo "signature_line=$SIGNATURE_LINE" >> "$GITHUB_OUTPUT"
+          echo "signature=$(printf '%s' "$SIGNATURE_LINE" | sed -E 's/.*sparkle:edSignature=\"([^\"]+)\".*/\1/')" >> "$GITHUB_OUTPUT"
+          echo "length=$(printf '%s' "$SIGNATURE_LINE" | sed -E 's/.*length=\"([^\"]+)\".*/\1/')" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          ZIP_PATH="${{ steps.package.outputs.zip_path }}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP_PATH" --clobber
+          else
+            gh release create "$TAG" "$ZIP_PATH" \
+              --title "BuddyGrammar ${{ steps.package.outputs.short_version }}" \
+              --notes "Release ${{ steps.package.outputs.short_version }}"
+          fi
+
+      - name: Generate appcast
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          PUB_DATE=$(LC_ALL=en_US.UTF-8 date -u +"%a, %d %b %Y %H:%M:%S %z")
+          DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${{ steps.package.outputs.zip_name }}"
+
+          cat > "$RUNNER_TEMP/appcast.xml" <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0"
+              xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+              xmlns:dc="http://purl.org/dc/elements/1.1/">
+              <channel>
+                  <title>BuddyGrammar Updates</title>
+                  <link>https://github.com/${GITHUB_REPOSITORY}/releases</link>
+                  <description>Latest BuddyGrammar releases for Sparkle.</description>
+                  <language>en</language>
+                  <item>
+                      <title>Version ${{ steps.package.outputs.short_version }}</title>
+                      <pubDate>${PUB_DATE}</pubDate>
+                      <description><![CDATA[BuddyGrammar ${{ steps.package.outputs.short_version }}]]></description>
+                      <enclosure
+                          url="${DOWNLOAD_URL}"
+                          sparkle:version="${{ steps.package.outputs.build_version }}"
+                          sparkle:shortVersionString="${{ steps.package.outputs.short_version }}"
+                          sparkle:minimumSystemVersion="${{ steps.package.outputs.minimum_system_version }}"
+                          sparkle:edSignature="${{ steps.sparkle_sign.outputs.signature }}"
+                          length="${{ steps.sparkle_sign.outputs.length }}"
+                          type="application/octet-stream" />
+                  </item>
+              </channel>
+          </rss>
+          EOF
+
+      - name: Commit updated appcast
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git fetch origin "$DEFAULT_BRANCH"
+          git checkout "$DEFAULT_BRANCH"
+          cp "$RUNNER_TEMP/appcast.xml" "$GITHUB_WORKSPACE/appcast.xml"
+
+          if git diff --quiet -- appcast.xml; then
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git commit -m "Update appcast for ${GITHUB_REF_NAME}"
+          git push origin "HEAD:$DEFAULT_BRANCH"

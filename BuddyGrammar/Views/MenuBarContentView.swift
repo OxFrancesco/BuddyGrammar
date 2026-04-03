@@ -61,6 +61,7 @@ struct MenuBarContentView: View {
 
             // Actions
             HStack(spacing: 10) {
+                neoMenuButton("Updates", icon: "arrow.trianglehead.clockwise") { model.checkForUpdates() }
                 neoMenuButton("Settings", icon: "gearshape") { model.openSettings() }
                 Spacer()
                 neoMenuButton("Quit", icon: "xmark.circle") { NSApp.terminate(nil) }
@@ -130,4 +131,3 @@ private struct ProfileButton: View {
         .onHover { isHovered = $0 }
     }
 }
-

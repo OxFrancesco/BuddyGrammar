@@ -10,11 +10,33 @@ struct ProfileEditorView: View {
 
     var body: some View {
         Form {
-            Section("Profile") {
-                TextField("Name", text: binding(\.name))
-                TextEditor(text: binding(\.instruction))
-                    .font(.body)
-                    .frame(minHeight: 140)
+            Section("Personality") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Label")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    if profile.isStandard {
+                        readonlyCard(text: profile.name)
+                    } else {
+                        TextField("Label", text: binding(\.name))
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("System Prompt")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    if profile.isStandard {
+                        readonlyCard(text: profile.instruction, minHeight: 140)
+                    } else {
+                        TextEditor(text: binding(\.instruction))
+                            .font(.body)
+                            .frame(minHeight: 140)
+                    }
+                }
+
                 Toggle("Enabled", isOn: binding(\.isEnabled))
                     .disabled(profile.hotkey == nil)
             }
@@ -29,7 +51,9 @@ struct ProfileEditorView: View {
             Section("Actions") {
                 HStack {
                     Button("Move Up", action: onMoveUp)
+                        .disabled(profile.isStandard)
                     Button("Move Down", action: onMoveDown)
+                        .disabled(profile.isStandard)
                     Spacer()
                     if let onDelete {
                         Button("Delete", role: .destructive, action: onDelete)
@@ -38,15 +62,33 @@ struct ProfileEditorView: View {
                 }
             }
 
-            if profile.isBuiltIn {
+            Section {
+                Text("Templates are starting points. You can customize the label, system prompt, and shortcut after adding one.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if profile.isStandard {
                 Section {
-                    Text("The Grammar profile is built in and cannot be deleted.")
+                    Text("Standard is built in. Its label and system prompt are fixed, but you can change its shortcut.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func readonlyCard(text: String, minHeight: CGFloat? = nil) -> some View {
+        ScrollView {
+            Text(text)
+                .font(.body)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+        }
+        .frame(minHeight: minHeight)
+        .background(Color(nsColor: .textBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private func binding<Value>(_ keyPath: WritableKeyPath<PromptProfile, Value>) -> Binding<Value> {

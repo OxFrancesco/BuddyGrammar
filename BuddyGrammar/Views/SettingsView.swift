@@ -5,14 +5,14 @@ struct SettingsView: View {
     @State private var selectedTab: Tab = .general
 
     private enum Tab: String, CaseIterable, Identifiable {
-        case general, openRouter, profiles
+        case general, openRouter, personalities
         var id: Self { self }
 
         var title: String {
             switch self {
             case .general: "General"
             case .openRouter: "OpenRouter"
-            case .profiles: "Profiles"
+            case .personalities: "Personalities"
             }
         }
 
@@ -20,7 +20,7 @@ struct SettingsView: View {
             switch self {
             case .general: "gearshape"
             case .openRouter: "key.horizontal"
-            case .profiles: "slider.horizontal.3"
+            case .personalities: "slider.horizontal.3"
             }
         }
     }
@@ -142,8 +142,8 @@ struct SettingsView: View {
             generalTab
         case .openRouter:
             apiTab
-        case .profiles:
-            profilesTab
+        case .personalities:
+            personalitiesTab
         }
     }
 
@@ -168,6 +168,34 @@ struct SettingsView: View {
                 neoFormRow(label: "Launch at login") {
                     neoToggle(isOn: launchAtLoginBinding)
                 }
+
+                neoDivider
+
+                neoFormRow(label: "App version") {
+                    Text(model.appUpdateService.currentVersionDescription)
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(NeoTheme.mutedForeground)
+                }
+
+                HStack(spacing: 10) {
+                    Button("Check for Updates") {
+                        model.checkForUpdates()
+                    }
+                    .buttonStyle(NeoBrutalistButton(isPrimary: false))
+
+                    Button("Open Releases") {
+                        model.openReleasesPage()
+                    }
+                    .buttonStyle(NeoBrutalistButton(isPrimary: false))
+                }
+
+                Text(
+                    model.appUpdateService.usesSparkleUpdates
+                        ? "Sparkle is enabled for in-app updates backed by the GitHub release feed."
+                        : "Release browsing is enabled. In-app updates activate automatically once Sparkle signing is configured for release builds."
+                )
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(NeoTheme.mutedForeground)
 
                 neoDivider
 
@@ -247,9 +275,9 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Profiles
+    // MARK: - Personalities
 
-    private var profilesTab: some View {
+    private var personalitiesTab: some View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 10) {
                 VStack(spacing: 2) {
@@ -285,14 +313,58 @@ struct SettingsView: View {
                 .padding(8)
                 .modifier(NeoBrutalistCard())
 
+                neoCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Starter Templates")
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+
+                        ForEach(PersonalityTemplate.allCases) { template in
+                            Button {
+                                model.addPersonality(template: template)
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: templateSymbol(template))
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(NeoTheme.primary)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(template.title)
+                                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                                            .foregroundStyle(NeoTheme.foreground)
+                                        Text(templateSubtitle(template))
+                                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                                            .foregroundStyle(NeoTheme.mutedForeground)
+                                            .lineLimit(2)
+                                    }
+                                    Spacer()
+                                    Text(template.suggestedHotkey?.displayString ?? "—")
+                                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                        .foregroundStyle(NeoTheme.mutedForeground)
+                                }
+                                .padding(10)
+                                .background(NeoTheme.muted)
+                                .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                                        .stroke(NeoTheme.border, lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        Text("Templates are starting points. Add one, then customize the label, system prompt, and shortcut.")
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(NeoTheme.mutedForeground)
+                    }
+                }
+
                 HStack(spacing: 8) {
-                    Button("Add") {
-                        model.addProfile()
+                    Button("Add Blank") {
+                        model.addPersonality()
                     }
                     .buttonStyle(NeoBrutalistButton(isPrimary: false))
 
                     Button("Delete") {
-                        model.deleteSelectedProfile()
+                        model.deleteSelectedPersonality()
                     }
                     .buttonStyle(NeoBrutalistButton(isPrimary: false, isDisabled: selectedProfile?.isBuiltIn ?? true))
                     .disabled(selectedProfile?.isBuiltIn ?? true)
@@ -309,17 +381,17 @@ struct SettingsView: View {
                             model.settingsStore.update(updated)
                         },
                         onMoveUp: {
-                            model.moveSelectedProfile(.up)
+                            model.moveSelectedPersonality(.up)
                         },
                         onMoveDown: {
-                            model.moveSelectedProfile(.down)
+                            model.moveSelectedPersonality(.down)
                         },
                         onDelete: profile.isBuiltIn ? nil : {
-                            model.deleteSelectedProfile()
+                            model.deleteSelectedPersonality()
                         }
                     )
                 } else {
-                    ContentUnavailableView("No Profile Selected", systemImage: "slider.horizontal.below.rectangle")
+                    ContentUnavailableView("No Personality Selected", systemImage: "slider.horizontal.below.rectangle")
                 }
             }
             .frame(maxWidth: .infinity)
@@ -399,6 +471,32 @@ struct SettingsView: View {
     private var selectedProfile: PromptProfile? {
         guard let id = model.selectedProfileID else { return nil }
         return model.settingsStore.profile(id: id)
+    }
+
+    private func templateSymbol(_ template: PersonalityTemplate) -> String {
+        switch template {
+        case .formal:
+            "text.alignleft"
+        case .email:
+            "envelope"
+        case .twitterPost:
+            "bubble.left.and.bubble.right"
+        case .blankCustom:
+            "sparkles"
+        }
+    }
+
+    private func templateSubtitle(_ template: PersonalityTemplate) -> String {
+        switch template {
+        case .formal:
+            "Polished, formal wording"
+        case .email:
+            "Professional email draft"
+        case .twitterPost:
+            "Short social post"
+        case .blankCustom:
+            "Start from a blank prompt"
+        }
     }
 
     private var outputModeBinding: Binding<OutputMode> {
