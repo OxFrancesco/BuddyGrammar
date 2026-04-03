@@ -11,15 +11,17 @@ permissions:
 jobs:
   release:
     runs-on: macos-latest
-    env:
-      DERIVED_DATA: ${{ runner.temp }}/BuddyGrammarDerivedData
-      SPARKLE_TOOLS_DERIVED_DATA: ${{ runner.temp }}/SparkleToolsDerivedData
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Configure build paths
+        run: |
+          echo "DERIVED_DATA=$RUNNER_TEMP/BuddyGrammarDerivedData" >> "$GITHUB_ENV"
+          echo "SPARKLE_TOOLS_DERIVED_DATA=$RUNNER_TEMP/SparkleToolsDerivedData" >> "$GITHUB_ENV"
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -62,11 +64,13 @@ jobs:
           BUILD_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Contents/Info.plist")
           MIN_SYSTEM_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP_PATH/Contents/Info.plist")
 
-          echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
-          echo "zip_path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
-          echo "short_version=$SHORT_VERSION" >> "$GITHUB_OUTPUT"
-          echo "build_version=$BUILD_VERSION" >> "$GITHUB_OUTPUT"
-          echo "minimum_system_version=$MIN_SYSTEM_VERSION" >> "$GITHUB_OUTPUT"
+          {
+            echo "zip_name=$ZIP_NAME"
+            echo "zip_path=$ZIP_PATH"
+            echo "short_version=$SHORT_VERSION"
+            echo "build_version=$BUILD_VERSION"
+            echo "minimum_system_version=$MIN_SYSTEM_VERSION"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Sign update archive metadata
         id: sparkle_sign
@@ -81,9 +85,11 @@ jobs:
           SIGN_TOOL="$SPARKLE_TOOLS_DERIVED_DATA/Build/Products/Release/sign_update"
           SIGNATURE_LINE=$(printf '%s\n' "$SPARKLE_PRIVATE_KEY" | "$SIGN_TOOL" --ed-key-file - "${{ steps.package.outputs.zip_path }}")
 
-          echo "signature_line=$SIGNATURE_LINE" >> "$GITHUB_OUTPUT"
-          echo "signature=$(printf '%s' "$SIGNATURE_LINE" | sed -E 's/.*sparkle:edSignature=\"([^\"]+)\".*/\1/')" >> "$GITHUB_OUTPUT"
-          echo "length=$(printf '%s' "$SIGNATURE_LINE" | sed -E 's/.*length=\"([^\"]+)\".*/\1/')" >> "$GITHUB_OUTPUT"
+          {
+            echo "signature_line=$SIGNATURE_LINE"
+            echo "signature=$(printf '%s' "$SIGNATURE_LINE" | sed -E 's/.*sparkle:edSignature=\"([^\"]+)\".*/\1/')"
+            echo "length=$(printf '%s' "$SIGNATURE_LINE" | sed -E 's/.*length=\"([^\"]+)\".*/\1/')"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create or update GitHub release
         env:
