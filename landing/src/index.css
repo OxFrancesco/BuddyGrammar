@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Satoshi:wght@500;700;900&family=JetBrains+Mono:wght@500;700&display=swap');
+
+:root {
+  --bg: #EFF1F5;
+  --fg: #4C4F69;
+  --card: #ffffff;
+  --primary: #8839EF;
+  --accent: #04A5E5;
+  --destructive: #D20F39;
+  --muted: #DCE0E8;
+  --muted-fg: #6C6F85;
+  --border: #BCC0CC;
+  --green: #40A02B;
+  --orange: #FE640B;
+  --shadow: #1A1A2E;
+  --border-w: 2px;
+  --shadow-offset: 4px;
+  --radius: 8px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Satoshi', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--primary);
+  color: #fff;
+}
