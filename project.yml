@@ -15,6 +15,15 @@ packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     from: 2.7.0
+  MLXSwiftLM:
+    url: https://github.com/ml-explore/mlx-swift-lm.git
+    revision: 8c9dd6391139242261bcf27d253c326f9cf2d567
+  SwiftHuggingFaceMLX:
+    url: https://github.com/DePasqualeOrg/swift-huggingface-mlx.git
+    branch: main
+  SwiftTransformersMLX:
+    url: https://github.com/DePasqualeOrg/swift-transformers-mlx.git
+    branch: main
 targets:
   BuddyGrammar:
     type: application
@@ -23,6 +32,14 @@ targets:
       - path: BuddyGrammar
     dependencies:
       - package: Sparkle
+      - package: MLXSwiftLM
+        product: MLXLLM
+      - package: MLXSwiftLM
+        product: MLXLMCommon
+      - package: SwiftHuggingFaceMLX
+        product: MLXLMHuggingFace
+      - package: SwiftTransformersMLX
+        product: MLXLMTransformers
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.francescooddo.BuddyGrammar

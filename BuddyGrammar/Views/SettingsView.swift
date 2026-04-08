@@ -2,16 +2,15 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var model: AppModel
-    @State private var selectedTab: Tab = .general
 
     private enum Tab: String, CaseIterable, Identifiable {
-        case general, openRouter, personalities
+        case general, models, personalities
         var id: Self { self }
 
         var title: String {
             switch self {
             case .general: "General"
-            case .openRouter: "OpenRouter"
+            case .models: "Models"
             case .personalities: "Personalities"
             }
         }
@@ -19,36 +18,89 @@ struct SettingsView: View {
         var symbol: String {
             switch self {
             case .general: "gearshape"
-            case .openRouter: "key.horizontal"
+            case .models: "cpu"
             case .personalities: "slider.horizontal.3"
             }
         }
     }
 
+    @State private var selectedTab: Tab = .general
+
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-                .frame(minWidth: 170, idealWidth: 190, maxWidth: 220)
-                .padding(16)
+        GeometryReader { geo in
+            let compact = geo.size.width < 560
 
-            Rectangle()
-                .fill(NeoTheme.border)
-                .frame(width: 1)
-                .padding(.vertical, 16)
+            if compact {
+                VStack(spacing: 0) {
+                    compactTabBar
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                        .padding(.bottom, 8)
 
-            ZStack {
-                tabContent
-                    .id(selectedTab)
-                    .transition(.opacity)
+                    Rectangle()
+                        .fill(NeoTheme.border)
+                        .frame(height: 1)
+
+                    ZStack {
+                        tabContent
+                            .id(selectedTab)
+                            .transition(.opacity)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(16)
+                }
+            } else {
+                HStack(spacing: 0) {
+                    sidebar
+                        .frame(minWidth: 170, idealWidth: 190, maxWidth: 220)
+                        .padding(16)
+
+                    Rectangle()
+                        .fill(NeoTheme.border)
+                        .frame(width: 1)
+                        .padding(.vertical, 16)
+
+                    ZStack {
+                        tabContent
+                            .id(selectedTab)
+                            .transition(.opacity)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(24)
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(NeoTheme.background)
         .foregroundStyle(NeoTheme.foreground)
         .focusEffectDisabled()
         .animation(.easeInOut(duration: 0.15), value: selectedTab)
+    }
+
+    // MARK: - Compact Tab Bar
+
+    private var compactTabBar: some View {
+        HStack(spacing: 4) {
+            ForEach(Tab.allCases) { tab in
+                Button {
+                    selectedTab = tab
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: tab.symbol)
+                            .font(.system(size: 11, weight: .semibold))
+                        Text(tab.title)
+                            .font(.system(size: 12, weight: selectedTab == tab ? .bold : .medium, design: .rounded))
+                    }
+                    .foregroundStyle(selectedTab == tab ? NeoTheme.foreground : NeoTheme.mutedForeground)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(selectedTab == tab ? NeoTheme.primary.opacity(0.1) : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+                }
+                .buttonStyle(.plain)
+                .focusEffectDisabled()
+            }
+        }
     }
 
     // MARK: - Sidebar
@@ -96,8 +148,8 @@ struct SettingsView: View {
         switch selectedTab {
         case .general:
             generalTab
-        case .openRouter:
-            apiTab
+        case .models:
+            modelsTab
         case .personalities:
             personalitiesTab
         }
@@ -170,166 +222,274 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - API
+    // MARK: - Models
 
-    private var apiTab: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            neoCard {
-                VStack(alignment: .leading, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("API Key")
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(NeoTheme.mutedForeground)
-
-                        SecureField("sk-or-v1-…", text: $model.apiKeyDraft)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .padding(10)
-                            .background(NeoTheme.muted)
-                            .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
-                                    .stroke(NeoTheme.border, lineWidth: 1)
-                            )
-                    }
-
-                    HStack(spacing: 10) {
-                        Button("Save Key") {
-                            model.saveAPIKey()
-                        }
-                        .buttonStyle(NeoBrutalistButton())
-
-                        Button("Clear") {
-                            model.apiKeyDraft = ""
-                            model.saveAPIKey()
-                        }
-                        .buttonStyle(NeoBrutalistButton(isPrimary: false))
-                        .disabled(model.apiKeyDraft.isEmpty && !model.hasAPIKey)
-
-                        if model.hasAPIKey {
-                            HStack(spacing: 4) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 12, weight: .semibold))
-                                Text("Saved")
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+    private var modelsTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Provider selector
+                neoCard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        neoFormRow(label: "Rewrite provider") {
+                            Picker("", selection: rewriteProviderBinding) {
+                                ForEach(RewriteProviderKind.allCases) { providerKind in
+                                    Text(providerKind.title).tag(providerKind)
+                                }
                             }
-                            .foregroundStyle(NeoTheme.green)
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(maxWidth: 280)
                         }
                     }
+                }
 
-                    if let error = model.settingsErrorMessage {
-                        Text(error)
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(NeoTheme.destructive)
-                    }
-
-                    neoDivider
-
-                    featurePill(symbol: "cpu", label: "openai/gpt-5.4-nano")
+                // Active model card
+                if model.usesLocalProvider {
+                    localModelCard
+                } else {
+                    openRouterCard
                 }
             }
+        }
+    }
 
-            Spacer()
+    private var openRouterCard: some View {
+        neoCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
+                    Image(systemName: "globe")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(NeoTheme.primary)
+                    Text("OpenRouter")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                }
+
+                Text(model.currentProviderDescription)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundStyle(NeoTheme.mutedForeground)
+
+                neoDivider
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("API Key")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(NeoTheme.mutedForeground)
+
+                    SecureField("sk-or-v1-…", text: $model.apiKeyDraft)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .padding(10)
+                        .background(NeoTheme.muted)
+                        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                                .stroke(NeoTheme.border, lineWidth: 1)
+                        )
+                }
+
+                HStack(spacing: 10) {
+                    Button("Save Key") {
+                        model.saveAPIKey()
+                    }
+                    .buttonStyle(NeoBrutalistButton())
+
+                    Button("Clear") {
+                        model.apiKeyDraft = ""
+                        model.saveAPIKey()
+                    }
+                    .buttonStyle(NeoBrutalistButton(isPrimary: false))
+                    .disabled(model.apiKeyDraft.isEmpty && !model.hasAPIKey)
+
+                    if model.hasAPIKey {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text("Saved")
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                        }
+                        .foregroundStyle(NeoTheme.green)
+                    }
+                }
+
+                if let error = model.settingsErrorMessage {
+                    Text(error)
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(NeoTheme.destructive)
+                }
+            }
+        }
+    }
+
+    private var localModelCard: some View {
+        neoCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
+                    Image(systemName: "laptopcomputer")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(NeoTheme.primary)
+                    Text("Local MLX")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                }
+
+                neoDivider
+
+                neoFormRow(label: "Model") {
+                    Picker("", selection: selectedLocalModelBinding) {
+                        ForEach(LocalModelID.allCases) { modelID in
+                            Text(modelID.title).tag(modelID)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 280)
+                }
+
+                Text(model.selectedLocalModel.summary)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(NeoTheme.mutedForeground)
+
+                HStack(spacing: 8) {
+                    featurePill(symbol: "shippingbox", label: model.selectedLocalModel.badge)
+                    localModelStatusPill(status: model.selectedLocalModelStatus)
+                }
+
+                if model.hasAPIKey {
+                    neoDivider
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.trianglehead.clockwise")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(NeoTheme.accent)
+                        Text("OpenRouter fallback available")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(NeoTheme.mutedForeground)
+                    }
+                }
+
+                if let localModelError = model.localModelStore.lastErrorMessage {
+                    Text(localModelError)
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(NeoTheme.destructive)
+                }
+            }
         }
     }
 
     // MARK: - Personalities
 
     private var personalitiesTab: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 10) {
-                VStack(spacing: 2) {
-                    ForEach(model.settingsStore.profiles) { profile in
-                        Button {
-                            model.selectedProfileID = profile.id
-                        } label: {
-                            HStack(spacing: 8) {
-                                Text(profile.name)
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                                    .lineLimit(1)
-                                Spacer()
-                                Text(profile.hotkey?.displayString ?? "—")
-                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                    .foregroundStyle(NeoTheme.mutedForeground)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
-                            .background(model.selectedProfileID == profile.id ? NeoTheme.primary.opacity(0.1) : Color.clear)
-                            .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
-                        }
-                        .buttonStyle(.plain)
-                        .focusEffectDisabled()
-                    }
+        GeometryReader { geo in
+            let narrow = geo.size.width < 480
+
+            if narrow {
+                VStack(spacing: 12) {
+                    personalityList
+                        .frame(maxHeight: 200)
+                    personalityEditor
                 }
-                .padding(6)
-                .modifier(NeoBrutalistCard())
+            } else {
+                HStack(alignment: .top, spacing: 16) {
+                    personalityList
+                        .frame(minWidth: 200, idealWidth: 230, maxWidth: 260)
+                    personalityEditor
+                }
+            }
+        }
+    }
 
-                HStack(spacing: 8) {
-                    Menu {
-                        ForEach(PersonalityTemplate.allCases) { template in
-                            Button {
-                                model.addPersonality(template: template)
-                            } label: {
-                                Label {
-                                    VStack(alignment: .leading) {
-                                        Text(template.title)
-                                        Text(templateSubtitle(template))
-                                            .font(.caption2)
-                                    }
-                                } icon: {
-                                    Image(systemName: templateSymbol(template))
+    private var personalityList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(spacing: 2) {
+                ForEach(model.settingsStore.profiles) { profile in
+                    Button {
+                        model.selectedProfileID = profile.id
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text(profile.name)
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .lineLimit(1)
+                            Spacer()
+                            Text(profile.hotkey?.displayString ?? "—")
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(NeoTheme.mutedForeground)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(model.selectedProfileID == profile.id ? NeoTheme.primary.opacity(0.1) : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+                    }
+                    .buttonStyle(.plain)
+                    .focusEffectDisabled()
+                }
+            }
+            .padding(6)
+            .modifier(NeoBrutalistCard())
+
+            HStack(spacing: 8) {
+                Menu {
+                    ForEach(PersonalityTemplate.allCases) { template in
+                        Button {
+                            model.addPersonality(template: template)
+                        } label: {
+                            Label {
+                                VStack(alignment: .leading) {
+                                    Text(template.title)
+                                    Text(templateSubtitle(template))
+                                        .font(.caption2)
                                 }
+                            } icon: {
+                                Image(systemName: templateSymbol(template))
                             }
                         }
-                    } label: {
-                        Text("Add")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 10)
-                            .foregroundStyle(NeoTheme.foreground)
-                            .background(NeoTheme.card)
-                            .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
-                                    .stroke(NeoTheme.border, lineWidth: NeoTheme.borderWidth)
-                            )
                     }
-                    .focusEffectDisabled()
+                } label: {
+                    Text("Add")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .foregroundStyle(NeoTheme.foreground)
+                        .background(NeoTheme.card)
+                        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                                .stroke(NeoTheme.border, lineWidth: NeoTheme.borderWidth)
+                        )
+                }
+                .focusEffectDisabled()
 
-                    Button("Delete") {
+                Button("Delete") {
+                    model.deleteSelectedPersonality()
+                }
+                .buttonStyle(NeoBrutalistButton(isPrimary: false, isDisabled: selectedProfile?.isBuiltIn ?? true))
+                .disabled(selectedProfile?.isBuiltIn ?? true)
+            }
+        }
+    }
+
+    private var personalityEditor: some View {
+        Group {
+            if let profile = selectedProfile {
+                ProfileEditorView(
+                    profile: profile,
+                    conflictingProfile: model.settingsStore.hotkeyConflict(for: profile.id, hotkey: profile.hotkey),
+                    onChange: { updated in
+                        model.settingsStore.update(updated)
+                    },
+                    onMoveUp: {
+                        model.moveSelectedPersonality(.up)
+                    },
+                    onMoveDown: {
+                        model.moveSelectedPersonality(.down)
+                    },
+                    onDelete: profile.isBuiltIn ? nil : {
                         model.deleteSelectedPersonality()
                     }
-                    .buttonStyle(NeoBrutalistButton(isPrimary: false, isDisabled: selectedProfile?.isBuiltIn ?? true))
-                    .disabled(selectedProfile?.isBuiltIn ?? true)
-                }
+                )
+                .id(profile.id)
+            } else {
+                ContentUnavailableView("No Personality Selected", systemImage: "slider.horizontal.below.rectangle")
             }
-            .frame(minWidth: 200, idealWidth: 230, maxWidth: 260)
-
-            Group {
-                if let profile = selectedProfile {
-                    ProfileEditorView(
-                        profile: profile,
-                        conflictingProfile: model.settingsStore.hotkeyConflict(for: profile.id, hotkey: profile.hotkey),
-                        onChange: { updated in
-                            model.settingsStore.update(updated)
-                        },
-                        onMoveUp: {
-                            model.moveSelectedPersonality(.up)
-                        },
-                        onMoveDown: {
-                            model.moveSelectedPersonality(.down)
-                        },
-                        onDelete: profile.isBuiltIn ? nil : {
-                            model.deleteSelectedPersonality()
-                        }
-                    )
-                    .id(profile.id)
-                } else {
-                    ContentUnavailableView("No Personality Selected", systemImage: "slider.horizontal.below.rectangle")
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Shared Components
@@ -365,6 +525,45 @@ struct SettingsView: View {
                 .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .foregroundStyle(NeoTheme.accent)
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(NeoTheme.muted)
+        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                .stroke(NeoTheme.border, lineWidth: 1)
+        )
+    }
+
+    private func localModelStatusPill(status: LocalModelStatus) -> some View {
+        let progressSuffix: String
+        if let progress = status.progress, status.state == .downloading {
+            progressSuffix = " \(Int(progress * 100))%"
+        } else {
+            progressSuffix = ""
+        }
+
+        let color: Color
+        switch status.state {
+        case .loaded:
+            color = NeoTheme.green
+        case .ready:
+            color = NeoTheme.accent
+        case .downloading, .loading:
+            color = NeoTheme.orange
+        case .failed:
+            color = NeoTheme.destructive
+        case .notDownloaded:
+            color = NeoTheme.mutedForeground
+        }
+
+        return HStack(spacing: 6) {
+            Image(systemName: iconName(for: status.state))
+                .font(.system(size: 12, weight: .bold))
+            Text(status.state.title + progressSuffix)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+        }
+        .foregroundStyle(color)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(NeoTheme.muted)
@@ -417,6 +616,24 @@ struct SettingsView: View {
         )
     }
 
+    private var rewriteProviderBinding: Binding<RewriteProviderKind> {
+        Binding(
+            get: { model.rewriteProviderKind },
+            set: { newValue in
+                model.setRewriteProviderKind(newValue)
+            }
+        )
+    }
+
+    private var selectedLocalModelBinding: Binding<LocalModelID> {
+        Binding(
+            get: { model.selectedLocalModel },
+            set: { newValue in
+                model.setSelectedLocalModel(newValue)
+            }
+        )
+    }
+
     private var launchAtLoginBinding: Binding<Bool> {
         Binding(
             get: { model.settingsStore.appSettings.launchAtLogin },
@@ -424,5 +641,22 @@ struct SettingsView: View {
                 model.settingsStore.appSettings.launchAtLogin = newValue
             }
         )
+    }
+
+    private func iconName(for state: LocalModelState) -> String {
+        switch state {
+        case .notDownloaded:
+            "arrow.down.circle"
+        case .downloading:
+            "arrow.down.circle.fill"
+        case .ready:
+            "checkmark.circle"
+        case .loading:
+            "clock.arrow.trianglehead.counterclockwise.rotate.90"
+        case .loaded:
+            "checkmark.circle.fill"
+        case .failed:
+            "xmark.circle.fill"
+        }
     }
 }

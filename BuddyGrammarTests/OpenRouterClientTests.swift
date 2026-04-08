@@ -4,11 +4,14 @@ import XCTest
 final class OpenRouterClientTests: XCTestCase {
     func testPayloadIncludesExpectedModelAndInstruction() throws {
         let payload = OpenRouterRequestFactory.makePayload(
+            modelID: OpenRouterModel.defaultID,
             instruction: "Fix grammar only.",
             selectedText: "this are bad"
         )
 
-        XCTAssertEqual(payload.model, "openai/gpt-5.4-nano")
+        XCTAssertEqual(payload.model, OpenRouterModel.defaultID)
+        XCTAssertEqual(payload.temperature, 0)
+        XCTAssertEqual(payload.maxCompletionTokens, 96)
         XCTAssertEqual(payload.messages.first?.content, "Fix grammar only.")
         XCTAssertEqual(payload.messages.last?.content, "this are bad")
     }

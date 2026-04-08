@@ -18,7 +18,7 @@ struct OnboardingView: View {
             case .welcome:
                 "Welcome"
             case .apiKey:
-                "OpenRouter Key"
+                "Provider"
             case .accessibility:
                 "Accessibility"
             case .workflow:
@@ -33,7 +33,7 @@ struct OnboardingView: View {
             case .welcome:
                 "Set up BuddyGrammar in a couple of minutes."
             case .apiKey:
-                "Save the key BuddyGrammar uses for rewrites."
+                "Choose OpenRouter or a local MLX model."
             case .accessibility:
                 "Allow cross-app text capture and replacement."
             case .workflow:
@@ -65,6 +65,7 @@ struct OnboardingView: View {
     @State private var accessibilityCheckAttempt = 0
     @State private var isAccessibilityChecking = false
     @State private var accessibilitySecondsUntilRetry = 0
+    @State private var showsAdvancedLocalModels = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -228,7 +229,7 @@ struct OnboardingView: View {
 
                 HStack(spacing: 12) {
                     featurePill(symbol: "keyboard", label: "⌘⇧1")
-                    featurePill(symbol: "cpu", label: "gpt-5.4-nano")
+                    featurePill(symbol: "cpu", label: model.currentProviderDescription)
                     featurePill(symbol: "menubar.rectangle", label: "Menu bar")
                 }
 
@@ -244,30 +245,76 @@ struct OnboardingView: View {
     private var apiKeyStep: some View {
         neoCard {
             VStack(alignment: .leading, spacing: 14) {
-                SecureField("OpenRouter API Key", text: $model.apiKeyDraft)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
-                    .padding(10)
-                    .background(NeoTheme.muted)
-                    .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
-                            .stroke(NeoTheme.foreground, lineWidth: NeoTheme.borderWidth)
-                    )
-
-                Button("Save Key") {
-                    model.saveAPIKey()
+                Picker("Provider", selection: rewriteProviderBinding) {
+                    ForEach(RewriteProviderKind.allCases) { providerKind in
+                        Text(providerKind.title).tag(providerKind)
+                    }
                 }
-                .buttonStyle(NeoBrutalistButton())
+                .pickerStyle(.segmented)
 
-                if model.hasAPIKey {
-                    neoStatusBadge(text: "Key saved", icon: "checkmark.circle.fill", color: NeoTheme.green)
+                if model.usesLocalProvider {
+                    Picker("Local model", selection: selectedLocalModelBinding) {
+                        ForEach(visibleLocalModels) { modelID in
+                            Text(modelID.title).tag(modelID)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Text(model.selectedLocalModel.summary)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(NeoTheme.mutedForeground)
+
+                    HStack(spacing: 10) {
+                        Button("Warm Load") {
+                            model.preloadSelectedLocalModel()
+                        }
+                        .buttonStyle(NeoBrutalistButton())
+
+                        Toggle("Preload on launch", isOn: preloadLocalModelBinding)
+                            .toggleStyle(.switch)
+                            .tint(NeoTheme.primary)
+                    }
+
+                    Button(showsAdvancedLocalModels ? "Hide advanced local models" : "Show advanced local models") {
+                        showsAdvancedLocalModels.toggle()
+                    }
+                    .buttonStyle(.plain)
+
+                    neoStatusBadge(
+                        text: localProviderBadgeText,
+                        icon: localProviderBadgeIcon,
+                        color: localProviderBadgeColor
+                    )
                 } else {
-                    neoStatusBadge(text: "No key yet", icon: "exclamationmark.triangle.fill", color: NeoTheme.orange)
+                    SecureField("OpenRouter API Key", text: $model.apiKeyDraft)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .padding(10)
+                        .background(NeoTheme.muted)
+                        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                                .stroke(NeoTheme.foreground, lineWidth: NeoTheme.borderWidth)
+                        )
+
+                    Button("Save Key") {
+                        model.saveAPIKey()
+                    }
+                    .buttonStyle(NeoBrutalistButton())
+
+                    if model.hasAPIKey {
+                        neoStatusBadge(text: "Key saved", icon: "checkmark.circle.fill", color: NeoTheme.green)
+                    } else {
+                        neoStatusBadge(text: "No key yet", icon: "exclamationmark.triangle.fill", color: NeoTheme.orange)
+                    }
                 }
 
                 if let settingsErrorMessage = model.settingsErrorMessage {
                     neoStatusBadge(text: settingsErrorMessage, icon: "xmark.circle.fill", color: NeoTheme.destructive)
+                }
+
+                if let localModelError = model.localModelStore.lastErrorMessage, model.usesLocalProvider {
+                    neoStatusBadge(text: localModelError, icon: "xmark.circle.fill", color: NeoTheme.destructive)
                 }
             }
         }
@@ -356,10 +403,10 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(spacing: 8) {
                     statusRow(
-                        title: "API key",
-                        isComplete: model.hasAPIKey,
-                        successText: "Saved",
-                        pendingText: "Missing"
+                        title: "Provider",
+                        isComplete: isProviderStepSatisfied,
+                        successText: providerCompletionText,
+                        pendingText: providerPendingText
                     )
                     statusRow(
                         title: "Accessibility",
@@ -500,8 +547,108 @@ struct OnboardingView: View {
         )
     }
 
+    private var rewriteProviderBinding: Binding<RewriteProviderKind> {
+        Binding(
+            get: { model.rewriteProviderKind },
+            set: { newValue in
+                model.setRewriteProviderKind(newValue)
+            }
+        )
+    }
+
+    private var selectedLocalModelBinding: Binding<LocalModelID> {
+        Binding(
+            get: { model.selectedLocalModel },
+            set: { newValue in
+                model.setSelectedLocalModel(newValue)
+            }
+        )
+    }
+
+    private var preloadLocalModelBinding: Binding<Bool> {
+        Binding(
+            get: { model.preloadLocalModelOnLaunch },
+            set: { newValue in
+                model.setPreloadLocalModelOnLaunch(newValue)
+            }
+        )
+    }
+
+    private var visibleLocalModels: [LocalModelID] {
+        LocalModelID.allCases.filter { modelID in
+            !modelID.isAdvanced || showsAdvancedLocalModels || model.selectedLocalModel == modelID
+        }
+    }
+
+    private var isProviderStepSatisfied: Bool {
+        switch model.rewriteProviderKind {
+        case .openRouter:
+            model.hasAPIKey
+        case .local:
+            true
+        }
+    }
+
+    private var providerCompletionText: String {
+        switch model.rewriteProviderKind {
+        case .openRouter:
+            "OpenRouter"
+        case .local:
+            model.selectedLocalModel.title
+        }
+    }
+
+    private var providerPendingText: String {
+        switch model.rewriteProviderKind {
+        case .openRouter:
+            "Add API key"
+        case .local:
+            "Select local model"
+        }
+    }
+
+    private var localProviderBadgeText: String {
+        let status = model.selectedLocalModelStatus
+        if let progress = status.progress, status.state == .downloading {
+            return "\(status.state.title) \(Int(progress * 100))%"
+        }
+        return status.state.title
+    }
+
+    private var localProviderBadgeIcon: String {
+        switch model.selectedLocalModelStatus.state {
+        case .notDownloaded:
+            "shippingbox"
+        case .downloading:
+            "arrow.down.circle.fill"
+        case .ready:
+            "checkmark.circle"
+        case .loading:
+            "clock.arrow.trianglehead.counterclockwise.rotate.90"
+        case .loaded:
+            "checkmark.circle.fill"
+        case .failed:
+            "xmark.circle.fill"
+        }
+    }
+
+    private var localProviderBadgeColor: Color {
+        switch model.selectedLocalModelStatus.state {
+        case .loaded:
+            NeoTheme.green
+        case .ready:
+            NeoTheme.accent
+        case .downloading, .loading:
+            NeoTheme.orange
+        case .failed:
+            NeoTheme.destructive
+        case .notDownloaded:
+            NeoTheme.mutedForeground
+        }
+    }
+
     private var isReadyToFinish: Bool {
-        model.hasAPIKey && model.accessibilityGranted
+        isProviderStepSatisfied && model.accessibilityGranted
     }
 
     private func canAdvance(from step: Step) -> Bool {
@@ -509,7 +656,7 @@ struct OnboardingView: View {
         case .welcome, .workflow:
             true
         case .apiKey:
-            model.hasAPIKey
+            isProviderStepSatisfied
         case .accessibility:
             model.accessibilityGranted
         case .finish:

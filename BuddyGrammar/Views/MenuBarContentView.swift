@@ -3,7 +3,6 @@ import SwiftUI
 struct MenuBarContentView: View {
     @Bindable var model: AppModel
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.openSettings) private var openSettings
 
     private var fg: Color { colorScheme == .dark ? Color(hex: 0xCDD6F4) : Color(hex: 0x4C4F69) }
     private var fgSecondary: Color { colorScheme == .dark ? Color(hex: 0xA6ADC8) : Color(hex: 0x6C6F85) }
@@ -66,7 +65,7 @@ struct MenuBarContentView: View {
             // Actions
             HStack(spacing: 10) {
                 neoMenuButton("Updates", icon: "arrow.trianglehead.clockwise") { model.checkForUpdates() }
-                neoMenuButton("Settings", icon: "gearshape") { openSettings() }
+                neoMenuButton("Settings", icon: "gearshape") { model.openSettings() }
                 Spacer()
                 neoMenuButton("Quit", icon: "xmark.circle") { NSApp.terminate(nil) }
             }

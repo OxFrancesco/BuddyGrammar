@@ -17,6 +17,8 @@ enum RewriteFailure: LocalizedError, Equatable {
     case emptySelection
     case network(String)
     case unexpectedResponse
+    case invalidOutput
+    case localModel(String)
     case busy
     case pasteFailed
 
@@ -34,6 +36,10 @@ enum RewriteFailure: LocalizedError, Equatable {
             message
         case .unexpectedResponse:
             "OpenRouter returned an empty or unreadable response."
+        case .invalidOutput:
+            "The model returned text BuddyGrammar could not safely apply."
+        case .localModel(let message):
+            message
         case .busy:
             "BuddyGrammar is already processing another prompt."
         case .pasteFailed:

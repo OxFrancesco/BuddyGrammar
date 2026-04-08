@@ -8,8 +8,9 @@ actor OpenRouterClient {
         self.session = session
     }
 
-    func rewrite(_ request: RewriteRequest, apiKey: String) async throws -> RewriteResult {
+    func rewrite(_ request: RewriteRequest, apiKey: String, modelID: String) async throws -> RewriteResult {
         let payload = OpenRouterRequestFactory.makePayload(
+            modelID: modelID,
             instruction: request.profile.instruction,
             selectedText: request.selectedText
         )
@@ -47,15 +48,39 @@ actor OpenRouterClient {
 }
 
 enum OpenRouterRequestFactory {
-    static func makePayload(instruction: String, selectedText: String) -> OpenRouterChatRequest {
+    static func makePayload(modelID: String, instruction: String, selectedText: String) -> OpenRouterChatRequest {
         OpenRouterChatRequest(
-            model: "openai/gpt-5.4-nano",
-            temperature: 0.1,
-            maxCompletionTokens: max(256, min(2_048, selectedText.count * 2)),
+            model: modelID,
+            temperature: 0,
+            maxCompletionTokens: 96,
             messages: [
                 .init(role: "system", content: instruction),
                 .init(role: "user", content: selectedText)
             ]
+        )
+    }
+}
+
+actor OpenRouterRewriteEngine: RewriteEngine {
+    private let client: OpenRouterClient
+    private let apiKey: String?
+    private let modelID: String
+
+    init(client: OpenRouterClient, apiKey: String?, modelID: String) {
+        self.client = client
+        self.apiKey = apiKey
+        self.modelID = modelID
+    }
+
+    func rewrite(_ request: RewriteRequest) async throws -> RewriteResult {
+        guard let apiKey, !apiKey.isEmpty else {
+            throw RewriteFailure.missingAPIKey
+        }
+
+        let result = try await client.rewrite(request, apiKey: apiKey, modelID: modelID)
+        return RewriteResult(
+            originalText: result.originalText,
+            rewrittenText: try RewriteOutputGuard.sanitize(result.rewrittenText)
         )
     }
 }

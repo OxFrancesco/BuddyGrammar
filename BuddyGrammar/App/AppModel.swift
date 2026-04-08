@@ -11,6 +11,8 @@ final class AppModel {
     let accessibilityService: AccessibilityService
     let appUpdateService: AppUpdateService
     let hotkeyService: HotkeyService
+    let localModelStore: LocalModelStore
+    let rewriteProviderController: RewriteProviderController
     let rewriteCoordinator: RewriteCoordinator
     let menuBarStatus: MenuBarStatusModel
 
@@ -30,21 +32,27 @@ final class AppModel {
         let clipboardService = ClipboardService()
         let eventSimulationService = EventSimulationService()
         let menuBarStatus = MenuBarStatusModel()
+        let localModelStore = LocalModelStore()
         let selectionService = SelectionService(
             accessibilityService: accessibilityService,
             clipboardService: clipboardService,
             eventSimulationService: eventSimulationService
         )
         let openRouterClient = OpenRouterClient()
+        let rewriteProviderController = RewriteProviderController(
+            settingsStore: settingsStore,
+            keychainService: keychainService,
+            openRouterClient: openRouterClient,
+            localModelStore: localModelStore
+        )
         let hotkeyService = HotkeyService()
         let launchAtLoginService = LaunchAtLoginService()
         let rewriteCoordinator = RewriteCoordinator(
             settingsStore: settingsStore,
-            keychainService: keychainService,
             selectionService: selectionService,
             clipboardService: clipboardService,
             eventSimulationService: eventSimulationService,
-            openRouterClient: openRouterClient,
+            rewriteProviderController: rewriteProviderController,
             menuBarStatus: menuBarStatus
         )
 
@@ -53,6 +61,8 @@ final class AppModel {
         self.accessibilityService = accessibilityService
         self.appUpdateService = appUpdateService
         self.hotkeyService = hotkeyService
+        self.localModelStore = localModelStore
+        self.rewriteProviderController = rewriteProviderController
         self.launchAtLoginService = launchAtLoginService
         self.rewriteCoordinator = rewriteCoordinator
         self.menuBarStatus = menuBarStatus
@@ -70,6 +80,7 @@ final class AppModel {
         }
         settingsStore.onSettingsChanged = { [weak self] settings in
             self?.apply(settings: settings)
+            self?.rewriteProviderController.apply(settings: settings)
         }
     }
 
@@ -94,18 +105,20 @@ final class AppModel {
     func start() {
         hotkeyService.register(profiles: settingsStore.enabledProfilesWithHotkeys())
         apply(settings: settingsStore.appSettings)
+        rewriteProviderController.start()
         if !settingsStore.appSettings.hasCompletedOnboarding {
             openOnboarding()
         }
     }
 
     func openSettings() {
-        NSApp.activate()
+        NSApp.activate(ignoringOtherApps: true)
         if #available(macOS 14, *) {
             NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         } else {
             NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
         }
+        focusSettingsWindowSoon()
     }
 
     func openOnboarding() {
@@ -183,6 +196,35 @@ final class AppModel {
         selectedProfileID = settingsStore.addProfile(template: template)
     }
 
+    func setRewriteProviderKind(_ providerKind: RewriteProviderKind) {
+        var settings = settingsStore.appSettings
+        switch providerKind {
+        case .openRouter:
+            let modelID = settings.rewriteProvider.openRouterModelID ?? OpenRouterModel.defaultID
+            settings.rewriteProvider = .openRouter(modelID: modelID)
+        case .local:
+            settings.rewriteProvider = .local(modelID: settings.selectedLocalModel)
+        }
+        settingsStore.appSettings = settings
+    }
+
+    func setSelectedLocalModel(_ modelID: LocalModelID) {
+        var settings = settingsStore.appSettings
+        settings.selectedLocalModel = modelID
+        if settings.rewriteProvider.kind == .local {
+            settings.rewriteProvider = .local(modelID: modelID)
+        }
+        settingsStore.appSettings = settings
+    }
+
+    func setPreloadLocalModelOnLaunch(_ preload: Bool) {
+        settingsStore.appSettings.preloadLocalModelOnLaunch = preload
+    }
+
+    func preloadSelectedLocalModel() {
+        localModelStore.preload(modelID: settingsStore.appSettings.selectedLocalModel)
+    }
+
     func deleteSelectedPersonality() {
         guard let selectedProfileID else { return }
         settingsStore.removeProfile(id: selectedProfileID)
@@ -200,5 +242,53 @@ final class AppModel {
         } catch {
             settingsErrorMessage = "Could not update launch at login: \(error.localizedDescription)"
         }
+    }
+
+    private func focusSettingsWindowSoon() {
+        focusSettingsWindow()
+        DispatchQueue.main.async { [weak self] in
+            self?.focusSettingsWindow()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.focusSettingsWindow()
+        }
+    }
+
+    private func focusSettingsWindow() {
+        for window in NSApp.windows where isSettingsWindow(window) {
+            window.styleMask.insert(.resizable)
+            window.collectionBehavior.insert(.fullScreenPrimary)
+            window.orderFrontRegardless()
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    private func isSettingsWindow(_ window: NSWindow) -> Bool {
+        let title = window.title.localizedLowercase
+        return title.contains("settings") || title.contains("preferences")
+    }
+
+    var rewriteProviderKind: RewriteProviderKind {
+        settingsStore.appSettings.rewriteProvider.kind
+    }
+
+    var selectedLocalModel: LocalModelID {
+        settingsStore.appSettings.selectedLocalModel
+    }
+
+    var preloadLocalModelOnLaunch: Bool {
+        settingsStore.appSettings.preloadLocalModelOnLaunch
+    }
+
+    var selectedLocalModelStatus: LocalModelStatus {
+        localModelStore.status(for: selectedLocalModel)
+    }
+
+    var usesLocalProvider: Bool {
+        rewriteProviderKind == .local
+    }
+
+    var currentProviderDescription: String {
+        settingsStore.appSettings.rewriteProvider.modelLabel
     }
 }

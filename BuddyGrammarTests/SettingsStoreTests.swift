@@ -11,6 +11,9 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.profiles.first?.id, PromptProfile.grammarProfileID)
         XCTAssertEqual(store.profiles.first?.name, "Standard")
         XCTAssertEqual(store.profiles.first?.hotkey, PromptProfile.defaultStandardHotkey)
+        XCTAssertEqual(store.appSettings.rewriteProvider, .openRouter(modelID: OpenRouterModel.defaultID))
+        XCTAssertEqual(store.appSettings.selectedLocalModel, .qwen3_4b_instruct_2507_4bit)
+        XCTAssertTrue(store.appSettings.preloadLocalModelOnLaunch)
     }
 
     func testStandardPersonalityStaysPinnedFirst() {
@@ -137,5 +140,54 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.appSettings.outputMode, .copyToClipboard)
         XCTAssertTrue(store.appSettings.launchAtLogin)
         XCTAssertTrue(store.appSettings.hasCompletedOnboarding)
+        XCTAssertEqual(store.appSettings.rewriteProvider, .openRouter(modelID: OpenRouterModel.defaultID))
+        XCTAssertEqual(store.appSettings.selectedLocalModel, .qwen3_4b_instruct_2507_4bit)
+        XCTAssertTrue(store.appSettings.preloadLocalModelOnLaunch)
+    }
+
+    func testSettingsDecodeLocalProviderDefaults() throws {
+        let suite = UserDefaults(suiteName: #function)!
+        suite.removePersistentDomain(forName: #function)
+
+        let localSettingsJSON = """
+        {
+          "outputMode": "replaceSelection",
+          "rewriteProvider": {
+            "kind": "local",
+            "modelID": "gemma4_e4b_it_mxfp8"
+          },
+          "selectedLocalModel": "gemma4_e4b_it_mxfp8",
+          "preloadLocalModelOnLaunch": false,
+          "launchAtLogin": false,
+          "hasCompletedOnboarding": true
+        }
+        """
+
+        suite.set(Data(localSettingsJSON.utf8), forKey: "BuddyGrammar.settings")
+
+        let store = SettingsStore(defaults: suite)
+        XCTAssertEqual(store.appSettings.rewriteProvider, .local(modelID: .gemma4_e4b_it_mxfp8))
+        XCTAssertEqual(store.appSettings.selectedLocalModel, .gemma4_e4b_it_mxfp8)
+        XCTAssertFalse(store.appSettings.preloadLocalModelOnLaunch)
+    }
+
+    func testSettingsDecodeLocalProviderFallsBackToProviderModelWhenSelectedModelIsMissing() throws {
+        let suite = UserDefaults(suiteName: #function)!
+        suite.removePersistentDomain(forName: #function)
+
+        let localSettingsJSON = """
+        {
+          "rewriteProvider": {
+            "kind": "local",
+            "modelID": "gemma4_e4b_it_mxfp8"
+          }
+        }
+        """
+
+        suite.set(Data(localSettingsJSON.utf8), forKey: "BuddyGrammar.settings")
+
+        let store = SettingsStore(defaults: suite)
+        XCTAssertEqual(store.appSettings.rewriteProvider, .local(modelID: .gemma4_e4b_it_mxfp8))
+        XCTAssertEqual(store.appSettings.selectedLocalModel, .gemma4_e4b_it_mxfp8)
     }
 }

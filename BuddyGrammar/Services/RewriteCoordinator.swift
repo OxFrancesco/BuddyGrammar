@@ -9,28 +9,25 @@ final class RewriteCoordinator {
     var isProcessing = false
 
     private let settingsStore: SettingsStore
-    private let keychainService: KeychainService
     private let selectionService: SelectionService
     private let clipboardService: ClipboardService
     private let eventSimulationService: EventSimulationService
-    private let openRouterClient: OpenRouterClient
+    private let rewriteProviderController: RewriteProviderController
     private let menuBarStatus: MenuBarStatusModel
 
     init(
         settingsStore: SettingsStore,
-        keychainService: KeychainService,
         selectionService: SelectionService,
         clipboardService: ClipboardService,
         eventSimulationService: EventSimulationService,
-        openRouterClient: OpenRouterClient,
+        rewriteProviderController: RewriteProviderController,
         menuBarStatus: MenuBarStatusModel
     ) {
         self.settingsStore = settingsStore
-        self.keychainService = keychainService
         self.selectionService = selectionService
         self.clipboardService = clipboardService
         self.eventSimulationService = eventSimulationService
-        self.openRouterClient = openRouterClient
+        self.rewriteProviderController = rewriteProviderController
         self.menuBarStatus = menuBarStatus
     }
 
@@ -49,11 +46,6 @@ final class RewriteCoordinator {
                 return
             }
 
-            guard let apiKey = keychainService.loadAPIKey(), !apiKey.isEmpty else {
-                presentFailure(.missingAPIKey)
-                return
-            }
-
             do {
                 statusMessage = "Reading the current selection..."
                 menuBarStatus.show(.capture(profileName: profile.name))
@@ -61,9 +53,8 @@ final class RewriteCoordinator {
                 statusMessage = "Fixing your text with \(profile.name)..."
                 menuBarStatus.show(.sending(profileName: profile.name))
 
-                let result = try await openRouterClient.rewrite(
-                    RewriteRequest(profile: profile, selectedText: selectedText),
-                    apiKey: apiKey
+                let result = try await rewriteProviderController.rewrite(
+                    RewriteRequest(profile: profile, selectedText: selectedText)
                 )
 
                 switch settingsStore.appSettings.outputMode {
