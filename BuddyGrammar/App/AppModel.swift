@@ -6,6 +6,8 @@ import SwiftUI
 @MainActor
 @Observable
 final class AppModel {
+    static let settingsWindowID = "settings-window"
+
     let settingsStore: SettingsStore
     let keychainService: KeychainService
     let accessibilityService: AccessibilityService
@@ -23,6 +25,7 @@ final class AppModel {
 
     private let launchAtLoginService: LaunchAtLoginService
     private var onboardingWindowController: NSWindowController?
+    private var settingsWindowCloseObserver: NSObjectProtocol?
 
     init() {
         let settingsStore = SettingsStore()
@@ -106,19 +109,23 @@ final class AppModel {
         hotkeyService.register(profiles: settingsStore.enabledProfilesWithHotkeys())
         apply(settings: settingsStore.appSettings)
         rewriteProviderController.start()
+        restoreAccessoryActivationIfPossible()
         if !settingsStore.appSettings.hasCompletedOnboarding {
             openOnboarding()
         }
     }
 
-    func openSettings() {
-        NSApp.activate(ignoringOtherApps: true)
-        if #available(macOS 14, *) {
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        } else {
-            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-        }
+    func prepareToOpenSettingsWindow() {
+        promoteForForegroundWindow()
+    }
+
+    func settingsWindowDidAppear() {
+        configureSettingsWindows()
         focusSettingsWindowSoon()
+    }
+
+    func settingsWindowDidDisappear() {
+        restoreAccessoryActivationIfPossible()
     }
 
     func openOnboarding() {
@@ -139,13 +146,14 @@ final class AppModel {
         let controller = NSWindowController(window: window)
         onboardingWindowController = controller
         controller.showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        promoteForForegroundWindow()
     }
 
     func completeOnboarding() {
         settingsStore.markOnboardingComplete()
         onboardingWindowController?.close()
         onboardingWindowController = nil
+        restoreAccessoryActivationIfPossible()
     }
 
     func openAccessibilitySettings() {
@@ -256,16 +264,77 @@ final class AppModel {
 
     private func focusSettingsWindow() {
         for window in NSApp.windows where isSettingsWindow(window) {
-            window.styleMask.insert(.resizable)
-            window.collectionBehavior.insert(.fullScreenPrimary)
+            configureSettingsWindow(window)
+            promoteForForegroundWindow()
             window.orderFrontRegardless()
             window.makeKeyAndOrderFront(nil)
+            window.makeMain()
         }
     }
 
     private func isSettingsWindow(_ window: NSWindow) -> Bool {
+        if window.identifier?.rawValue == Self.settingsWindowID {
+            return true
+        }
+
         let title = window.title.localizedLowercase
         return title.contains("settings") || title.contains("preferences")
+    }
+
+    private func promoteForForegroundWindow() {
+        if NSApp.activationPolicy() != .regular {
+            NSApp.setActivationPolicy(.regular)
+        }
+        NSApp.unhide(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func restoreAccessoryActivationIfPossible() {
+        let hasVisibleSettingsWindow = NSApp.windows.contains { window in
+            isSettingsWindow(window) && window.isVisible
+        }
+        let hasVisibleOnboardingWindow = onboardingWindowController?.window?.isVisible == true
+
+        guard !hasVisibleSettingsWindow, !hasVisibleOnboardingWindow else {
+            return
+        }
+
+        if NSApp.activationPolicy() != .accessory {
+            NSApp.setActivationPolicy(.accessory)
+        }
+    }
+
+    private func configureSettingsWindows() {
+        for window in NSApp.windows where isSettingsWindow(window) {
+            configureSettingsWindow(window)
+        }
+    }
+
+    private func configureSettingsWindow(_ window: NSWindow) {
+        window.identifier = NSUserInterfaceItemIdentifier(Self.settingsWindowID)
+        window.styleMask.insert(.resizable)
+        window.collectionBehavior.formUnion([.fullScreenPrimary, .moveToActiveSpace])
+        installSettingsWindowCloseObserver(for: window)
+    }
+
+    private func installSettingsWindowCloseObserver(for window: NSWindow) {
+        if let settingsWindowCloseObserver {
+            NotificationCenter.default.removeObserver(settingsWindowCloseObserver)
+        }
+
+        settingsWindowCloseObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.settingsWindowCloseObserver = nil
+                DispatchQueue.main.async {
+                    self.restoreAccessoryActivationIfPossible()
+                }
+            }
+        }
     }
 
     var rewriteProviderKind: RewriteProviderKind {

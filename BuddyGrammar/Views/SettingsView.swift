@@ -169,7 +169,7 @@ struct SettingsView: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.segmented)
-                        .frame(maxWidth: 280)
+                        .fixedSize()
                     }
 
                     neoDivider
@@ -230,7 +230,7 @@ struct SettingsView: View {
                 // Provider selector
                 neoCard {
                     VStack(alignment: .leading, spacing: 14) {
-                        neoFormRow(label: "Rewrite provider") {
+                        neoFormRow(label: "Provider") {
                             Picker("", selection: rewriteProviderBinding) {
                                 ForEach(RewriteProviderKind.allCases) { providerKind in
                                     Text(providerKind.title).tag(providerKind)
@@ -238,7 +238,7 @@ struct SettingsView: View {
                             }
                             .labelsHidden()
                             .pickerStyle(.segmented)
-                            .frame(maxWidth: 280)
+                            .fixedSize()
                         }
                     }
                 }
@@ -327,7 +327,7 @@ struct SettingsView: View {
                     Image(systemName: "laptopcomputer")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(NeoTheme.primary)
-                    Text("Local MLX")
+                    Text("Local Model")
                         .font(.system(size: 14, weight: .bold, design: .rounded))
                 }
 
@@ -340,7 +340,7 @@ struct SettingsView: View {
                         }
                     }
                     .labelsHidden()
-                    .frame(maxWidth: 280)
+                    .fixedSize()
                 }
 
                 Text(model.selectedLocalModel.summary)

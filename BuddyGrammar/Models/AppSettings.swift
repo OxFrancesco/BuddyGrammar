@@ -27,7 +27,7 @@ enum RewriteProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .openRouter:
             "OpenRouter"
         case .local:
-            "Local MLX"
+            "Local Models"
         }
     }
 }
