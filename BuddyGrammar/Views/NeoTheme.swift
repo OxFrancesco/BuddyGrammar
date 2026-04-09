@@ -188,6 +188,126 @@ struct NeoBrutalistButton: ButtonStyle {
     }
 }
 
+// MARK: - Jelly Motion
+
+extension Animation {
+    static var neoJellySpring: Animation {
+        .spring(duration: 0.58, bounce: 0.34)
+    }
+}
+
+extension AnyTransition {
+    static var neoJellyReveal: AnyTransition {
+        .move(edge: .top)
+            .combined(with: .scale(scale: 0.86, anchor: .top))
+            .combined(with: .opacity)
+    }
+}
+
+struct NeoJellyDisclosure<Content: View>: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let accent: Color
+    let isExpanded: Bool
+    let onToggle: () -> Void
+    private let content: Content
+
+    init(
+        title: String,
+        subtitle: String,
+        icon: String,
+        accent: Color = NeoTheme.accent,
+        isExpanded: Bool,
+        onToggle: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.icon = icon
+        self.accent = accent
+        self.isExpanded = isExpanded
+        self.onToggle = onToggle
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation(.neoJellySpring) {
+                    onToggle()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                            .fill(accent.opacity(0.14))
+                        Image(systemName: icon)
+                            .font(.system(size: 12, weight: .black))
+                            .foregroundStyle(accent)
+                    }
+                    .frame(width: 32, height: 32)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                            .stroke(accent.opacity(0.45), lineWidth: 1)
+                    )
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.system(size: 12, weight: .black, design: .rounded))
+                            .foregroundStyle(NeoTheme.foreground)
+                        Text(subtitle)
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundStyle(NeoTheme.mutedForeground)
+                            .lineLimit(2)
+                    }
+
+                    Spacer(minLength: 12)
+
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .black))
+                        .foregroundStyle(accent)
+                        .frame(width: 28, height: 28)
+                        .background(accent.opacity(0.14))
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 7)
+                                .stroke(accent.opacity(0.45), lineWidth: 1)
+                        )
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                        .symbolEffect(.bounce, value: isExpanded)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(NeoTheme.muted)
+                .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius + 2))
+                .overlay(
+                    RoundedRectangle(cornerRadius: NeoTheme.cornerRadius + 2)
+                        .stroke(NeoTheme.border, lineWidth: NeoTheme.borderWidth)
+                )
+            }
+            .buttonStyle(.plain)
+            .focusEffectDisabled()
+            .scaleEffect(isExpanded ? 0.985 : 1, anchor: .top)
+            .animation(.neoJellySpring, value: isExpanded)
+
+            if isExpanded {
+                content
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(NeoTheme.muted.opacity(0.45))
+                    .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius + 2))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: NeoTheme.cornerRadius + 2)
+                            .stroke(NeoTheme.border, lineWidth: NeoTheme.borderWidth)
+                    )
+                    .transition(.neoJellyReveal)
+            }
+        }
+        .animation(.neoJellySpring, value: isExpanded)
+    }
+}
+
 // MARK: - Focus Style
 
 extension View {

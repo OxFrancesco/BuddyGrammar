@@ -275,10 +275,27 @@ struct OnboardingView: View {
                             .tint(NeoTheme.primary)
                     }
 
-                    Button(showsAdvancedLocalModels ? "Hide advanced local models" : "Show advanced local models") {
-                        showsAdvancedLocalModels.toggle()
+                    NeoJellyDisclosure(
+                        title: showsAdvancedLocalModels ? "Advanced models unlocked" : "Show advanced local models",
+                        subtitle: showsAdvancedLocalModels
+                            ? "The picker above now includes heavier local models."
+                            : "Keep setup lean, then reveal benchmark-heavy local models when you want more range.",
+                        icon: "sparkles",
+                        isExpanded: showsAdvancedLocalModels,
+                        onToggle: {
+                            showsAdvancedLocalModels.toggle()
+                        }
+                    ) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("These models are noticeably heavier to download and warm up. Keep them for benchmarking or edge cases, not the default path.")
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .foregroundStyle(NeoTheme.mutedForeground)
+
+                            ForEach(advancedLocalModels) { modelID in
+                                advancedLocalModelRow(modelID)
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
 
                     neoStatusBadge(
                         text: localProviderBadgeText,
@@ -503,6 +520,114 @@ struct OnboardingView: View {
         )
     }
 
+    private func advancedLocalModelRow(_ modelID: LocalModelID) -> some View {
+        let isSelected = model.selectedLocalModel == modelID
+        let status = model.localModelStore.status(for: modelID)
+
+        return Button {
+            withAnimation(.neoJellySpring) {
+                model.setSelectedLocalModel(modelID)
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(modelID.title)
+                            .font(.system(size: 13, weight: .black, design: .rounded))
+                            .foregroundStyle(NeoTheme.foreground)
+                        Text(modelID.summary)
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundStyle(NeoTheme.mutedForeground)
+                            .lineLimit(2)
+                    }
+
+                    Spacer(minLength: 12)
+
+                    if isSelected {
+                        neoSelectionPill
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    featurePill(symbol: "shippingbox", label: modelID.badge)
+                    localModelStatusPill(status: status)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(isSelected ? NeoTheme.primary.opacity(0.12) : NeoTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                    .stroke(
+                        isSelected ? NeoTheme.primary : NeoTheme.border,
+                        lineWidth: NeoTheme.borderWidth
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .scaleEffect(isSelected ? 1 : 0.985, anchor: .center)
+        .animation(.neoJellySpring, value: model.selectedLocalModel)
+    }
+
+    private var neoSelectionPill: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 11, weight: .bold))
+            Text("Selected")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+        }
+        .foregroundStyle(NeoTheme.primary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(NeoTheme.primary.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                .stroke(NeoTheme.primary.opacity(0.35), lineWidth: 1)
+        )
+    }
+
+    private func localModelStatusPill(status: LocalModelStatus) -> some View {
+        let progressSuffix: String
+        if let progress = status.progress, status.state == .downloading {
+            progressSuffix = " \(Int(progress * 100))%"
+        } else {
+            progressSuffix = ""
+        }
+
+        let color: Color
+        switch status.state {
+        case .loaded:
+            color = NeoTheme.green
+        case .ready:
+            color = NeoTheme.accent
+        case .downloading, .loading:
+            color = NeoTheme.orange
+        case .failed:
+            color = NeoTheme.destructive
+        case .notDownloaded:
+            color = NeoTheme.mutedForeground
+        }
+
+        return HStack(spacing: 6) {
+            Image(systemName: iconName(for: status.state))
+                .font(.system(size: 12, weight: .bold))
+            Text(status.state.title + progressSuffix)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(NeoTheme.muted)
+        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                .stroke(NeoTheme.border, lineWidth: 1)
+        )
+    }
+
     private func statusRow(title: String, isComplete: Bool, successText: String, pendingText: String) -> some View {
         HStack {
             Text(title)
@@ -572,6 +697,10 @@ struct OnboardingView: View {
                 model.setPreloadLocalModelOnLaunch(newValue)
             }
         )
+    }
+
+    private var advancedLocalModels: [LocalModelID] {
+        LocalModelID.allCases.filter(\.isAdvanced)
     }
 
     private var visibleLocalModels: [LocalModelID] {
@@ -644,6 +773,23 @@ struct OnboardingView: View {
             NeoTheme.destructive
         case .notDownloaded:
             NeoTheme.mutedForeground
+        }
+    }
+
+    private func iconName(for state: LocalModelState) -> String {
+        switch state {
+        case .notDownloaded:
+            "shippingbox"
+        case .downloading:
+            "arrow.down.circle.fill"
+        case .ready:
+            "checkmark.circle"
+        case .loading:
+            "clock.arrow.trianglehead.counterclockwise.rotate.90"
+        case .loaded:
+            "checkmark.circle.fill"
+        case .failed:
+            "xmark.circle.fill"
         }
     }
 
