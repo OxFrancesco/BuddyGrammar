@@ -24,6 +24,8 @@ packages:
   SwiftTransformersMLX:
     url: https://github.com/DePasqualeOrg/swift-transformers-mlx.git
     branch: main
+  ArgmaxOSS:
+    path: Vendor/argmax-oss-swift
 targets:
   BuddyGrammar:
     type: application
@@ -40,13 +42,19 @@ targets:
         product: MLXLMHuggingFace
       - package: SwiftTransformersMLX
         product: MLXLMTransformers
+      - package: ArgmaxOSS
+        product: WhisperKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.francescooddo.BuddyGrammar
         INFOPLIST_FILE: BuddyGrammar/Support/Info.plist
         GENERATE_INFOPLIST_FILE: NO
-        PRODUCT_NAME: BuddyGrammar
+        PRODUCT_NAME: BuddyWrite
+        PRODUCT_MODULE_NAME: BuddyGrammar
         ENABLE_HARDENED_RUNTIME: YES
+    scheme:
+      testTargets:
+        - BuddyGrammarTests
   BuddyGrammarTests:
     type: bundle.unit-test
     platform: macOS
@@ -58,3 +66,5 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.francescooddo.BuddyGrammarTests
         GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/BuddyWrite.app/Contents/MacOS/BuddyWrite"
+        BUNDLE_LOADER: "$(TEST_HOST)"

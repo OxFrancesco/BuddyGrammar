@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import Speech
 import SwiftUI
 
 @MainActor
@@ -14,8 +15,11 @@ final class AppModel {
     let appUpdateService: AppUpdateService
     let hotkeyService: HotkeyService
     let localModelStore: LocalModelStore
+    let voiceAuthorizationService: VoiceAuthorizationService
+    let voiceModelStore: VoiceModelStore
     let rewriteProviderController: RewriteProviderController
     let rewriteCoordinator: RewriteCoordinator
+    let voiceInputCoordinator: VoiceInputCoordinator
     let menuBarStatus: MenuBarStatusModel
 
     var selectedProfileID: UUID?
@@ -36,6 +40,9 @@ final class AppModel {
         let eventSimulationService = EventSimulationService()
         let menuBarStatus = MenuBarStatusModel()
         let localModelStore = LocalModelStore()
+        let voiceAuthorizationService = VoiceAuthorizationService()
+        let voiceModelStore = VoiceModelStore()
+        let audioRecordingService = AudioRecordingService()
         let selectionService = SelectionService(
             accessibilityService: accessibilityService,
             clipboardService: clipboardService,
@@ -58,6 +65,16 @@ final class AppModel {
             rewriteProviderController: rewriteProviderController,
             menuBarStatus: menuBarStatus
         )
+        let voiceInputCoordinator = VoiceInputCoordinator(
+            settingsProvider: settingsStore,
+            rewriteProvider: rewriteProviderController,
+            clipboardService: clipboardService,
+            eventSimulationService: eventSimulationService,
+            voiceAuthorizationService: voiceAuthorizationService,
+            audioRecordingService: audioRecordingService,
+            voiceModelStore: voiceModelStore,
+            menuBarStatus: menuBarStatus
+        )
 
         self.settingsStore = settingsStore
         self.keychainService = keychainService
@@ -65,9 +82,12 @@ final class AppModel {
         self.appUpdateService = appUpdateService
         self.hotkeyService = hotkeyService
         self.localModelStore = localModelStore
+        self.voiceAuthorizationService = voiceAuthorizationService
+        self.voiceModelStore = voiceModelStore
         self.rewriteProviderController = rewriteProviderController
         self.launchAtLoginService = launchAtLoginService
         self.rewriteCoordinator = rewriteCoordinator
+        self.voiceInputCoordinator = voiceInputCoordinator
         self.menuBarStatus = menuBarStatus
         self.selectedProfileID = settingsStore.profiles.first?.id
         self.apiKeyDraft = keychainService.loadAPIKey() ?? ""
@@ -75,8 +95,14 @@ final class AppModel {
         hotkeyService.onHotKey = { [weak self] profileID in
             self?.runProfile(id: profileID)
         }
+        hotkeyService.onVoiceHotKey = { [weak self] in
+            self?.toggleVoiceInput()
+        }
         settingsStore.onProfilesChanged = { [weak self] profiles in
-            self?.hotkeyService.register(profiles: profiles)
+            self?.hotkeyService.register(
+                profiles: profiles,
+                voiceHotkey: self?.settingsStore.appSettings.voiceHotkey
+            )
             if let selectedID = self?.selectedProfileID, !profiles.contains(where: { $0.id == selectedID }) {
                 self?.selectedProfileID = profiles.first?.id
             }
@@ -84,6 +110,10 @@ final class AppModel {
         settingsStore.onSettingsChanged = { [weak self] settings in
             self?.apply(settings: settings)
             self?.rewriteProviderController.apply(settings: settings)
+            self?.hotkeyService.register(
+                profiles: self?.settingsStore.enabledProfilesWithHotkeys() ?? [],
+                voiceHotkey: settings.voiceHotkey
+            )
         }
     }
 
@@ -97,6 +127,16 @@ final class AppModel {
         return accessibilityService.isTrusted(prompt: false)
     }
 
+    var microphonePermission: VoicePermissionState {
+        _ = environmentStateRevision
+        return voiceAuthorizationService.microphonePermission
+    }
+
+    var speechRecognitionPermission: VoicePermissionState {
+        _ = environmentStateRevision
+        return voiceAuthorizationService.speechRecognitionPermission
+    }
+
     var appBundlePath: String {
         Bundle.main.bundlePath
     }
@@ -106,7 +146,10 @@ final class AppModel {
     }
 
     func start() {
-        hotkeyService.register(profiles: settingsStore.enabledProfilesWithHotkeys())
+        hotkeyService.register(
+            profiles: settingsStore.enabledProfilesWithHotkeys(),
+            voiceHotkey: settingsStore.appSettings.voiceHotkey
+        )
         apply(settings: settingsStore.appSettings)
         rewriteProviderController.start()
         restoreAccessoryActivationIfPossible()
@@ -137,7 +180,7 @@ final class AppModel {
             defer: false
         )
         window.center()
-        window.title = "Welcome to BuddyGrammar"
+        window.title = "Welcome to BuddyWrite"
         window.minSize = NSSize(width: 760, height: 560)
         window.collectionBehavior.insert(.fullScreenPrimary)
         window.contentViewController = NSHostingController(rootView: rootView)
@@ -200,6 +243,10 @@ final class AppModel {
         rewriteCoordinator.run(profile: profile, accessibilityService: accessibilityService)
     }
 
+    func toggleVoiceInput() {
+        voiceInputCoordinator.toggleDictation(accessibilityService: accessibilityService)
+    }
+
     func addPersonality(template: PersonalityTemplate = .blankCustom) {
         selectedProfileID = settingsStore.addProfile(template: template)
     }
@@ -231,6 +278,56 @@ final class AppModel {
 
     func preloadSelectedLocalModel() {
         localModelStore.preload(modelID: settingsStore.appSettings.selectedLocalModel)
+    }
+
+    func preloadVoiceFallbackModel() {
+        voiceModelStore.preloadFallbackModel()
+    }
+
+    func setVoiceProfileID(_ profileID: UUID?) {
+        settingsStore.appSettings.voiceProfileID = profileID
+    }
+
+    func setVoiceLocaleIdentifier(_ localeIdentifier: String) {
+        settingsStore.appSettings.voiceLocaleIdentifier = localeIdentifier
+    }
+
+    func setVoiceHotkey(_ hotkey: HotkeyDescriptor?) {
+        settingsStore.appSettings.voiceHotkey = hotkey
+    }
+
+    func requestVoicePermissions() {
+        Task { @MainActor in
+            let microphoneGranted = modelRequiresMicrophonePrompt
+                ? await voiceAuthorizationService.requestMicrophoneAccess()
+                : voiceAuthorizationService.microphonePermission.isAuthorized
+
+            guard microphoneGranted else {
+                refreshEnvironmentState()
+                return
+            }
+
+            if modelRequiresSpeechPrompt {
+                _ = await voiceAuthorizationService.requestSpeechRecognitionAccess()
+            }
+            refreshEnvironmentState()
+        }
+    }
+
+    func openMicrophoneSettings() {
+        voiceAuthorizationService.openMicrophoneSettings()
+    }
+
+    func openSpeechRecognitionSettings() {
+        voiceAuthorizationService.openSpeechRecognitionSettings()
+    }
+
+    var voicePermissionsGranted: Bool {
+        microphonePermission.isAuthorized && speechRecognitionPermission.isAuthorized
+    }
+
+    var voicePermissionsRequested: Bool {
+        microphonePermission != .notDetermined || speechRecognitionPermission != .notDetermined
     }
 
     func deleteSelectedPersonality() {
@@ -359,5 +456,70 @@ final class AppModel {
 
     var currentProviderDescription: String {
         settingsStore.appSettings.rewriteProvider.modelLabel
+    }
+
+    var selectedVoiceProfile: PromptProfile {
+        if let voiceProfileID = settingsStore.appSettings.voiceProfileID,
+           let voiceProfile = settingsStore.profile(id: voiceProfileID) {
+            return voiceProfile
+        }
+
+        return settingsStore.profile(id: PromptProfile.grammarProfileID) ?? PromptProfile.standard
+    }
+
+    var voiceLocaleIdentifier: String {
+        settingsStore.appSettings.voiceLocaleIdentifier ?? Locale.autoupdatingCurrent.identifier
+    }
+
+    var voiceHotkey: HotkeyDescriptor? {
+        settingsStore.appSettings.voiceHotkey
+    }
+
+    var voiceFallbackStatus: VoiceModelStatus {
+        voiceModelStore.status
+    }
+
+    var availableVoiceLocales: [VoiceLocaleOption] {
+        VoiceLocaleOption.defaultOptions(currentIdentifier: voiceLocaleIdentifier)
+    }
+
+    func voiceHotkeyConflictLabel(for hotkey: HotkeyDescriptor?) -> String? {
+        guard let hotkey else { return nil }
+        if let conflict = settingsStore.profiles.first(where: { $0.isEnabled && $0.hotkey == hotkey }) {
+            return conflict.name
+        }
+        return nil
+    }
+
+    private var modelRequiresMicrophonePrompt: Bool {
+        !voiceAuthorizationService.microphonePermission.isAuthorized
+    }
+
+    private var modelRequiresSpeechPrompt: Bool {
+        !voiceAuthorizationService.speechRecognitionPermission.isAuthorized
+    }
+}
+
+struct VoiceLocaleOption: Identifiable, Hashable {
+    let id: String
+    let title: String
+
+    static func defaultOptions(currentIdentifier: String) -> [VoiceLocaleOption] {
+        let supported = SFSpeechRecognizer.supportedLocales()
+            .map { locale in
+                let identifier = locale.identifier
+                let localizedName = Locale.autoupdatingCurrent.localizedString(forIdentifier: identifier) ?? identifier
+                return VoiceLocaleOption(id: identifier, title: localizedName)
+            }
+            .sorted { (lhs: VoiceLocaleOption, rhs: VoiceLocaleOption) in
+                lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+            }
+
+        if supported.contains(where: { $0.id == currentIdentifier }) {
+            return supported
+        }
+
+        let currentName = Locale.autoupdatingCurrent.localizedString(forIdentifier: currentIdentifier) ?? currentIdentifier
+        return [VoiceLocaleOption(id: currentIdentifier, title: "\(currentName) (System)") ] + supported
     }
 }

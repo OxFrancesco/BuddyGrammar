@@ -11,7 +11,8 @@ const features = [
 
 const steps = [
   { title: 'Select text anywhere', desc: 'Highlight text in any application — a browser, Notes, Slack, your editor.' },
-  { title: 'Press ⌘⇧1', desc: 'The default Standard personality fires and BuddyGrammar grabs the selection.' },
+  { title: 'Press ⌘⇧1', desc: 'The default Standard personality fires and BuddyWrite grabs the selection.' },
+  { title: 'Or dictate locally', desc: 'Use the dictation shortcut to record your voice, transcribe it locally, and run it through your chosen personality.' },
   { title: 'AI rewrites it', desc: 'The text is sent to OpenRouter (gpt-5.4-nano) and rewritten in seconds.' },
   { title: 'Fixed text appears', desc: 'The corrected text replaces your selection — or lands in the clipboard.' },
 ]
@@ -27,7 +28,7 @@ function App() {
       <nav>
         <div className="logo">
           <img className="logo-icon" src="/logo.png" alt="" />
-          BuddyGrammar
+          BuddyWrite
         </div>
         <div className="nav-links">
           <a href="#features">Features</a>
@@ -45,7 +46,7 @@ function App() {
       {/* Hero */}
       <section className="hero">
         <div className="hero-mark">
-          <img className="hero-logo" src="/logo.png" alt="BuddyGrammar logo" />
+          <img className="hero-logo" src="/logo.png" alt="BuddyWrite logo" />
         </div>
         <h1>
           Fix your text with <em>one shortcut</em>
@@ -124,14 +125,14 @@ function App() {
         <div className="cta-card neo-card">
           <h2>Ready to write better?</h2>
           <p>
-            BuddyGrammar is free and open source. Download it, add your
+            BuddyWrite is free and open source. Download it, add your
             OpenRouter key, and start fixing text in seconds.
           </p>
           <a
             href="https://github.com/oxfrancesco/buddygrammar/releases"
             className="neo-btn neo-btn-primary"
           >
-            ⬇ Download BuddyGrammar
+            ⬇ Download BuddyWrite
           </a>
         </div>
       </section>

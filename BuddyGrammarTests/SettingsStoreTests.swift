@@ -14,6 +14,9 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.appSettings.rewriteProvider, .openRouter(modelID: OpenRouterModel.defaultID))
         XCTAssertEqual(store.appSettings.selectedLocalModel, .qwen3_4b_instruct_2507_4bit)
         XCTAssertTrue(store.appSettings.preloadLocalModelOnLaunch)
+        XCTAssertEqual(store.appSettings.voiceProfileID, PromptProfile.grammarProfileID)
+        XCTAssertEqual(store.appSettings.voiceLocaleIdentifier, Locale.autoupdatingCurrent.identifier)
+        XCTAssertNil(store.appSettings.voiceHotkey)
     }
 
     func testStandardPersonalityStaysPinnedFirst() {
@@ -143,6 +146,9 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.appSettings.rewriteProvider, .openRouter(modelID: OpenRouterModel.defaultID))
         XCTAssertEqual(store.appSettings.selectedLocalModel, .qwen3_4b_instruct_2507_4bit)
         XCTAssertTrue(store.appSettings.preloadLocalModelOnLaunch)
+        XCTAssertEqual(store.appSettings.voiceProfileID, PromptProfile.grammarProfileID)
+        XCTAssertEqual(store.appSettings.voiceLocaleIdentifier, Locale.autoupdatingCurrent.identifier)
+        XCTAssertNil(store.appSettings.voiceHotkey)
     }
 
     func testSettingsDecodeLocalProviderDefaults() throws {
@@ -158,6 +164,12 @@ final class SettingsStoreTests: XCTestCase {
           },
           "selectedLocalModel": "gemma4_e4b_it_mxfp8",
           "preloadLocalModelOnLaunch": false,
+          "voiceProfileID": "B48FDF75-0C5D-4A96-B48D-29D160C6B470",
+          "voiceLocaleIdentifier": "en_US",
+          "voiceHotkey": {
+            "keyCode": 49,
+            "modifiersRawValue": 1048576
+          },
           "launchAtLogin": false,
           "hasCompletedOnboarding": true
         }
@@ -169,6 +181,9 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.appSettings.rewriteProvider, .local(modelID: .gemma4_e4b_it_mxfp8))
         XCTAssertEqual(store.appSettings.selectedLocalModel, .gemma4_e4b_it_mxfp8)
         XCTAssertFalse(store.appSettings.preloadLocalModelOnLaunch)
+        XCTAssertEqual(store.appSettings.voiceProfileID, PromptProfile.grammarProfileID)
+        XCTAssertEqual(store.appSettings.voiceLocaleIdentifier, "en_US")
+        XCTAssertEqual(store.appSettings.voiceHotkey, HotkeyDescriptor(keyCode: 49, modifiers: [.command]))
     }
 
     func testSettingsDecodeLocalProviderFallsBackToProviderModelWhenSelectedModelIsMissing() throws {

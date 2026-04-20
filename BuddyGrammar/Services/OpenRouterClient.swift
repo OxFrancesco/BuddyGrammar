@@ -19,7 +19,7 @@ actor OpenRouterClient {
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        urlRequest.setValue("BuddyGrammar", forHTTPHeaderField: "X-Title")
+        urlRequest.setValue("BuddyWrite", forHTTPHeaderField: "X-Title")
         urlRequest.httpBody = try JSONEncoder().encode(payload)
 
         let (data, response) = try await session.data(for: urlRequest)

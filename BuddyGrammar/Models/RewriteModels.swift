@@ -15,6 +15,10 @@ enum RewriteFailure: LocalizedError, Equatable {
     case accessibilityPermissionDenied
     case selectionUnavailable
     case emptySelection
+    case microphonePermissionDenied
+    case speechRecognitionPermissionDenied
+    case voiceRecordingFailed(String)
+    case transcriptionUnavailable(String)
     case network(String)
     case unexpectedResponse
     case invalidOutput
@@ -27,23 +31,31 @@ enum RewriteFailure: LocalizedError, Equatable {
         case .missingAPIKey:
             "Add your OpenRouter API key in Settings."
         case .accessibilityPermissionDenied:
-            "BuddyGrammar needs Accessibility permission to read or replace selected text."
+            "BuddyWrite needs Accessibility permission to read or replace selected text."
         case .selectionUnavailable:
             "Could not read the current selection."
         case .emptySelection:
             "The selected text is empty."
+        case .microphonePermissionDenied:
+            "BuddyWrite needs Microphone permission for dictation."
+        case .speechRecognitionPermissionDenied:
+            "BuddyWrite needs Speech Recognition permission for local transcription."
+        case .voiceRecordingFailed(let message):
+            message
+        case .transcriptionUnavailable(let message):
+            message
         case .network(let message):
             message
         case .unexpectedResponse:
             "OpenRouter returned an empty or unreadable response."
         case .invalidOutput:
-            "The model returned text BuddyGrammar could not safely apply."
+            "The model returned text BuddyWrite could not safely apply."
         case .localModel(let message):
             message
         case .busy:
-            "BuddyGrammar is already processing another prompt."
+            "BuddyWrite is already processing another prompt."
         case .pasteFailed:
-            "BuddyGrammar could not paste the rewritten text back into the active app."
+            "BuddyWrite could not paste the rewritten text back into the active app."
         }
     }
 }

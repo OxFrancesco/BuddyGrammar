@@ -3,16 +3,19 @@ import Foundation
 
 @MainActor
 final class HotkeyService {
+    private let voiceHotKeyID: UInt32 = 9_999
+
     private var hotKeyRefs: [UInt32: EventHotKeyRef] = [:]
     private var profileIDsByHotKeyID: [UInt32: UUID] = [:]
     private var eventHandler: EventHandlerRef?
     var onHotKey: ((UUID) -> Void)?
+    var onVoiceHotKey: (() -> Void)?
 
     init() {
         installHandler()
     }
 
-    func register(profiles: [PromptProfile]) {
+    func register(profiles: [PromptProfile], voiceHotkey: HotkeyDescriptor?) {
         unregisterAll()
 
         for (index, profile) in profiles.enumerated() {
@@ -32,6 +35,23 @@ final class HotkeyService {
             guard status == noErr, let hotKeyRef else { continue }
             hotKeyRefs[hotKeyID.id] = hotKeyRef
             profileIDsByHotKeyID[hotKeyID.id] = profile.id
+        }
+
+        if let voiceHotkey, voiceHotkey.isValid {
+            var hotKeyRef: EventHotKeyRef?
+            let hotKeyID = EventHotKeyID(signature: fourCharCode("BDVW"), id: voiceHotKeyID)
+            let status = RegisterEventHotKey(
+                voiceHotkey.keyCode,
+                voiceHotkey.carbonModifiers,
+                hotKeyID,
+                GetEventDispatcherTarget(),
+                0,
+                &hotKeyRef
+            )
+
+            if status == noErr, let hotKeyRef {
+                hotKeyRefs[hotKeyID.id] = hotKeyRef
+            }
         }
     }
 
@@ -73,8 +93,15 @@ final class HotkeyService {
         )
 
         guard status == noErr,
-              let profileID = profileIDsByHotKeyID[hotKeyID.id]
+              hotKeyID.id != voiceHotKeyID
         else {
+            if status == noErr, hotKeyID.id == voiceHotKeyID {
+                onVoiceHotKey?()
+            }
+            return status
+        }
+
+        guard let profileID = profileIDsByHotKeyID[hotKeyID.id] else {
             return status
         }
 

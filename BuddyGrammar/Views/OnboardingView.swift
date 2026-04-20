@@ -31,13 +31,13 @@ struct OnboardingView: View {
         var detail: String {
             switch self {
             case .welcome:
-                "Set up BuddyGrammar in a couple of minutes."
+                "Set up BuddyWrite in a couple of minutes."
             case .apiKey:
-                "Choose OpenRouter or a local MLX model."
+                "Choose OpenRouter or a local MLX rewrite model."
             case .accessibility:
-                "Allow cross-app text capture and replacement."
+                "Allow BuddyWrite to read and replace selected text."
             case .workflow:
-                "Choose what happens after a rewrite."
+                "Choose output mode and optionally enable dictation."
             case .finish:
                 "Confirm the app is ready."
             }
@@ -140,7 +140,7 @@ struct OnboardingView: View {
 
     private var progressRail: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("BuddyGrammar")
+            Text("BuddyWrite")
                 .font(.system(size: 18, weight: .black, design: .rounded))
                 .tracking(-0.3)
                 .foregroundStyle(NeoTheme.foreground)
@@ -224,7 +224,7 @@ struct OnboardingView: View {
     private var welcomeStep: some View {
         neoCard {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Grab selected text, run the Standard personality, and paste it back with one shortcut.")
+                Text("Grab selected text or dictate locally, run the Standard personality, and paste it back with one shortcut.")
                     .font(.system(size: 14, weight: .medium, design: .rounded))
 
                 HStack(spacing: 12) {
@@ -325,7 +325,7 @@ struct OnboardingView: View {
     private var accessibilityStep: some View {
         neoCard {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Enable Accessibility so BuddyGrammar can read and replace selected text.")
+                Text("Start with Accessibility so BuddyWrite can read and replace selected text in other apps.")
                     .font(.system(size: 14, weight: .medium, design: .rounded))
 
                 HStack(spacing: 10) {
@@ -385,12 +385,60 @@ struct OnboardingView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     workflowItem(icon: "selection.pin.in.out", text: "Select text anywhere.")
                     workflowItem(icon: "keyboard", text: "Press ⌘⇧1 to run Standard.")
+                    workflowItem(icon: "mic.fill", text: "Use your dictation shortcut to start and stop local voice input.")
                     workflowItem(
                         icon: "doc.on.clipboard",
                         text: outputModeBinding.wrappedValue == .replaceSelection
-                            ? "The corrected text replaces your selection."
-                            : "The corrected text goes to the clipboard."
+                            ? "The corrected or dictated text is pasted into the active app."
+                            : "The corrected or dictated text goes to the clipboard."
                     )
+                }
+
+                Divider()
+                    .frame(height: NeoTheme.borderWidth)
+                    .background(NeoTheme.border)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Dictation is optional. BuddyWrite only asks for Microphone and Speech Recognition when you enable it.")
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(NeoTheme.mutedForeground)
+
+                    HStack(spacing: 10) {
+                        Button(model.voicePermissionsGranted ? "Dictation Ready" : "Enable Dictation") {
+                            model.requestVoicePermissions()
+                        }
+                        .buttonStyle(NeoBrutalistButton(isDisabled: model.voicePermissionsGranted))
+                        .disabled(model.voicePermissionsGranted)
+
+                        if model.microphonePermission == .denied || model.microphonePermission == .restricted {
+                            Button("Open Mic Settings") {
+                                model.openMicrophoneSettings()
+                            }
+                            .buttonStyle(NeoBrutalistButton(isPrimary: false))
+                        }
+
+                        if model.speechRecognitionPermission == .denied || model.speechRecognitionPermission == .restricted {
+                            Button("Open Speech Settings") {
+                                model.openSpeechRecognitionSettings()
+                            }
+                            .buttonStyle(NeoBrutalistButton(isPrimary: false))
+                        }
+                    }
+
+                    HStack(spacing: 10) {
+                        statusRow(
+                            title: "Microphone",
+                            isComplete: model.microphonePermission.isAuthorized,
+                            successText: "Granted",
+                            pendingText: model.microphonePermission.title
+                        )
+                        statusRow(
+                            title: "Speech",
+                            isComplete: model.speechRecognitionPermission.isAuthorized,
+                            successText: "Granted",
+                            pendingText: model.speechRecognitionPermission.title
+                        )
+                    }
                 }
             }
         }
@@ -413,6 +461,12 @@ struct OnboardingView: View {
                         isComplete: model.accessibilityGranted,
                         successText: "Enabled",
                         pendingText: "Missing"
+                    )
+                    statusRow(
+                        title: "Dictation",
+                        isComplete: model.voicePermissionsGranted,
+                        successText: "Enabled",
+                        pendingText: model.voicePermissionsRequested ? "Finish in How It Works or Settings" : "Optional"
                     )
                 }
 
@@ -439,7 +493,7 @@ struct OnboardingView: View {
             Spacer()
 
             if currentStep == .finish {
-                Button("Start Using BuddyGrammar") {
+                Button("Start Using BuddyWrite") {
                     model.completeOnboarding()
                 }
                 .buttonStyle(NeoBrutalistButton(isDisabled: !isReadyToFinish))
@@ -648,7 +702,8 @@ struct OnboardingView: View {
     }
 
     private var isReadyToFinish: Bool {
-        isProviderStepSatisfied && model.accessibilityGranted
+        isProviderStepSatisfied
+            && model.accessibilityGranted
     }
 
     private func canAdvance(from step: Step) -> Bool {

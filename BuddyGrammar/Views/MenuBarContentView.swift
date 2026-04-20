@@ -17,88 +17,148 @@ struct MenuBarContentView: View {
     private var appIconImage: NSImage { NSApplication.shared.applicationIconImage }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
-            HStack(spacing: 8) {
-                Image(nsImage: appIconImage)
-                    .interpolation(.high)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 18, height: 18)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                Text("BuddyGrammar")
-                    .font(.system(size: 13, weight: .black, design: .rounded))
-                    .foregroundStyle(fg)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+        ZStack {
+            bg
+                .ignoresSafeArea()
 
-            neoDivider
+            VStack(alignment: .leading, spacing: 0) {
+                // Header
+                HStack(spacing: 10) {
+                    Image(nsImage: appIconImage)
+                        .interpolation(.high)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 20, height: 20)
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                    Text("BuddyWrite")
+                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .foregroundStyle(fg)
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
 
-            // Profiles
-            VStack(alignment: .leading, spacing: 2) {
-                ForEach(model.settingsStore.profiles) { profile in
-                    ProfileButton(
-                        profile: profile,
-                        fg: fg,
-                        fgSecondary: fgSecondary,
-                        primary: primary,
-                        hoverBg: hoverBg
-                    ) {
-                        model.runProfile(profile)
+                neoDivider
+
+                // Profiles
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(model.settingsStore.profiles) { profile in
+                        ProfileButton(
+                            profile: profile,
+                            fg: fg,
+                            fgSecondary: fgSecondary,
+                            primary: primary,
+                            hoverBg: hoverBg
+                        ) {
+                            model.runProfile(profile)
+                        }
                     }
                 }
-            }
-            .padding(.vertical, 4)
-            .padding(.horizontal, 4)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 10)
 
-            if model.rewriteCoordinator.lastErrorMessage != nil {
-                neoDivider
-                Text(model.rewriteCoordinator.statusMessage)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(red)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-            }
-
-            neoDivider
-
-            // Actions
-            HStack(spacing: 10) {
-                neoMenuButton("Updates", icon: "arrow.trianglehead.clockwise") { model.checkForUpdates() }
-                neoMenuButton("Settings", icon: "gearshape") {
-                    model.prepareToOpenSettingsWindow()
-                    openWindow(id: AppModel.settingsWindowID)
+                if model.rewriteCoordinator.lastErrorMessage != nil {
+                    neoDivider
+                    Text(model.rewriteCoordinator.statusMessage)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(red)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
                 }
-                Spacer()
-                neoMenuButton("Quit", icon: "xmark.circle") { NSApp.terminate(nil) }
+
+                neoDivider
+
+                LazyVGrid(columns: actionColumns, alignment: .leading, spacing: 10) {
+                    neoMenuButton(
+                        model.voiceInputCoordinator.isRecording ? "Stop Dictation" : "Dictate with BuddyWrite",
+                        icon: model.voiceInputCoordinator.isRecording ? "stop.circle.fill" : "mic.fill"
+                    ) {
+                        model.toggleVoiceInput()
+                    }
+                    neoMenuButton("Check for Updates", icon: "arrow.trianglehead.clockwise") {
+                        model.checkForUpdates()
+                    }
+                    neoMenuButton("Open Settings", icon: "gearshape.fill") {
+                        model.prepareToOpenSettingsWindow()
+                        openWindow(id: AppModel.settingsWindowID)
+                    }
+                    neoMenuButton("Quit BuddyWrite", icon: "xmark.circle") {
+                        NSApp.terminate(nil)
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 14)
+                .padding(.bottom, 18)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(bg)
+            )
         }
-        .frame(width: 260)
-        .background(bg)
+        .padding(12)
+        .frame(width: 452)
+    }
+
+    private var actionColumns: [GridItem] {
+        [
+            GridItem(.flexible(minimum: 0, maximum: .infinity), spacing: 10),
+            GridItem(.flexible(minimum: 0, maximum: .infinity), spacing: 10)
+        ]
     }
 
     private var neoDivider: some View {
         Rectangle()
             .fill(dividerColor)
             .frame(height: 1)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 14)
     }
 
     private func neoMenuButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        MenuActionButton(
+            title: title,
+            icon: icon,
+            fg: fgSecondary,
+            hoverBg: hoverBg,
+            action: action
+        )
+    }
+}
+
+private struct MenuActionButton: View {
+    let title: String
+    let icon: String
+    let fg: Color
+    let hoverBg: Color
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
         Button(action: action) {
-            HStack(spacing: 4) {
+            HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 12, weight: .bold))
+                    .frame(width: 14)
                 Text(title)
                     .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
             }
-            .foregroundStyle(fgSecondary)
+            .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 3)
+            .foregroundStyle(fg)
+            .background(isHovered ? hoverBg : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(isHovered ? hoverBg.opacity(0.45) : fg.opacity(0.12), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
         .focusable(false)
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -127,9 +187,9 @@ private struct ProfileButton: View {
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundStyle(fgSecondary)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(isHovered ? hoverBg : Color.clear, in: RoundedRectangle(cornerRadius: 5))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(isHovered ? hoverBg : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

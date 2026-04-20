@@ -1,6 +1,6 @@
-# BuddyGrammar
+# BuddyWrite
 
-BuddyGrammar is a native macOS menu bar utility that rewrites the currently selected text through OpenRouter using `openai/gpt-5.4-nano`.
+BuddyWrite is a native macOS menu bar utility that rewrites selected text or transcribed local dictation through OpenRouter using `openai/gpt-5.4-nano`.
 
 ## Features
 
@@ -47,7 +47,7 @@ xcodebuild -project BuddyGrammar.xcodeproj -scheme BuddyGrammar -configuration D
 
 ## Updates
 
-BuddyGrammar now includes Sparkle-based in-app updates backed by GitHub Releases.
+BuddyWrite now includes Sparkle-based in-app updates backed by GitHub Releases.
 
 - The app reads updates from [`appcast.xml`](./appcast.xml)
 - Release builds expose `Check for Updates` in the app UI

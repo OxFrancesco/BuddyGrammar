@@ -4,13 +4,14 @@ struct SettingsView: View {
     @Bindable var model: AppModel
 
     private enum Tab: String, CaseIterable, Identifiable {
-        case general, models, personalities
+        case general, models, voice, personalities
         var id: Self { self }
 
         var title: String {
             switch self {
             case .general: "General"
             case .models: "Models"
+            case .voice: "Voice"
             case .personalities: "Personalities"
             }
         }
@@ -19,12 +20,14 @@ struct SettingsView: View {
             switch self {
             case .general: "gearshape"
             case .models: "cpu"
+            case .voice: "mic"
             case .personalities: "slider.horizontal.3"
             }
         }
     }
 
     @State private var selectedTab: Tab = .general
+    @State private var appleSpeechAvailable: Bool?
 
     var body: some View {
         GeometryReader { geo in
@@ -107,7 +110,7 @@ struct SettingsView: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("BuddyGrammar")
+            Text("BuddyWrite")
                 .font(.system(size: 16, weight: .black, design: .rounded))
                 .tracking(-0.3)
                 .foregroundStyle(NeoTheme.foreground)
@@ -150,6 +153,8 @@ struct SettingsView: View {
             generalTab
         case .models:
             modelsTab
+        case .voice:
+            voiceTab
         case .personalities:
             personalitiesTab
         }
@@ -374,6 +379,135 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Voice
+
+    private var voiceTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                neoCard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "mic.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(NeoTheme.primary)
+                            Text("Local Dictation")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                        }
+
+                        neoDivider
+
+                        neoFormRow(label: "Dictation shortcut") {
+                            Text(model.voiceHotkey?.displayString ?? "None")
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundStyle(NeoTheme.accent)
+                        }
+
+                        HotkeyRecorderView(
+                            hotkey: voiceHotkeyBinding,
+                            conflictLabel: model.voiceHotkeyConflictLabel(for: model.voiceHotkey)
+                        )
+
+                        neoDivider
+
+                        neoFormRow(label: "Voice personality") {
+                            Picker("", selection: voiceProfileIDBinding) {
+                                ForEach(model.settingsStore.profiles) { profile in
+                                    Text(profile.name).tag(profile.id)
+                                }
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                        }
+
+                        neoFormRow(label: "Language") {
+                            Picker("", selection: voiceLocaleBinding) {
+                                ForEach(model.availableVoiceLocales) { locale in
+                                    Text(locale.title).tag(locale.id)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 220)
+                        }
+
+                        HStack(spacing: 8) {
+                            featurePill(symbol: "waveform", label: "Apple STT")
+                            appleSpeechAvailabilityPill
+                        }
+                    }
+                }
+                .task(id: model.voiceLocaleIdentifier) {
+                    appleSpeechAvailable = await model.voiceModelStore.appleOnDeviceAvailable(for: model.voiceLocaleIdentifier)
+                }
+
+                neoCard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "shippingbox")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(NeoTheme.primary)
+                            Text("Whisper Fallback")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                        }
+
+                        Text(model.voiceModelStore.fallbackModelID.summary)
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(NeoTheme.mutedForeground)
+
+                        HStack(spacing: 8) {
+                            featurePill(symbol: "externaldrive.fill", label: model.voiceModelStore.fallbackModelID.badge)
+                            voiceModelStatusPill(status: model.voiceFallbackStatus)
+                        }
+
+                        HStack(spacing: 10) {
+                            Button("Download Fallback") {
+                                model.preloadVoiceFallbackModel()
+                            }
+                            .buttonStyle(NeoBrutalistButton())
+
+                            Button("Dictate Now") {
+                                model.toggleVoiceInput()
+                            }
+                            .buttonStyle(NeoBrutalistButton(isPrimary: false))
+                        }
+
+                        if let localModelError = model.voiceModelStore.lastErrorMessage {
+                            Text(localModelError)
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundStyle(NeoTheme.destructive)
+                        }
+
+                        neoDivider
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("BuddyWrite only asks for dictation permissions when you enable local voice input.")
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .foregroundStyle(NeoTheme.mutedForeground)
+
+                            Button(model.voicePermissionsGranted ? "Dictation Enabled" : "Enable Dictation Permissions") {
+                                model.requestVoicePermissions()
+                            }
+                            .buttonStyle(NeoBrutalistButton(isDisabled: model.voicePermissionsGranted))
+                            .disabled(model.voicePermissionsGranted)
+
+                            permissionRow(
+                                title: "Microphone",
+                                state: model.microphonePermission,
+                                actionTitle: "Open Settings",
+                                action: model.openMicrophoneSettings
+                            )
+                            permissionRow(
+                                title: "Speech Recognition",
+                                state: model.speechRecognitionPermission,
+                                actionTitle: "Open Settings",
+                                action: model.openSpeechRecognitionSettings
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Personalities
 
     private var personalitiesTab: some View {
@@ -574,6 +708,106 @@ struct SettingsView: View {
         )
     }
 
+    private var appleSpeechAvailabilityPill: some View {
+        let label: String
+        let color: Color
+        let icon: String
+
+        switch appleSpeechAvailable {
+        case .some(true):
+            label = "On-device ready"
+            color = NeoTheme.green
+            icon = "checkmark.circle.fill"
+        case .some(false):
+            label = "Needs Whisper fallback"
+            color = NeoTheme.orange
+            icon = "exclamationmark.triangle.fill"
+        case .none:
+            label = "Checking availability"
+            color = NeoTheme.mutedForeground
+            icon = "clock"
+        }
+
+        return HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .bold))
+            Text(label)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(NeoTheme.muted)
+        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                .stroke(NeoTheme.border, lineWidth: 1)
+        )
+    }
+
+    private func voiceModelStatusPill(status: VoiceModelStatus) -> some View {
+        let color: Color
+        switch status.state {
+        case .loaded:
+            color = NeoTheme.green
+        case .downloading:
+            color = NeoTheme.orange
+        case .failed:
+            color = NeoTheme.destructive
+        case .notDownloaded:
+            color = NeoTheme.mutedForeground
+        }
+
+        return HStack(spacing: 6) {
+            Image(systemName: voiceModelIconName(for: status.state))
+                .font(.system(size: 12, weight: .bold))
+            Text(status.state.title)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(NeoTheme.muted)
+        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                .stroke(NeoTheme.border, lineWidth: 1)
+        )
+    }
+
+    private func permissionRow(
+        title: String,
+        state: VoicePermissionState,
+        actionTitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                Text(state.title)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(NeoTheme.mutedForeground)
+            }
+            Spacer()
+            if state.isAuthorized {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(NeoTheme.green)
+                    .font(.system(size: 14, weight: .bold))
+            } else {
+                Button(actionTitle, action: action)
+                    .buttonStyle(NeoBrutalistButton(isPrimary: false))
+            }
+        }
+        .padding(10)
+        .background(NeoTheme.muted)
+        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                .stroke(NeoTheme.border, lineWidth: 1)
+        )
+    }
+
     // MARK: - Bindings
 
     private var selectedProfile: PromptProfile? {
@@ -643,6 +877,33 @@ struct SettingsView: View {
         )
     }
 
+    private var voiceProfileIDBinding: Binding<UUID> {
+        Binding(
+            get: { model.selectedVoiceProfile.id },
+            set: { newValue in
+                model.setVoiceProfileID(newValue)
+            }
+        )
+    }
+
+    private var voiceLocaleBinding: Binding<String> {
+        Binding(
+            get: { model.voiceLocaleIdentifier },
+            set: { newValue in
+                model.setVoiceLocaleIdentifier(newValue)
+            }
+        )
+    }
+
+    private var voiceHotkeyBinding: Binding<HotkeyDescriptor?> {
+        Binding(
+            get: { model.voiceHotkey },
+            set: { newValue in
+                model.setVoiceHotkey(newValue)
+            }
+        )
+    }
+
     private func iconName(for state: LocalModelState) -> String {
         switch state {
         case .notDownloaded:
@@ -653,6 +914,19 @@ struct SettingsView: View {
             "checkmark.circle"
         case .loading:
             "clock.arrow.trianglehead.counterclockwise.rotate.90"
+        case .loaded:
+            "checkmark.circle.fill"
+        case .failed:
+            "xmark.circle.fill"
+        }
+    }
+
+    private func voiceModelIconName(for state: VoiceModelState) -> String {
+        switch state {
+        case .notDownloaded:
+            "arrow.down.circle"
+        case .downloading:
+            "arrow.down.circle.fill"
         case .loaded:
             "checkmark.circle.fill"
         case .failed:

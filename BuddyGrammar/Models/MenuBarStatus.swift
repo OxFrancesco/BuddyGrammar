@@ -4,6 +4,8 @@ import Observation
 enum MenuBarStatusPhase: Equatable, Sendable {
     case idle
     case capture(profileName: String)
+    case recording
+    case transcribing
     case sending(profileName: String)
     case success(message: String)
     case failure(message: String)
@@ -14,6 +16,10 @@ enum MenuBarStatusPhase: Equatable, Sendable {
             ""
         case .capture:
             "Reading..."
+        case .recording:
+            "Listening..."
+        case .transcribing:
+            "Transcribing..."
         case .sending:
             "Fixing..."
         case .success:
@@ -29,6 +35,10 @@ enum MenuBarStatusPhase: Equatable, Sendable {
             "text.redaction"
         case .capture:
             "text.cursor"
+        case .recording:
+            "waveform"
+        case .transcribing:
+            "waveform.and.magnifyingglass"
         case .sending:
             "wand.and.stars"
         case .success:
@@ -41,15 +51,19 @@ enum MenuBarStatusPhase: Equatable, Sendable {
     var accessibilityLabel: String {
         switch self {
         case .idle:
-            "BuddyGrammar"
+            "BuddyWrite"
         case .capture(let profileName):
-            "BuddyGrammar is reading text for \(profileName)."
+            "BuddyWrite is reading text for \(profileName)."
+        case .recording:
+            "BuddyWrite is recording dictation."
+        case .transcribing:
+            "BuddyWrite is transcribing your speech locally."
         case .sending(let profileName):
-            "BuddyGrammar is rewriting text with \(profileName)."
+            "BuddyWrite is rewriting text with \(profileName)."
         case .success(let message):
-            "BuddyGrammar finished. \(message)"
+            "BuddyWrite finished. \(message)"
         case .failure(let message):
-            "BuddyGrammar error. \(message)"
+            "BuddyWrite error. \(message)"
         }
     }
 }

@@ -57,8 +57,8 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
-          APP_PATH="$DERIVED_DATA/Build/Products/Release/BuddyGrammar.app"
-          ZIP_NAME="BuddyGrammar-${VERSION}.zip"
+          APP_PATH="$DERIVED_DATA/Build/Products/Release/BuddyWrite.app"
+          ZIP_NAME="BuddyWrite-${VERSION}.zip"
           ZIP_PATH="$RUNNER_TEMP/$ZIP_NAME"
 
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_PATH"
@@ -105,7 +105,7 @@ jobs:
             gh release upload "$TAG" "$ZIP_PATH" --clobber
           else
             gh release create "$TAG" "$ZIP_PATH" \
-              --title "BuddyGrammar ${{ steps.package.outputs.short_version }}" \
+              --title "BuddyWrite ${{ steps.package.outputs.short_version }}" \
               --notes "Release ${{ steps.package.outputs.short_version }}"
           fi
 
@@ -121,14 +121,14 @@ jobs:
               xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
               xmlns:dc="http://purl.org/dc/elements/1.1/">
               <channel>
-                  <title>BuddyGrammar Updates</title>
+                  <title>BuddyWrite Updates</title>
                   <link>https://github.com/${GITHUB_REPOSITORY}/releases</link>
-                  <description>Latest BuddyGrammar releases for Sparkle.</description>
+                  <description>Latest BuddyWrite releases for Sparkle.</description>
                   <language>en</language>
                   <item>
                       <title>Version ${{ steps.package.outputs.short_version }}</title>
                       <pubDate>${PUB_DATE}</pubDate>
-                      <description><![CDATA[BuddyGrammar ${{ steps.package.outputs.short_version }}]]></description>
+                      <description><![CDATA[BuddyWrite ${{ steps.package.outputs.short_version }}]]></description>
                       <enclosure
                           url="${DOWNLOAD_URL}"
                           sparkle:version="${{ steps.package.outputs.build_version }}"

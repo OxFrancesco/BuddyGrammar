@@ -193,6 +193,9 @@ struct AppSettings: Codable, Hashable, Sendable {
         case rewriteProvider
         case selectedLocalModel
         case preloadLocalModelOnLaunch
+        case voiceProfileID
+        case voiceLocaleIdentifier
+        case voiceHotkey
         case launchAtLogin
         case hasCompletedOnboarding
     }
@@ -201,6 +204,9 @@ struct AppSettings: Codable, Hashable, Sendable {
     var rewriteProvider: RewriteProvider
     var selectedLocalModel: LocalModelID
     var preloadLocalModelOnLaunch: Bool
+    var voiceProfileID: UUID?
+    var voiceLocaleIdentifier: String?
+    var voiceHotkey: HotkeyDescriptor?
     var launchAtLogin: Bool
     var hasCompletedOnboarding: Bool
 
@@ -209,6 +215,9 @@ struct AppSettings: Codable, Hashable, Sendable {
         rewriteProvider: RewriteProvider,
         selectedLocalModel: LocalModelID,
         preloadLocalModelOnLaunch: Bool,
+        voiceProfileID: UUID?,
+        voiceLocaleIdentifier: String?,
+        voiceHotkey: HotkeyDescriptor?,
         launchAtLogin: Bool,
         hasCompletedOnboarding: Bool
     ) {
@@ -216,6 +225,9 @@ struct AppSettings: Codable, Hashable, Sendable {
         self.rewriteProvider = rewriteProvider
         self.selectedLocalModel = selectedLocalModel
         self.preloadLocalModelOnLaunch = preloadLocalModelOnLaunch
+        self.voiceProfileID = voiceProfileID
+        self.voiceLocaleIdentifier = voiceLocaleIdentifier
+        self.voiceHotkey = voiceHotkey
         self.launchAtLogin = launchAtLogin
         self.hasCompletedOnboarding = hasCompletedOnboarding
     }
@@ -230,6 +242,10 @@ struct AppSettings: Codable, Hashable, Sendable {
             ?? decodedProvider.localModelID
             ?? .qwen3_4b_instruct_2507_4bit
         preloadLocalModelOnLaunch = try container.decodeIfPresent(Bool.self, forKey: .preloadLocalModelOnLaunch) ?? true
+        voiceProfileID = try container.decodeIfPresent(UUID.self, forKey: .voiceProfileID) ?? PromptProfile.grammarProfileID
+        voiceLocaleIdentifier = try container.decodeIfPresent(String.self, forKey: .voiceLocaleIdentifier)
+            ?? Locale.autoupdatingCurrent.identifier
+        voiceHotkey = try container.decodeIfPresent(HotkeyDescriptor.self, forKey: .voiceHotkey)
         launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
         hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? false
     }
@@ -239,6 +255,9 @@ struct AppSettings: Codable, Hashable, Sendable {
         rewriteProvider: .openRouter(modelID: OpenRouterModel.defaultID),
         selectedLocalModel: .qwen3_4b_instruct_2507_4bit,
         preloadLocalModelOnLaunch: true,
+        voiceProfileID: PromptProfile.grammarProfileID,
+        voiceLocaleIdentifier: Locale.autoupdatingCurrent.identifier,
+        voiceHotkey: nil,
         launchAtLogin: false,
         hasCompletedOnboarding: false
     )
