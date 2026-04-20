@@ -307,7 +307,8 @@ final class AppModel {
                 return
             }
 
-            if modelRequiresSpeechPrompt {
+            let needsSpeechPrompt = await voiceModelStore.appleOnDeviceAvailable(for: voiceLocaleIdentifier)
+            if needsSpeechPrompt, modelRequiresSpeechPrompt {
                 _ = await voiceAuthorizationService.requestSpeechRecognitionAccess()
             }
             refreshEnvironmentState()

@@ -8,13 +8,17 @@ final class MockVoiceAuthorizationService: VoiceAuthorizing {
     var speechRecognitionPermission: VoicePermissionState = .authorized
     var microphoneRequestResult = true
     var speechRequestResult = true
+    var microphoneRequestCount = 0
+    var speechRequestCount = 0
 
     func requestMicrophoneAccess() async -> Bool {
+        microphoneRequestCount += 1
         microphonePermission = microphoneRequestResult ? .authorized : .denied
         return microphoneRequestResult
     }
 
     func requestSpeechRecognitionAccess() async -> Bool {
+        speechRequestCount += 1
         speechRecognitionPermission = speechRequestResult ? .authorized : .denied
         return speechRequestResult
     }
@@ -222,5 +226,21 @@ final class VoiceInputCoordinatorTests: XCTestCase {
         XCTAssertEqual(harness.rewriteProvider.lastRequest?.selectedText, "hello from voice")
         XCTAssertEqual(harness.clipboard.writtenStrings.last, "Hello from voice.")
         XCTAssertEqual(harness.pasteSimulator.pasteCallCount, 0)
+    }
+
+    func testFallbackDictationDoesNotRequestSpeechPermission() async throws {
+        let harness = makeCoordinator(
+            outputMode: .copyToClipboard,
+            speechGranted: false,
+            appleAvailable: false,
+            fallbackPrepared: true
+        )
+
+        harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
+        try await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertTrue(harness.coordinator.isRecording)
+        XCTAssertEqual(harness.authorization.microphoneRequestCount, 1)
+        XCTAssertEqual(harness.authorization.speechRequestCount, 0)
     }
 }

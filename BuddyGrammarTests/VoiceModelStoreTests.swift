@@ -106,4 +106,14 @@ final class VoiceModelStoreTests: XCTestCase {
             XCTFail("Unexpected error: \(error)")
         }
     }
+
+    func testPreparedFallbackSetsInitialLoadedStatus() async throws {
+        let apple = MockSpeechEngine(available: false, transcript: "apple transcript")
+        let fallback = MockFallbackSpeechEngine(prepared: true, transcript: "fallback transcript")
+        let store = VoiceModelStore(appleEngine: apple, fallbackEngine: fallback)
+
+        try await Task.sleep(for: .milliseconds(20))
+
+        XCTAssertEqual(store.status.state, .loaded)
+    }
 }

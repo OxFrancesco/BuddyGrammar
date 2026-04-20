@@ -92,16 +92,21 @@ final class VoiceInputCoordinator {
                 return
             }
 
+            let voiceLocaleIdentifier = settingsProvider.appSettings.voiceLocaleIdentifier
+                ?? Locale.autoupdatingCurrent.identifier
             let microphoneGranted = await voiceAuthorizationService.requestMicrophoneAccess()
             guard microphoneGranted else {
                 presentFailure(.microphonePermissionDenied)
                 return
             }
 
-            let speechGranted = await voiceAuthorizationService.requestSpeechRecognitionAccess()
-            guard speechGranted else {
-                presentFailure(.speechRecognitionPermissionDenied)
-                return
+            let appleSpeechAvailable = await voiceModelStore.appleOnDeviceAvailable(for: voiceLocaleIdentifier)
+            if appleSpeechAvailable {
+                let speechGranted = await voiceAuthorizationService.requestSpeechRecognitionAccess()
+                guard speechGranted else {
+                    presentFailure(.speechRecognitionPermissionDenied)
+                    return
+                }
             }
 
             do {

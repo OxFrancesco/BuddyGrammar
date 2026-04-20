@@ -153,11 +153,25 @@ final class AppleOnDeviceSpeechEngine: SpeechTranscriptionEngine {
 
 @MainActor
 final class WhisperKitSpeechEngine: FallbackSpeechTranscriptionEngine {
-    private let modelID: VoiceFallbackModelID
-    private var whisperKit: WhisperKit?
+    private enum StorageKey {
+        static let cachedModelFolderPath = "BuddyGrammar.voice.whisperModelFolderPath"
+    }
 
-    init(modelID: VoiceFallbackModelID = .whisperBase) {
+    private let modelID: VoiceFallbackModelID
+    private let defaults: UserDefaults
+    private var whisperKit: WhisperKit?
+    private var cachedModelFolderPath: String?
+
+    init(modelID: VoiceFallbackModelID = .whisperBase, defaults: UserDefaults = .standard) {
         self.modelID = modelID
+        self.defaults = defaults
+
+        if let persistedPath = defaults.string(forKey: StorageKey.cachedModelFolderPath),
+           FileManager.default.fileExists(atPath: persistedPath) {
+            self.cachedModelFolderPath = persistedPath
+        } else {
+            defaults.removeObject(forKey: StorageKey.cachedModelFolderPath)
+        }
     }
 
     func isAvailable(for localeIdentifier: String) async -> Bool {
@@ -165,7 +179,7 @@ final class WhisperKitSpeechEngine: FallbackSpeechTranscriptionEngine {
     }
 
     func isPrepared() async -> Bool {
-        whisperKit != nil
+        whisperKit != nil || cachedModelFolderPath != nil
     }
 
     func preload() async throws {
@@ -173,18 +187,18 @@ final class WhisperKitSpeechEngine: FallbackSpeechTranscriptionEngine {
             return
         }
 
-        whisperKit = try await WhisperKit(
-            WhisperKitConfig(
-                model: modelID.whisperKitModelName,
-                verbose: false,
-                prewarm: false,
-                load: true,
-                download: true
-            )
-        )
+        whisperKit = try await loadWhisperKit(allowDownload: cachedModelFolderPath == nil)
     }
 
     func transcribe(audioURL: URL, localeIdentifier: String) async throws -> String {
+        if whisperKit == nil, cachedModelFolderPath != nil {
+            do {
+                whisperKit = try await loadWhisperKit(allowDownload: false)
+            } catch {
+                clearCachedModelFolder()
+            }
+        }
+
         guard let whisperKit else {
             throw RewriteFailure.transcriptionUnavailable(
                 "Download the local Whisper fallback model in Settings before using dictation on this Mac."
@@ -201,6 +215,31 @@ final class WhisperKitSpeechEngine: FallbackSpeechTranscriptionEngine {
             throw RewriteFailure.transcriptionUnavailable("BuddyWrite could not hear any speech in the recording.")
         }
         return text
+    }
+
+    private func loadWhisperKit(allowDownload: Bool) async throws -> WhisperKit {
+        let whisperKit = try await WhisperKit(
+            WhisperKitConfig(
+                model: modelID.whisperKitModelName,
+                modelFolder: cachedModelFolderPath,
+                verbose: false,
+                prewarm: false,
+                load: true,
+                download: allowDownload
+            )
+        )
+
+        if let modelFolderPath = whisperKit.modelFolder?.path {
+            cachedModelFolderPath = modelFolderPath
+            defaults.set(modelFolderPath, forKey: StorageKey.cachedModelFolderPath)
+        }
+
+        return whisperKit
+    }
+
+    private func clearCachedModelFolder() {
+        cachedModelFolderPath = nil
+        defaults.removeObject(forKey: StorageKey.cachedModelFolderPath)
     }
 }
 
@@ -224,6 +263,13 @@ final class VoiceModelStore {
         self.appleEngine = appleEngine
         self.fallbackEngine = fallbackEngine
         self.status = .notDownloaded
+
+        Task { [weak self] in
+            guard let self else { return }
+            if await self.fallbackEngine.isPrepared() {
+                self.status = .init(state: .loaded, errorMessage: nil)
+            }
+        }
     }
 
     func appleOnDeviceAvailable(for localeIdentifier: String) async -> Bool {
