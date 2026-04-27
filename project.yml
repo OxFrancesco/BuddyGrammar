@@ -48,6 +48,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.francescooddo.BuddyGrammar
         INFOPLIST_FILE: BuddyGrammar/Support/Info.plist
+        CODE_SIGN_ENTITLEMENTS: BuddyGrammar/Support/BuddyGrammar.entitlements
         GENERATE_INFOPLIST_FILE: NO
         PRODUCT_NAME: BuddyWrite
         PRODUCT_MODULE_NAME: BuddyGrammar

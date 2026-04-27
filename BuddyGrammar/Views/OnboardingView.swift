@@ -399,7 +399,7 @@ struct OnboardingView: View {
                     .background(NeoTheme.border)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Dictation is optional. BuddyWrite only asks for Microphone and Speech Recognition when you enable it.")
+                    Text("Dictation is optional. BuddyWrite only appears in Privacy > Microphone after the first macOS permission prompt.")
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundStyle(NeoTheme.mutedForeground)
 
@@ -434,9 +434,11 @@ struct OnboardingView: View {
                         )
                         statusRow(
                             title: "Speech",
-                            isComplete: model.speechRecognitionPermission.isAuthorized,
-                            successText: "Granted",
-                            pendingText: model.speechRecognitionPermission.title
+                            isComplete: !model.speechRecognitionRequiredForDictation || model.speechRecognitionPermission.isAuthorized,
+                            successText: model.speechRecognitionRequiredForDictation ? "Granted" : "Not required",
+                            pendingText: model.speechRecognitionRequiredForDictation
+                                ? model.speechRecognitionPermission.title
+                                : "Whisper fallback"
                         )
                     }
                 }

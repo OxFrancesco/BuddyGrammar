@@ -40,14 +40,12 @@ protocol VoiceAuthorizing: AnyObject {
 @MainActor
 final class VoiceAuthorizationService: VoiceAuthorizing {
     var microphonePermission: VoicePermissionState {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .notDetermined:
+        switch AVAudioApplication.shared.recordPermission {
+        case .undetermined:
             .notDetermined
         case .denied:
             .denied
-        case .restricted:
-            .restricted
-        case .authorized:
+        case .granted:
             .authorized
         @unknown default:
             .denied
@@ -74,11 +72,8 @@ final class VoiceAuthorizationService: VoiceAuthorizing {
             return true
         }
 
-        return await withCheckedContinuation { continuation in
-            AVCaptureDevice.requestAccess(for: .audio) { granted in
-                continuation.resume(returning: granted)
-            }
-        }
+        activateForPrivacyPrompt()
+        return await Self.requestSystemMicrophoneAccess()
     }
 
     func requestSpeechRecognitionAccess() async -> Bool {
@@ -86,11 +81,8 @@ final class VoiceAuthorizationService: VoiceAuthorizing {
             return true
         }
 
-        return await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status == .authorized)
-            }
-        }
+        activateForPrivacyPrompt()
+        return await Self.requestSystemSpeechRecognitionAccess()
     }
 
     func openMicrophoneSettings() {
@@ -102,9 +94,38 @@ final class VoiceAuthorizationService: VoiceAuthorizing {
     }
 
     private func openPrivacySettings(anchor: String) {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)") else {
-            return
+        let urls = [
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?\(anchor)",
+            "x-apple.systempreferences:com.apple.preference.security?\(anchor)"
+        ]
+
+        for candidate in urls {
+            guard let url = URL(string: candidate) else {
+                continue
+            }
+            if NSWorkspace.shared.open(url) {
+                return
+            }
         }
-        NSWorkspace.shared.open(url)
+    }
+
+    private func activateForPrivacyPrompt() {
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private nonisolated static func requestSystemMicrophoneAccess() async -> Bool {
+        await withCheckedContinuation { continuation in
+            AVAudioApplication.requestRecordPermission { @Sendable granted in
+                continuation.resume(returning: granted)
+            }
+        }
+    }
+
+    private nonisolated static func requestSystemSpeechRecognitionAccess() async -> Bool {
+        await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { @Sendable status in
+                continuation.resume(returning: status == .authorized)
+            }
+        }
     }
 }

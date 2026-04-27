@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ProfileEditorView: View {
     let profile: PromptProfile
-    let conflictingProfile: PromptProfile?
+    let conflictLabel: String?
     let onChange: (PromptProfile) -> Void
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
@@ -78,7 +78,7 @@ struct ProfileEditorView: View {
 
                     HotkeyRecorderView(
                         hotkey: binding(\.hotkey),
-                        conflictLabel: conflictingProfile?.name
+                        conflictLabel: conflictLabel
                     )
                 }
                 .padding(16)

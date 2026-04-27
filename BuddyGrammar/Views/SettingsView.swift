@@ -441,6 +441,8 @@ struct SettingsView: View {
 
                 neoCard {
                     VStack(alignment: .leading, spacing: 14) {
+                        let speechRequired = appleSpeechAvailable != false
+
                         HStack(spacing: 10) {
                             Image(systemName: "shippingbox")
                                 .font(.system(size: 14, weight: .bold))
@@ -479,7 +481,7 @@ struct SettingsView: View {
                         neoDivider
 
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("BuddyWrite only asks for dictation permissions when you enable local voice input.")
+                            Text("BuddyWrite only appears in Privacy > Microphone after macOS shows the first system prompt.")
                                 .font(.system(size: 12, weight: .medium, design: .rounded))
                                 .foregroundStyle(NeoTheme.mutedForeground)
 
@@ -492,15 +494,27 @@ struct SettingsView: View {
                             permissionRow(
                                 title: "Microphone",
                                 state: model.microphonePermission,
-                                actionTitle: "Open Settings",
-                                action: model.openMicrophoneSettings
+                                actionTitle: model.microphonePermission == .notDetermined ? "Request Access" : "Open Settings",
+                                action: model.microphonePermission == .notDetermined
+                                    ? model.requestMicrophonePermission
+                                    : model.openMicrophoneSettings
                             )
-                            permissionRow(
-                                title: "Speech Recognition",
-                                state: model.speechRecognitionPermission,
-                                actionTitle: "Open Settings",
-                                action: model.openSpeechRecognitionSettings
-                            )
+
+                            if speechRequired {
+                                permissionRow(
+                                    title: "Speech Recognition",
+                                    state: model.speechRecognitionPermission,
+                                    actionTitle: model.speechRecognitionPermission == .notDetermined ? "Request Access" : "Open Settings",
+                                    action: model.speechRecognitionPermission == .notDetermined
+                                        ? model.requestSpeechRecognitionPermission
+                                        : model.openSpeechRecognitionSettings
+                                )
+                            } else {
+                                infoRow(
+                                    title: "Speech Recognition",
+                                    message: "Not required for this language on this Mac. BuddyWrite will use the local Whisper fallback instead."
+                                )
+                            }
                         }
                     }
                 }
@@ -604,7 +618,7 @@ struct SettingsView: View {
             if let profile = selectedProfile {
                 ProfileEditorView(
                     profile: profile,
-                    conflictingProfile: model.settingsStore.hotkeyConflict(for: profile.id, hotkey: profile.hotkey),
+                    conflictLabel: model.profileHotkeyConflictLabel(for: profile.id, hotkey: profile.hotkey),
                     onChange: { updated in
                         model.settingsStore.update(updated)
                     },
@@ -797,6 +811,30 @@ struct SettingsView: View {
             } else {
                 Button(actionTitle, action: action)
                     .buttonStyle(NeoBrutalistButton(isPrimary: false))
+            }
+        }
+        .padding(10)
+        .background(NeoTheme.muted)
+        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                .stroke(NeoTheme.border, lineWidth: 1)
+        )
+    }
+
+    private func infoRow(title: String, message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "info.circle.fill")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(NeoTheme.accent)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                Text(message)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(NeoTheme.mutedForeground)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(10)

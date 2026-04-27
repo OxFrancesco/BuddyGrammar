@@ -24,8 +24,8 @@ enum MenuBarStatusPhase: Equatable, Sendable {
             "Fixing..."
         case .success:
             "Done"
-        case .failure:
-            "Error"
+        case .failure(let message):
+            Self.compactFailureTitle(for: message)
         }
     }
 
@@ -65,6 +65,18 @@ enum MenuBarStatusPhase: Equatable, Sendable {
         case .failure(let message):
             "BuddyWrite error. \(message)"
         }
+    }
+
+    private static func compactFailureTitle(for message: String) -> String {
+        let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedMessage.isEmpty else { return "Error" }
+
+        let maxLength = 48
+        if trimmedMessage.count <= maxLength {
+            return trimmedMessage
+        }
+
+        return String(trimmedMessage.prefix(maxLength - 3)) + "..."
     }
 }
 

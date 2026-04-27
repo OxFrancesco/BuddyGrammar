@@ -32,5 +32,29 @@ struct BuddyGrammarApp: App {
         .defaultSize(width: 820, height: 560)
         .windowResizability(.contentSize)
         .commandsRemoved()
+
+        Window("Notes", id: AppModel.notesWindowID) {
+            NotesView(model: model)
+                .frame(minWidth: 720, minHeight: 520)
+                .onAppear {
+                    model.utilityWindowDidAppear()
+                }
+                .onDisappear {
+                    model.utilityWindowDidDisappear()
+                }
+        }
+        .defaultSize(width: 920, height: 620)
+
+        Window("Debug", id: AppModel.debugWindowID) {
+            DebugPanelView(model: model)
+                .frame(minWidth: 720, minHeight: 520)
+                .onAppear {
+                    model.utilityWindowDidAppear()
+                }
+                .onDisappear {
+                    model.utilityWindowDidDisappear()
+                }
+        }
+        .defaultSize(width: 880, height: 620)
     }
 }

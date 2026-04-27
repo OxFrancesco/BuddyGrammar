@@ -8,8 +8,11 @@ import SwiftUI
 @Observable
 final class AppModel {
     static let settingsWindowID = "settings-window"
+    static let notesWindowID = "notes-window"
+    static let debugWindowID = "debug-window"
 
     let settingsStore: SettingsStore
+    let notesStore: NotesStore
     let keychainService: KeychainService
     let accessibilityService: AccessibilityService
     let appUpdateService: AppUpdateService
@@ -23,16 +26,22 @@ final class AppModel {
     let menuBarStatus: MenuBarStatusModel
 
     var selectedProfileID: UUID?
+    var selectedNoteID: UUID?
     var apiKeyDraft = ""
     var settingsErrorMessage: String?
+    var appleSpeechAvailableForSelectedLocale: Bool?
     private var environmentStateRevision = 0
 
     private let launchAtLoginService: LaunchAtLoginService
+    private let clipboardService: ClipboardService
+    private let eventSimulationService: EventSimulationService
     private var onboardingWindowController: NSWindowController?
     private var settingsWindowCloseObserver: NSObjectProtocol?
+    private var utilityWindowCloseObserver: NSObjectProtocol?
 
     init() {
         let settingsStore = SettingsStore()
+        let notesStore = NotesStore()
         let keychainService = KeychainService()
         let accessibilityService = AccessibilityService()
         let appUpdateService = AppUpdateService()
@@ -77,6 +86,7 @@ final class AppModel {
         )
 
         self.settingsStore = settingsStore
+        self.notesStore = notesStore
         self.keychainService = keychainService
         self.accessibilityService = accessibilityService
         self.appUpdateService = appUpdateService
@@ -89,8 +99,12 @@ final class AppModel {
         self.rewriteCoordinator = rewriteCoordinator
         self.voiceInputCoordinator = voiceInputCoordinator
         self.menuBarStatus = menuBarStatus
+        self.clipboardService = clipboardService
+        self.eventSimulationService = eventSimulationService
         self.selectedProfileID = settingsStore.profiles.first?.id
+        self.selectedNoteID = notesStore.notes.first?.id
         self.apiKeyDraft = keychainService.loadAPIKey() ?? ""
+        self.appleSpeechAvailableForSelectedLocale = nil
 
         hotkeyService.onHotKey = { [weak self] profileID in
             self?.runProfile(id: profileID)
@@ -98,11 +112,11 @@ final class AppModel {
         hotkeyService.onVoiceHotKey = { [weak self] in
             self?.toggleVoiceInput()
         }
+        hotkeyService.onNoteHotKey = { [weak self] noteID in
+            self?.pasteNote(id: noteID)
+        }
         settingsStore.onProfilesChanged = { [weak self] profiles in
-            self?.hotkeyService.register(
-                profiles: profiles,
-                voiceHotkey: self?.settingsStore.appSettings.voiceHotkey
-            )
+            self?.registerHotkeys()
             if let selectedID = self?.selectedProfileID, !profiles.contains(where: { $0.id == selectedID }) {
                 self?.selectedProfileID = profiles.first?.id
             }
@@ -110,11 +124,17 @@ final class AppModel {
         settingsStore.onSettingsChanged = { [weak self] settings in
             self?.apply(settings: settings)
             self?.rewriteProviderController.apply(settings: settings)
-            self?.hotkeyService.register(
-                profiles: self?.settingsStore.enabledProfilesWithHotkeys() ?? [],
-                voiceHotkey: settings.voiceHotkey
-            )
+            self?.registerHotkeys()
+            self?.refreshVoiceSpeechAvailability()
         }
+        notesStore.onNotesChanged = { [weak self] notes in
+            self?.registerHotkeys()
+            if let selectedID = self?.selectedNoteID, !notes.contains(where: { $0.id == selectedID }) {
+                self?.selectedNoteID = notes.first?.id
+            }
+        }
+
+        refreshVoiceSpeechAvailability()
     }
 
     var hasAPIKey: Bool {
@@ -146,10 +166,7 @@ final class AppModel {
     }
 
     func start() {
-        hotkeyService.register(
-            profiles: settingsStore.enabledProfilesWithHotkeys(),
-            voiceHotkey: settingsStore.appSettings.voiceHotkey
-        )
+        registerHotkeys()
         apply(settings: settingsStore.appSettings)
         rewriteProviderController.start()
         restoreAccessoryActivationIfPossible()
@@ -162,12 +179,25 @@ final class AppModel {
         promoteForForegroundWindow()
     }
 
+    func prepareToOpenUtilityWindow() {
+        promoteForForegroundWindow()
+    }
+
     func settingsWindowDidAppear() {
         configureSettingsWindows()
         focusSettingsWindowSoon()
     }
 
     func settingsWindowDidDisappear() {
+        restoreAccessoryActivationIfPossible()
+    }
+
+    func utilityWindowDidAppear() {
+        configureUtilityWindows()
+        promoteForForegroundWindow()
+    }
+
+    func utilityWindowDidDisappear() {
         restoreAccessoryActivationIfPossible()
     }
 
@@ -207,8 +237,30 @@ final class AppModel {
         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: appBundlePath)
     }
 
+    func openAppSupportFolder() {
+        guard let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
+
     func refreshEnvironmentState() {
         environmentStateRevision += 1
+    }
+
+    func refreshVoiceSpeechAvailability() {
+        let localeIdentifier = voiceLocaleIdentifier
+        appleSpeechAvailableForSelectedLocale = nil
+
+        Task { [weak self] in
+            guard let self else { return }
+            let available = await self.voiceModelStore.appleOnDeviceAvailable(for: localeIdentifier)
+            await MainActor.run {
+                guard self.voiceLocaleIdentifier == localeIdentifier else { return }
+                self.appleSpeechAvailableForSelectedLocale = available
+                self.refreshEnvironmentState()
+            }
+        }
     }
 
     func checkForUpdates() {
@@ -245,6 +297,57 @@ final class AppModel {
 
     func toggleVoiceInput() {
         voiceInputCoordinator.toggleDictation(accessibilityService: accessibilityService)
+    }
+
+    func addNote() {
+        selectedNoteID = notesStore.addNote()
+    }
+
+    func deleteSelectedNote() {
+        guard let selectedNoteID else { return }
+        notesStore.removeNote(id: selectedNoteID)
+    }
+
+    func pasteSelectedNote() {
+        guard let selectedNoteID else { return }
+        pasteNote(id: selectedNoteID)
+    }
+
+    func pasteNote(id: UUID) {
+        guard let note = notesStore.note(id: id) else { return }
+        pasteNote(note)
+    }
+
+    func copyNoteToClipboard(_ note: NoteItem) {
+        clipboardService.writeString(note.content)
+        menuBarStatus.show(.success(message: "Note copied"))
+        menuBarStatus.reset(after: .seconds(1.2))
+    }
+
+    func pasteNote(_ note: NoteItem) {
+        guard !note.content.isEmpty else { return }
+
+        Task { @MainActor in
+            guard accessibilityService.isTrusted(prompt: true) else {
+                menuBarStatus.show(.failure(message: "Accessibility access needed"))
+                menuBarStatus.reset(after: .seconds(2.4))
+                return
+            }
+
+            let snapshot = clipboardService.snapshot()
+            clipboardService.writeString(note.content)
+            do {
+                try eventSimulationService.simulatePaste()
+                try await Task.sleep(for: .milliseconds(180))
+                clipboardService.restore(snapshot)
+                menuBarStatus.show(.success(message: "Note pasted"))
+                menuBarStatus.reset(after: .seconds(1.2))
+            } catch {
+                clipboardService.restore(snapshot)
+                menuBarStatus.show(.failure(message: "Could not paste note"))
+                menuBarStatus.reset(after: .seconds(2.4))
+            }
+        }
     }
 
     func addPersonality(template: PersonalityTemplate = .blankCustom) {
@@ -290,6 +393,7 @@ final class AppModel {
 
     func setVoiceLocaleIdentifier(_ localeIdentifier: String) {
         settingsStore.appSettings.voiceLocaleIdentifier = localeIdentifier
+        refreshVoiceSpeechAvailability()
     }
 
     func setVoiceHotkey(_ hotkey: HotkeyDescriptor?) {
@@ -315,6 +419,22 @@ final class AppModel {
         }
     }
 
+    func requestMicrophonePermission() {
+        Task { @MainActor in
+            _ = await voiceAuthorizationService.requestMicrophoneAccess()
+            refreshEnvironmentState()
+        }
+    }
+
+    func requestSpeechRecognitionPermission() {
+        guard speechRecognitionRequiredForDictation else { return }
+
+        Task { @MainActor in
+            _ = await voiceAuthorizationService.requestSpeechRecognitionAccess()
+            refreshEnvironmentState()
+        }
+    }
+
     func openMicrophoneSettings() {
         voiceAuthorizationService.openMicrophoneSettings()
     }
@@ -324,11 +444,19 @@ final class AppModel {
     }
 
     var voicePermissionsGranted: Bool {
-        microphonePermission.isAuthorized && speechRecognitionPermission.isAuthorized
+        microphonePermission.isAuthorized && (
+            !speechRecognitionRequiredForDictation || speechRecognitionPermission.isAuthorized
+        )
     }
 
     var voicePermissionsRequested: Bool {
-        microphonePermission != .notDetermined || speechRecognitionPermission != .notDetermined
+        microphonePermission != .notDetermined || (
+            speechRecognitionRequiredForDictation && speechRecognitionPermission != .notDetermined
+        )
+    }
+
+    var speechRecognitionRequiredForDictation: Bool {
+        appleSpeechAvailableForSelectedLocale != false
     }
 
     func deleteSelectedPersonality() {
@@ -341,6 +469,76 @@ final class AppModel {
         settingsStore.moveProfile(id: selectedProfileID, direction: direction)
     }
 
+    func noteHotkeyConflictLabel(for noteID: UUID, hotkey: HotkeyDescriptor?) -> String? {
+        guard let hotkey else { return nil }
+
+        if let note = notesStore.hotkeyConflict(for: noteID, hotkey: hotkey) {
+            return note.displayTitle
+        }
+
+        if let profile = settingsStore.profiles.first(where: { $0.isEnabled && $0.hotkey == hotkey }) {
+            return profile.name
+        }
+
+        if settingsStore.appSettings.voiceHotkey == hotkey {
+            return "Dictation"
+        }
+
+        return nil
+    }
+
+    func profileHotkeyConflictLabel(for profileID: UUID, hotkey: HotkeyDescriptor?) -> String? {
+        guard let hotkey else { return nil }
+
+        if let profile = settingsStore.hotkeyConflict(for: profileID, hotkey: hotkey) {
+            return profile.name
+        }
+
+        if let note = notesStore.notes.first(where: { $0.hotkey == hotkey }) {
+            return note.displayTitle
+        }
+
+        if settingsStore.appSettings.voiceHotkey == hotkey {
+            return "Dictation"
+        }
+
+        return nil
+    }
+
+    func copyDebugDiagnostics() {
+        clipboardService.writeString(debugDiagnosticsText)
+        menuBarStatus.show(.success(message: "Debug info copied"))
+        menuBarStatus.reset(after: .seconds(1.2))
+    }
+
+    var debugDiagnosticsText: String {
+        let localStatuses = LocalModelID.allCases
+            .map { "\($0.title): \(localModelStore.status(for: $0).state.title)" }
+            .joined(separator: "\n")
+
+        return """
+        BuddyWrite Diagnostics
+        Version: \(appUpdateService.currentVersionDescription)
+        Bundle: \(Bundle.main.bundleIdentifier ?? "unknown")
+        Path: \(appBundlePath)
+        DerivedData: \(isRunningFromDerivedData)
+        Accessibility: \(accessibilityGranted ? "Granted" : "Missing")
+        Microphone: \(microphonePermission.title)
+        Speech Recognition: \(speechRecognitionPermission.title)
+        Output Mode: \(settingsStore.appSettings.outputMode.title)
+        Provider: \(currentProviderDescription)
+        API Key Saved: \(hasAPIKey)
+        Rewrite Status: \(rewriteCoordinator.statusMessage)
+        Rewrite Error: \(rewriteCoordinator.lastErrorMessage ?? "None")
+        Local Model Error: \(localModelStore.lastErrorMessage ?? "None")
+        Voice Error: \(voiceModelStore.lastErrorMessage ?? "None")
+        Notes: \(notesStore.notes.count)
+        Profiles: \(settingsStore.profiles.count)
+        Local Models:
+        \(localStatuses)
+        """
+    }
+
     private func apply(settings: AppSettings) {
         do {
             try launchAtLoginService.setEnabled(settings.launchAtLogin)
@@ -348,6 +546,14 @@ final class AppModel {
         } catch {
             settingsErrorMessage = "Could not update launch at login: \(error.localizedDescription)"
         }
+    }
+
+    private func registerHotkeys() {
+        hotkeyService.register(
+            profiles: settingsStore.enabledProfilesWithHotkeys(),
+            voiceHotkey: settingsStore.appSettings.voiceHotkey,
+            notes: notesStore.notesWithHotkeys()
+        )
     }
 
     private func focusSettingsWindowSoon() {
@@ -388,12 +594,12 @@ final class AppModel {
     }
 
     private func restoreAccessoryActivationIfPossible() {
-        let hasVisibleSettingsWindow = NSApp.windows.contains { window in
-            isSettingsWindow(window) && window.isVisible
+        let hasVisibleForegroundWindow = NSApp.windows.contains { window in
+            (isSettingsWindow(window) || isUtilityWindow(window)) && window.isVisible
         }
         let hasVisibleOnboardingWindow = onboardingWindowController?.window?.isVisible == true
 
-        guard !hasVisibleSettingsWindow, !hasVisibleOnboardingWindow else {
+        guard !hasVisibleForegroundWindow, !hasVisibleOnboardingWindow else {
             return
         }
 
@@ -415,6 +621,24 @@ final class AppModel {
         installSettingsWindowCloseObserver(for: window)
     }
 
+    private func configureUtilityWindows() {
+        for window in NSApp.windows where isUtilityWindow(window) {
+            window.styleMask.insert(.resizable)
+            window.collectionBehavior.formUnion([.fullScreenPrimary, .moveToActiveSpace])
+            installUtilityWindowCloseObserver(for: window)
+        }
+    }
+
+    private func isUtilityWindow(_ window: NSWindow) -> Bool {
+        let identifier = window.identifier?.rawValue
+        if identifier == Self.notesWindowID || identifier == Self.debugWindowID {
+            return true
+        }
+
+        let title = window.title.localizedLowercase
+        return title.contains("notes") || title.contains("debug")
+    }
+
     private func installSettingsWindowCloseObserver(for window: NSWindow) {
         if let settingsWindowCloseObserver {
             NotificationCenter.default.removeObserver(settingsWindowCloseObserver)
@@ -428,6 +652,26 @@ final class AppModel {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.settingsWindowCloseObserver = nil
+                DispatchQueue.main.async {
+                    self.restoreAccessoryActivationIfPossible()
+                }
+            }
+        }
+    }
+
+    private func installUtilityWindowCloseObserver(for window: NSWindow) {
+        if let utilityWindowCloseObserver {
+            NotificationCenter.default.removeObserver(utilityWindowCloseObserver)
+        }
+
+        utilityWindowCloseObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.utilityWindowCloseObserver = nil
                 DispatchQueue.main.async {
                     self.restoreAccessoryActivationIfPossible()
                 }

@@ -4,18 +4,21 @@ import Foundation
 @MainActor
 final class HotkeyService {
     private let voiceHotKeyID: UInt32 = 9_999
+    private let noteHotKeyBaseID: UInt32 = 20_000
 
     private var hotKeyRefs: [UInt32: EventHotKeyRef] = [:]
     private var profileIDsByHotKeyID: [UInt32: UUID] = [:]
+    private var noteIDsByHotKeyID: [UInt32: UUID] = [:]
     private var eventHandler: EventHandlerRef?
     var onHotKey: ((UUID) -> Void)?
     var onVoiceHotKey: (() -> Void)?
+    var onNoteHotKey: ((UUID) -> Void)?
 
     init() {
         installHandler()
     }
 
-    func register(profiles: [PromptProfile], voiceHotkey: HotkeyDescriptor?) {
+    func register(profiles: [PromptProfile], voiceHotkey: HotkeyDescriptor?, notes: [NoteItem] = []) {
         unregisterAll()
 
         for (index, profile) in profiles.enumerated() {
@@ -53,6 +56,25 @@ final class HotkeyService {
                 hotKeyRefs[hotKeyID.id] = hotKeyRef
             }
         }
+
+        for (index, note) in notes.enumerated() {
+            guard let hotkey = note.hotkey, hotkey.isValid, !note.content.isEmpty else { continue }
+
+            var hotKeyRef: EventHotKeyRef?
+            let hotKeyID = EventHotKeyID(signature: fourCharCode("BDNT"), id: noteHotKeyBaseID + UInt32(index))
+            let status = RegisterEventHotKey(
+                hotkey.keyCode,
+                hotkey.carbonModifiers,
+                hotKeyID,
+                GetEventDispatcherTarget(),
+                0,
+                &hotKeyRef
+            )
+
+            guard status == noErr, let hotKeyRef else { continue }
+            hotKeyRefs[hotKeyID.id] = hotKeyRef
+            noteIDsByHotKeyID[hotKeyID.id] = note.id
+        }
     }
 
     func unregisterAll() {
@@ -61,6 +83,7 @@ final class HotkeyService {
         }
         hotKeyRefs.removeAll()
         profileIDsByHotKeyID.removeAll()
+        noteIDsByHotKeyID.removeAll()
     }
 
     private func installHandler() {
@@ -92,12 +115,17 @@ final class HotkeyService {
             &hotKeyID
         )
 
-        guard status == noErr,
-              hotKeyID.id != voiceHotKeyID
-        else {
-            if status == noErr, hotKeyID.id == voiceHotKeyID {
-                onVoiceHotKey?()
-            }
+        guard status == noErr else {
+            return status
+        }
+
+        if hotKeyID.id == voiceHotKeyID {
+            onVoiceHotKey?()
+            return status
+        }
+
+        if let noteID = noteIDsByHotKeyID[hotKeyID.id] {
+            onNoteHotKey?(noteID)
             return status
         }
 

@@ -14,6 +14,7 @@
 		1652C2B9DD90482C1E6E58E5 /* RewriteOutputGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 760B2FC95A9B8C41EA7EBC4F /* RewriteOutputGuardTests.swift */; };
 		1F90E38C583EDB73168E9AC5 /* MenuBarStatusModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B84FD445147818F2FF33FB1 /* MenuBarStatusModelTests.swift */; };
 		2935CA82AABB059A3208A2FE /* NeoTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D87DA6B718D13A527DC543A2 /* NeoTheme.swift */; };
+		311281F9B9DAF7465CF3CCD8 /* NotesStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25956E545E1998E49CDA6DB7 /* NotesStoreTests.swift */; };
 		368ED8DFF5DCC5B4DEEA74B8 /* PromptProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24BA96E7C16D49B0538BBC5E /* PromptProfile.swift */; };
 		3A55A9C309A5E73EA7BC1CDA /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C125CE81237FFB6068CFDB14 /* AppSettings.swift */; };
 		3B9B1FBAAF7B13D48C015D04 /* OpenRouterClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCBEA522FD27E02CB88EBC28 /* OpenRouterClient.swift */; };
@@ -21,6 +22,7 @@
 		41339398468250B6BF948A1E /* MLXLMHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = EA858F67A711C5DB1252872F /* MLXLMHuggingFace */; };
 		4421E530E9C191CDD5538058 /* VoiceInputCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34F4782181AFDD77CEA437F0 /* VoiceInputCoordinatorTests.swift */; };
 		445F933160E43C7DB6741BC0 /* VoiceAuthorizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B433DCF6ECD08A7AE725AC2 /* VoiceAuthorizationService.swift */; };
+		44E0CCC000DC20682CF58DBB /* NoteItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1E262B58351ACF9FA45315 /* NoteItem.swift */; };
 		45CC16CECE052BF9D5A90736 /* VoiceModelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08847FA7A9628F8E6667AAA8 /* VoiceModelStore.swift */; };
 		47DF8D10214DDD91FEC7556B /* LocalModelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705B126510A088CBC55A5D35 /* LocalModelStore.swift */; };
 		4899645D8A827F264EEBB648 /* BuddyGrammarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04514728AF25CFA7FA9F0BC3 /* BuddyGrammarApp.swift */; };
@@ -33,6 +35,7 @@
 		7009C3CE6B08E3350F43AF5A /* VoiceInputCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EAA0F070498E3A8B15AC1BD /* VoiceInputCoordinator.swift */; };
 		73E4DCAD79C8ADB2EDA6C197 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FE7D0958D7D5C83B13F9AA4 /* OnboardingView.swift */; };
 		7C7E0FB9BD289CAD0FDAD1AF /* HotkeyDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9D6DCC3348591F36FDF1B6E /* HotkeyDescriptor.swift */; };
+		8A0F9F0963931811CC23FA5E /* NotesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B2492E0958B4C82204DC73 /* NotesStore.swift */; };
 		958FCD7EC13E388035C0E8FE /* OpenRouterClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB0B551AD0F880B1B6A02F6 /* OpenRouterClientTests.swift */; };
 		A00CE2D4A05ECB4AAF99C57F /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 9E6F05117AD0CA73E3845A4F /* Sparkle */; };
 		A558BD0E79E39A87BDFEE94D /* EventSimulationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E719D6E75F8753806BDAD870 /* EventSimulationService.swift */; };
@@ -41,6 +44,8 @@
 		BDFB82EF1ADBB4095AD163B8 /* HotkeyRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E2A8E0743E33B2844ED3BC /* HotkeyRecorderView.swift */; };
 		BFA322A6BF2B2CE41E215B36 /* MLXLMTransformers in Frameworks */ = {isa = PBXBuildFile; productRef = C5E6982152F9F3D4CFDCB060 /* MLXLMTransformers */; };
 		C57558F1909DBA8252C90311 /* ClipboardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFEA136271E55DAC4050C406 /* ClipboardService.swift */; };
+		C754A367DE67EFFE54972655 /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C16CA3F46F9C78C0728BA3F0 /* NotesView.swift */; };
+		C90CF34F6DBA3BEB7B2438F5 /* DebugPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1536056E4C54D54AC0351C8 /* DebugPanelView.swift */; };
 		CCD857BCF97A72903A464F4E /* RewriteCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27B6991402183AD0E62F477B /* RewriteCoordinator.swift */; };
 		CEDB1DE8AD85213CA49FC868 /* HotkeyValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF316B8B882E8CB4E96F0FB1 /* HotkeyValidationTests.swift */; };
 		D7BB2F9D089560CC33096C4E /* AccessibilityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110A9F0B5791E5FE0B6EA441 /* AccessibilityService.swift */; };
@@ -77,6 +82,7 @@
 		16271B2FC5E5812D9E39483F /* ClipboardServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardServiceTests.swift; sourceTree = "<group>"; };
 		23AE1B90882E13C9E9D4B8A3 /* RewriteProviderController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteProviderController.swift; sourceTree = "<group>"; };
 		24BA96E7C16D49B0538BBC5E /* PromptProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptProfile.swift; sourceTree = "<group>"; };
+		25956E545E1998E49CDA6DB7 /* NotesStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesStoreTests.swift; sourceTree = "<group>"; };
 		27B6991402183AD0E62F477B /* RewriteCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteCoordinator.swift; sourceTree = "<group>"; };
 		291281F679C782F42041C75E /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		2989CD27D097BBE591F008C2 /* MenuBarContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContentView.swift; sourceTree = "<group>"; };
@@ -97,9 +103,11 @@
 		8EAA0F070498E3A8B15AC1BD /* VoiceInputCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInputCoordinator.swift; sourceTree = "<group>"; };
 		908D2AE224565B3F3CC3BFE1 /* HotkeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyService.swift; sourceTree = "<group>"; };
 		9161826D72F8255096E1EE40 /* BuddyGrammarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BuddyGrammarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		93B2492E0958B4C82204DC73 /* NotesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesStore.swift; sourceTree = "<group>"; };
 		95A76C2E024B8D9A5FAC2506 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
 		98B9E4EC78C0C9DFA06298B4 /* SettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStoreTests.swift; sourceTree = "<group>"; };
 		98E2A8E0743E33B2844ED3BC /* HotkeyRecorderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderView.swift; sourceTree = "<group>"; };
+		9A1E262B58351ACF9FA45315 /* NoteItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteItem.swift; sourceTree = "<group>"; };
 		9D5E9835860FA5DBCDCBD143 /* ProfileEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditorView.swift; sourceTree = "<group>"; };
 		9E0527CF127B6BAF75D21411 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A14896C01D53FB7A2F878A84 /* RewriteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteEngine.swift; sourceTree = "<group>"; };
@@ -109,12 +117,15 @@
 		B3FEDFF340325A43F2BC7FC6 /* BuddyGrammar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BuddyGrammar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B9F8D7B0C705CBCF54997E43 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C125CE81237FFB6068CFDB14 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		C16CA3F46F9C78C0728BA3F0 /* NotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesView.swift; sourceTree = "<group>"; };
 		CCBEA522FD27E02CB88EBC28 /* OpenRouterClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterClient.swift; sourceTree = "<group>"; };
 		CF316B8B882E8CB4E96F0FB1 /* HotkeyValidationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyValidationTests.swift; sourceTree = "<group>"; };
+		D1536056E4C54D54AC0351C8 /* DebugPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugPanelView.swift; sourceTree = "<group>"; };
 		D87DA6B718D13A527DC543A2 /* NeoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeoTheme.swift; sourceTree = "<group>"; };
 		D8A44A3BBBBE4A90563E6076 /* argmax-oss-swift */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "argmax-oss-swift"; path = "Vendor/argmax-oss-swift"; sourceTree = SOURCE_ROOT; };
 		D9D6DCC3348591F36FDF1B6E /* HotkeyDescriptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyDescriptor.swift; sourceTree = "<group>"; };
 		E719D6E75F8753806BDAD870 /* EventSimulationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventSimulationService.swift; sourceTree = "<group>"; };
+		EA758E4C1C3D2CB4DA5364C4 /* BuddyGrammar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BuddyGrammar.entitlements; sourceTree = "<group>"; };
 		FFEA136271E55DAC4050C406 /* ClipboardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -141,6 +152,7 @@
 				16271B2FC5E5812D9E39483F /* ClipboardServiceTests.swift */,
 				CF316B8B882E8CB4E96F0FB1 /* HotkeyValidationTests.swift */,
 				6B84FD445147818F2FF33FB1 /* MenuBarStatusModelTests.swift */,
+				25956E545E1998E49CDA6DB7 /* NotesStoreTests.swift */,
 				4EB0B551AD0F880B1B6A02F6 /* OpenRouterClientTests.swift */,
 				760B2FC95A9B8C41EA7EBC4F /* RewriteOutputGuardTests.swift */,
 				98B9E4EC78C0C9DFA06298B4 /* SettingsStoreTests.swift */,
@@ -154,6 +166,7 @@
 		3DFED1958B350236BCC27CDF /* Support */ = {
 			isa = PBXGroup;
 			children = (
+				EA758E4C1C3D2CB4DA5364C4 /* BuddyGrammar.entitlements */,
 				9E0527CF127B6BAF75D21411 /* Info.plist */,
 			);
 			path = Support;
@@ -172,10 +185,12 @@
 		4A82F77EFBBD8D9F4F5D20BA /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				D1536056E4C54D54AC0351C8 /* DebugPanelView.swift */,
 				98E2A8E0743E33B2844ED3BC /* HotkeyRecorderView.swift */,
 				2989CD27D097BBE591F008C2 /* MenuBarContentView.swift */,
 				A5F857916C262F6BADF68E57 /* MenuBarStatusLabel.swift */,
 				D87DA6B718D13A527DC543A2 /* NeoTheme.swift */,
+				C16CA3F46F9C78C0728BA3F0 /* NotesView.swift */,
 				5FE7D0958D7D5C83B13F9AA4 /* OnboardingView.swift */,
 				9D5E9835860FA5DBCDCBD143 /* ProfileEditorView.swift */,
 				07C21333CC71CEBF1B10F536 /* SettingsView.swift */,
@@ -202,6 +217,7 @@
 				C125CE81237FFB6068CFDB14 /* AppSettings.swift */,
 				D9D6DCC3348591F36FDF1B6E /* HotkeyDescriptor.swift */,
 				4B3C9D45BA8F45D03A1B6302 /* MenuBarStatus.swift */,
+				9A1E262B58351ACF9FA45315 /* NoteItem.swift */,
 				24BA96E7C16D49B0538BBC5E /* PromptProfile.swift */,
 				3E9D411F40A1135B9000949C /* RewriteModels.swift */,
 			);
@@ -220,6 +236,7 @@
 				A2C3D7C55DF68CEF737684E5 /* KeychainService.swift */,
 				A305BF4FE3856ADA021A9EBF /* LaunchAtLoginService.swift */,
 				705B126510A088CBC55A5D35 /* LocalModelStore.swift */,
+				93B2492E0958B4C82204DC73 /* NotesStore.swift */,
 				CCBEA522FD27E02CB88EBC28 /* OpenRouterClient.swift */,
 				27B6991402183AD0E62F477B /* RewriteCoordinator.swift */,
 				A14896C01D53FB7A2F878A84 /* RewriteEngine.swift */,
@@ -371,6 +388,7 @@
 				AC47538A2BEA764099F9D971 /* ClipboardServiceTests.swift in Sources */,
 				CEDB1DE8AD85213CA49FC868 /* HotkeyValidationTests.swift in Sources */,
 				1F90E38C583EDB73168E9AC5 /* MenuBarStatusModelTests.swift in Sources */,
+				311281F9B9DAF7465CF3CCD8 /* NotesStoreTests.swift in Sources */,
 				958FCD7EC13E388035C0E8FE /* OpenRouterClientTests.swift in Sources */,
 				1652C2B9DD90482C1E6E58E5 /* RewriteOutputGuardTests.swift in Sources */,
 				F911FD8A63BA95578E152E05 /* SettingsStoreTests.swift in Sources */,
@@ -392,6 +410,7 @@
 				F6009BE96CCAA53A7685BFD8 /* AudioRecordingService.swift in Sources */,
 				4899645D8A827F264EEBB648 /* BuddyGrammarApp.swift in Sources */,
 				C57558F1909DBA8252C90311 /* ClipboardService.swift in Sources */,
+				C90CF34F6DBA3BEB7B2438F5 /* DebugPanelView.swift in Sources */,
 				A558BD0E79E39A87BDFEE94D /* EventSimulationService.swift in Sources */,
 				7C7E0FB9BD289CAD0FDAD1AF /* HotkeyDescriptor.swift in Sources */,
 				BDFB82EF1ADBB4095AD163B8 /* HotkeyRecorderView.swift in Sources */,
@@ -403,6 +422,9 @@
 				DDCFB36CEC7F930B3F450890 /* MenuBarStatus.swift in Sources */,
 				EBAE14C9FAC0CF63843F8C3C /* MenuBarStatusLabel.swift in Sources */,
 				2935CA82AABB059A3208A2FE /* NeoTheme.swift in Sources */,
+				44E0CCC000DC20682CF58DBB /* NoteItem.swift in Sources */,
+				8A0F9F0963931811CC23FA5E /* NotesStore.swift in Sources */,
+				C754A367DE67EFFE54972655 /* NotesView.swift in Sources */,
 				73E4DCAD79C8ADB2EDA6C197 /* OnboardingView.swift in Sources */,
 				3B9B1FBAAF7B13D48C015D04 /* OpenRouterClient.swift in Sources */,
 				104FD1525CED1C300068FE03 /* ProfileEditorView.swift in Sources */,
@@ -514,6 +536,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = BuddyGrammar/Support/BuddyGrammar.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -619,6 +642,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = BuddyGrammar/Support/BuddyGrammar.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;

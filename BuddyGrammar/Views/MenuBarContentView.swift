@@ -78,6 +78,14 @@ struct MenuBarContentView: View {
                     neoMenuButton("Check for Updates", icon: "arrow.trianglehead.clockwise") {
                         model.checkForUpdates()
                     }
+                    neoMenuButton("Open Notes", icon: "note.text") {
+                        model.prepareToOpenUtilityWindow()
+                        openWindow(id: AppModel.notesWindowID)
+                    }
+                    neoMenuButton("Open Debug", icon: "ladybug.fill") {
+                        model.prepareToOpenUtilityWindow()
+                        openWindow(id: AppModel.debugWindowID)
+                    }
                     neoMenuButton("Open Settings", icon: "gearshape.fill") {
                         model.prepareToOpenSettingsWindow()
                         openWindow(id: AppModel.settingsWindowID)
