@@ -4,12 +4,14 @@ struct SettingsView: View {
     @Bindable var model: AppModel
 
     private enum Tab: String, CaseIterable, Identifiable {
-        case general, models, voice, personalities
+        case general, notes, debug, models, voice, personalities
         var id: Self { self }
 
         var title: String {
             switch self {
             case .general: "General"
+            case .notes: "Notes"
+            case .debug: "Debug"
             case .models: "Models"
             case .voice: "Voice"
             case .personalities: "Personalities"
@@ -19,6 +21,8 @@ struct SettingsView: View {
         var symbol: String {
             switch self {
             case .general: "gearshape"
+            case .notes: "note.text"
+            case .debug: "ladybug"
             case .models: "cpu"
             case .voice: "mic"
             case .personalities: "slider.horizontal.3"
@@ -50,7 +54,7 @@ struct SettingsView: View {
                             .transition(.opacity)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .padding(16)
+                    .padding(contentPadding(compact: true))
                 }
             } else {
                 HStack(spacing: 0) {
@@ -69,7 +73,7 @@ struct SettingsView: View {
                             .transition(.opacity)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .padding(24)
+                    .padding(contentPadding(compact: false))
                 }
             }
         }
@@ -83,25 +87,27 @@ struct SettingsView: View {
     // MARK: - Compact Tab Bar
 
     private var compactTabBar: some View {
-        HStack(spacing: 4) {
-            ForEach(Tab.allCases) { tab in
-                Button {
-                    selectedTab = tab
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: tab.symbol)
-                            .font(.system(size: 11, weight: .semibold))
-                        Text(tab.title)
-                            .font(.system(size: 12, weight: selectedTab == tab ? .bold : .medium, design: .rounded))
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                ForEach(Tab.allCases) { tab in
+                    Button {
+                        selectedTab = tab
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: tab.symbol)
+                                .font(.system(size: 11, weight: .semibold))
+                            Text(tab.title)
+                                .font(.system(size: 12, weight: selectedTab == tab ? .bold : .medium, design: .rounded))
+                        }
+                        .foregroundStyle(selectedTab == tab ? NeoTheme.foreground : NeoTheme.mutedForeground)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(selectedTab == tab ? NeoTheme.primary.opacity(0.1) : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
                     }
-                    .foregroundStyle(selectedTab == tab ? NeoTheme.foreground : NeoTheme.mutedForeground)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(selectedTab == tab ? NeoTheme.primary.opacity(0.1) : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+                    .buttonStyle(.plain)
+                    .focusEffectDisabled()
                 }
-                .buttonStyle(.plain)
-                .focusEffectDisabled()
             }
         }
     }
@@ -151,12 +157,25 @@ struct SettingsView: View {
         switch selectedTab {
         case .general:
             generalTab
+        case .notes:
+            NotesView(model: model)
+        case .debug:
+            DebugPanelView(model: model)
         case .models:
             modelsTab
         case .voice:
             voiceTab
         case .personalities:
             personalitiesTab
+        }
+    }
+
+    private func contentPadding(compact: Bool) -> CGFloat {
+        switch selectedTab {
+        case .notes, .debug:
+            compact ? 8 : 0
+        default:
+            compact ? 16 : 24
         }
     }
 
