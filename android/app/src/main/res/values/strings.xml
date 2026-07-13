@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">BuddyGrammar</string>
+    <string name="keyboard_name">BuddyGrammar Keyboard</string>
+    <string name="keyboard_subtype_english">English (BuddyGrammar)</string>
+</resources>
