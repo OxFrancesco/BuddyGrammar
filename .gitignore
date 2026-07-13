@@ -1,8 +1,13 @@
 .DS_Store
 .build
+build/
+.asc/
 DerivedData
 xcuserdata/
 *.xcuserstate
 *.xcscmblueprint
 BuddyGrammar.xcodeproj/project.xcworkspace/xcuserdata/
 BuddyGrammar.xcodeproj/xcuserdata/
+
+# codeview reference codebases
+resources/

@@ -1,0 +1,3 @@
+# Local development only. Copy to .dev.vars and populate through Doppler.
+OPENROUTER_API_KEY=
+ELEVENLABS_API_KEY=

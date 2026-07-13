@@ -14,9 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "2B83EFBBF5CD825E5C6A9216"
-               BuildableName = "BuddyWrite.app"
-               BlueprintName = "BuddyGrammar"
+               BlueprintIdentifier = "52E536CE828B956A71A059D5"
+               BuildableName = "BuddyGrammar.app"
+               BlueprintName = "BuddyGrammarIOS"
                ReferencedContainer = "container:BuddyGrammar.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -30,9 +30,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "2B83EFBBF5CD825E5C6A9216"
-            BuildableName = "BuddyWrite.app"
-            BlueprintName = "BuddyGrammar"
+            BlueprintIdentifier = "52E536CE828B956A71A059D5"
+            BuildableName = "BuddyGrammar.app"
+            BlueprintName = "BuddyGrammarIOS"
             ReferencedContainer = "container:BuddyGrammar.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -42,9 +42,19 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "0A2DA624B95E71A135BB902A"
-               BuildableName = "BuddyGrammarTests.xctest"
-               BlueprintName = "BuddyGrammarTests"
+               BlueprintIdentifier = "0B315D1CB337543979AE0ADC"
+               BuildableName = "BuddyGrammarIOSTests.xctest"
+               BlueprintName = "BuddyGrammarIOSTests"
+               ReferencedContainer = "container:BuddyGrammar.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "EF463E49EB11F0C5DDD702B4"
+               BuildableName = "BuddyGrammarIOSUITests.xctest"
+               BlueprintName = "BuddyGrammarIOSUITests"
                ReferencedContainer = "container:BuddyGrammar.xcodeproj">
             </BuildableReference>
          </TestableReference>
@@ -64,9 +74,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "2B83EFBBF5CD825E5C6A9216"
-            BuildableName = "BuddyWrite.app"
-            BlueprintName = "BuddyGrammar"
+            BlueprintIdentifier = "52E536CE828B956A71A059D5"
+            BuildableName = "BuddyGrammar.app"
+            BlueprintName = "BuddyGrammarIOS"
             ReferencedContainer = "container:BuddyGrammar.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -81,9 +91,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "2B83EFBBF5CD825E5C6A9216"
-            BuildableName = "BuddyWrite.app"
-            BlueprintName = "BuddyGrammar"
+            BlueprintIdentifier = "52E536CE828B956A71A059D5"
+            BuildableName = "BuddyGrammar.app"
+            BlueprintName = "BuddyGrammarIOS"
             ReferencedContainer = "container:BuddyGrammar.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

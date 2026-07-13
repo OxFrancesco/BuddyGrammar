@@ -5,7 +5,7 @@ settings:
   base:
     SWIFT_VERSION: 6.0
     MACOSX_DEPLOYMENT_TARGET: 15.0
-    CURRENT_PROJECT_VERSION: 1
+    CURRENT_PROJECT_VERSION: 2
     MARKETING_VERSION: 0.1.0
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: G2442WAF29
@@ -26,6 +26,8 @@ packages:
     branch: main
   ArgmaxOSS:
     path: Vendor/argmax-oss-swift
+  BuddyGrammarKit:
+    path: BuddyGrammarKit
 targets:
   BuddyGrammar:
     type: application
@@ -69,3 +71,76 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/BuddyWrite.app/Contents/MacOS/BuddyWrite"
         BUNDLE_LOADER: "$(TEST_HOST)"
+  BuddyGrammarIOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: BuddyGrammarIOS
+      - path: BuddyGrammar/Assets.xcassets
+    dependencies:
+      - package: BuddyGrammarKit
+      - target: BuddyGrammarKeyboard
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.francescooddo.BuddyGrammar
+        INFOPLIST_FILE: BuddyGrammarIOS/Support/Info.plist
+        CODE_SIGN_ENTITLEMENTS: BuddyGrammarIOS/Support/BuddyGrammarIOS.entitlements
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_NAME: BuddyGrammar
+        PRODUCT_MODULE_NAME: BuddyGrammarIOS
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: NO
+    scheme:
+      testTargets:
+        - BuddyGrammarIOSTests
+        - BuddyGrammarIOSUITests
+  BuddyGrammarKeyboard:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: BuddyGrammarKeyboard
+    dependencies:
+      - package: BuddyGrammarKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.francescooddo.BuddyGrammar.Keyboard
+        INFOPLIST_FILE: BuddyGrammarKeyboard/Info.plist
+        CODE_SIGN_ENTITLEMENTS: BuddyGrammarKeyboard/BuddyGrammarKeyboard.entitlements
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_NAME: BuddyGrammarKeyboard
+        PRODUCT_MODULE_NAME: BuddyGrammarKeyboard
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+  BuddyGrammarIOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: BuddyGrammarIOSTests
+    dependencies:
+      - package: BuddyGrammarKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.francescooddo.BuddyGrammar.IOSTests
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+  BuddyGrammarIOSUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: BuddyGrammarIOSUITests
+    dependencies:
+      - target: BuddyGrammarIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.francescooddo.BuddyGrammar.IOSUITests
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1,2"

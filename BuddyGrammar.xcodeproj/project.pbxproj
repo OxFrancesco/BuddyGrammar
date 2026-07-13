@@ -10,14 +10,22 @@
 		03298C5222181AD8690C0C55 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 05F4C2AA028085FDEA8BDE30 /* MLXLLM */; };
 		0503839637AB9EE60F509615 /* AppUpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35DEAED4FF77067FD4CF0D45 /* AppUpdateService.swift */; };
 		0B7F656BF22C2AC524E68726 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 291281F679C782F42041C75E /* AppModel.swift */; };
+		0D0726AC41A79B53F074A620 /* KeyboardRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB9A01E9A84014C5C9339135 /* KeyboardRootView.swift */; };
+		0F362E1DBE01190CA9AA93CA /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 75EB93F150231FE0395A7D3A /* PrivacyInfo.xcprivacy */; };
 		104FD1525CED1C300068FE03 /* ProfileEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D5E9835860FA5DBCDCBD143 /* ProfileEditorView.swift */; };
 		1652C2B9DD90482C1E6E58E5 /* RewriteOutputGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 760B2FC95A9B8C41EA7EBC4F /* RewriteOutputGuardTests.swift */; };
 		1F90E38C583EDB73168E9AC5 /* MenuBarStatusModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B84FD445147818F2FF33FB1 /* MenuBarStatusModelTests.swift */; };
+		2686E9D29D7F4B7DFC7554EE /* BuddyGrammarKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7059D4902A6B899438D9AECF /* BuddyGrammarKit */; };
 		2935CA82AABB059A3208A2FE /* NeoTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D87DA6B718D13A527DC543A2 /* NeoTheme.swift */; };
+		2CC9F5881FE9EA4E02848A9B /* KeyboardModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 141E5FE2D6C7CE2647C88CA1 /* KeyboardModel.swift */; };
 		311281F9B9DAF7465CF3CCD8 /* NotesStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25956E545E1998E49CDA6DB7 /* NotesStoreTests.swift */; };
+		363BB05575F5AC7164B29864 /* DictationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90BA39783117374EA3B329F3 /* DictationView.swift */; };
+		365E6F54A18E39C8F1647403 /* KeyboardLabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE5698D93D654A8D8E12DA2F /* KeyboardLabView.swift */; };
 		368ED8DFF5DCC5B4DEEA74B8 /* PromptProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24BA96E7C16D49B0538BBC5E /* PromptProfile.swift */; };
 		3A55A9C309A5E73EA7BC1CDA /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C125CE81237FFB6068CFDB14 /* AppSettings.swift */; };
 		3B9B1FBAAF7B13D48C015D04 /* OpenRouterClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCBEA522FD27E02CB88EBC28 /* OpenRouterClient.swift */; };
+		3ED5E97B27EBD5D59545D792 /* IOSAudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C8F013ADFEFF7083FF6A934 /* IOSAudioRecorder.swift */; };
+		3FB237812ABACE13D7F7F967 /* BuddyGrammarIOSUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C7B107BDBED6F2D8827A0F3 /* BuddyGrammarIOSUITests.swift */; };
 		40D5DF0FE19BE2B06B156381 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F8D7B0C705CBCF54997E43 /* AppDelegate.swift */; };
 		41339398468250B6BF948A1E /* MLXLMHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = EA858F67A711C5DB1252872F /* MLXLMHuggingFace */; };
 		4421E530E9C191CDD5538058 /* VoiceInputCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34F4782181AFDD77CEA437F0 /* VoiceInputCoordinatorTests.swift */; };
@@ -27,32 +35,46 @@
 		47DF8D10214DDD91FEC7556B /* LocalModelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705B126510A088CBC55A5D35 /* LocalModelStore.swift */; };
 		4899645D8A827F264EEBB648 /* BuddyGrammarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04514728AF25CFA7FA9F0BC3 /* BuddyGrammarApp.swift */; };
 		49B49CFBC90EFC16324F63B4 /* RewriteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9D411F40A1135B9000949C /* RewriteModels.swift */; };
+		4AC106D380AF22BC2F454104 /* BuddyGrammarIOSTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92A5F2A0D9D500BB94A799B /* BuddyGrammarIOSTests.swift */; };
+		4C076AEB6CA4A029F3CE587A /* BuddyGrammarKit in Frameworks */ = {isa = PBXBuildFile; productRef = 35F38000F7CD966A184F9B78 /* BuddyGrammarKit */; };
 		4EA356080911925F32ABCCE0 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C3D7C55DF68CEF737684E5 /* KeychainService.swift */; };
+		5A51B8F4725DE5CC7BE8C96B /* AppDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F1C2176904C3AD505FACFEA /* AppDesign.swift */; };
 		5F908ED77C7C74941F817CE5 /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E074A18A6634D312DCDA6CE /* TestSupport.swift */; };
 		5FB9EE1C8AAD0B97CB65D604 /* HotkeyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 908D2AE224565B3F3CC3BFE1 /* HotkeyService.swift */; };
 		5FFBE0702C8814DC28E0B20C /* RewriteProviderController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23AE1B90882E13C9E9D4B8A3 /* RewriteProviderController.swift */; };
 		611CF422C61FE0FBAF278C9E /* LaunchAtLoginService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A305BF4FE3856ADA021A9EBF /* LaunchAtLoginService.swift */; };
+		65A9B0B129F7AF3E059474D1 /* BuddyGrammarKit in Frameworks */ = {isa = PBXBuildFile; productRef = D73ED00B5F8BC037B441E0AC /* BuddyGrammarKit */; };
+		6840B5297B8CC48ADFADA06D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9F0C4FCB6E20B4C640E4044B /* PrivacyInfo.xcprivacy */; };
 		7009C3CE6B08E3350F43AF5A /* VoiceInputCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EAA0F070498E3A8B15AC1BD /* VoiceInputCoordinator.swift */; };
 		73E4DCAD79C8ADB2EDA6C197 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FE7D0958D7D5C83B13F9AA4 /* OnboardingView.swift */; };
+		7772B7356D1D6C69AFD8EA2C /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F4BAA325CEFF349E32F3E10 /* HomeView.swift */; };
 		7C7E0FB9BD289CAD0FDAD1AF /* HotkeyDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9D6DCC3348591F36FDF1B6E /* HotkeyDescriptor.swift */; };
+		892C44226D3037453FB02F47 /* BuddyGrammarKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 107B1EC7D5A87990BBC88391 /* BuddyGrammarKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		8A0F9F0963931811CC23FA5E /* NotesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B2492E0958B4C82204DC73 /* NotesStore.swift */; };
 		958FCD7EC13E388035C0E8FE /* OpenRouterClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB0B551AD0F880B1B6A02F6 /* OpenRouterClientTests.swift */; };
+		9A498D4B1369CF4D579C3408 /* BuddyGrammarIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C32585AD0A94B1CFB35B9A38 /* BuddyGrammarIOSApp.swift */; };
 		A00CE2D4A05ECB4AAF99C57F /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 9E6F05117AD0CA73E3845A4F /* Sparkle */; };
 		A558BD0E79E39A87BDFEE94D /* EventSimulationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E719D6E75F8753806BDAD870 /* EventSimulationService.swift */; };
 		AC47538A2BEA764099F9D971 /* ClipboardServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16271B2FC5E5812D9E39483F /* ClipboardServiceTests.swift */; };
+		B90FD863CC6748272E27606A /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C1DB190A239C3075EE02380 /* AppRootView.swift */; };
 		BC7582408A0A9E4753549B9E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 654BDEEFC43D5CBAFAF5173E /* Assets.xcassets */; };
+		BC84F61B197519A6AF5F496C /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E845A6B23E252000A3774B91 /* KeyboardViewController.swift */; };
 		BDFB82EF1ADBB4095AD163B8 /* HotkeyRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E2A8E0743E33B2844ED3BC /* HotkeyRecorderView.swift */; };
 		BFA322A6BF2B2CE41E215B36 /* MLXLMTransformers in Frameworks */ = {isa = PBXBuildFile; productRef = C5E6982152F9F3D4CFDCB060 /* MLXLMTransformers */; };
+		BFEEEEF4C8216517B988BC05 /* IOSAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32B1A95A454172DBF19DE5DC /* IOSAppModel.swift */; };
 		C57558F1909DBA8252C90311 /* ClipboardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFEA136271E55DAC4050C406 /* ClipboardService.swift */; };
 		C754A367DE67EFFE54972655 /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C16CA3F46F9C78C0728BA3F0 /* NotesView.swift */; };
 		C90CF34F6DBA3BEB7B2438F5 /* DebugPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1536056E4C54D54AC0351C8 /* DebugPanelView.swift */; };
 		CCD857BCF97A72903A464F4E /* RewriteCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27B6991402183AD0E62F477B /* RewriteCoordinator.swift */; };
+		CD45A8ADF8FF7686459BE9DA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 375ED585ECC5B01AD88D6133 /* SettingsView.swift */; };
 		CEDB1DE8AD85213CA49FC868 /* HotkeyValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF316B8B882E8CB4E96F0FB1 /* HotkeyValidationTests.swift */; };
+		D26B7CF6F78D5F2AC1429DC9 /* NextKeyboardButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 058D399A2D79C86D6571099D /* NextKeyboardButton.swift */; };
 		D7BB2F9D089560CC33096C4E /* AccessibilityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110A9F0B5791E5FE0B6EA441 /* AccessibilityService.swift */; };
 		DCBD121DF71D13410923FB9D /* VoiceModelStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EFC487E79222678DEBCE2D /* VoiceModelStoreTests.swift */; };
 		DDCFB36CEC7F930B3F450890 /* MenuBarStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B3C9D45BA8F45D03A1B6302 /* MenuBarStatus.swift */; };
 		E193FC88DE8759BD7908E924 /* RewriteEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A14896C01D53FB7A2F878A84 /* RewriteEngine.swift */; };
 		E91B654BB5C21AC11B50C24A /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 76DB1AACAF97FE83D6514248 /* WhisperKit */; };
+		EA9F5A96B28672084B1644ED /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7321B6EDF2CC0E5BE075612 /* OnboardingView.swift */; };
 		EBAE14C9FAC0CF63843F8C3C /* MenuBarStatusLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F857916C262F6BADF68E57 /* MenuBarStatusLabel.swift */; };
 		EFCEEF93A25E988C20182A63 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 4F529799108FAF76A993811E /* MLXLMCommon */; };
 		F6009BE96CCAA53A7685BFD8 /* AudioRecordingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62C259D995569FB5D4FAD38F /* AudioRecordingService.swift */; };
@@ -60,10 +82,25 @@
 		F7BA2453E5647C3764E106D4 /* MenuBarContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2989CD27D097BBE591F008C2 /* MenuBarContentView.swift */; };
 		F911FD8A63BA95578E152E05 /* SettingsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98B9E4EC78C0C9DFA06298B4 /* SettingsStoreTests.swift */; };
 		FA7525C631D031AEA5750C0D /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95A76C2E024B8D9A5FAC2506 /* SettingsStore.swift */; };
+		FA7E9892F67DBC4ED0A85C95 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 654BDEEFC43D5CBAFAF5173E /* Assets.xcassets */; };
 		FC7E9C4025A1BEED2A99716E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07C21333CC71CEBF1B10F536 /* SettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		6D6E092F64EDFE1C170910FF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 04C5E9CF81BEF2259796D14E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2B114F2C4C3C792E3FA8BB5C;
+			remoteInfo = BuddyGrammarKeyboard;
+		};
+		B4CC861044170EF84C084F7F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 04C5E9CF81BEF2259796D14E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 52E536CE828B956A71A059D5;
+			remoteInfo = BuddyGrammarIOS;
+		};
 		FF0025799D6E005BB800F38A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 04C5E9CF81BEF2259796D14E /* Project object */;
@@ -73,13 +110,33 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		5002920F34529B0FDD1599E2 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				892C44226D3037453FB02F47 /* BuddyGrammarKeyboard.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		04514728AF25CFA7FA9F0BC3 /* BuddyGrammarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyGrammarApp.swift; sourceTree = "<group>"; };
+		058D399A2D79C86D6571099D /* NextKeyboardButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextKeyboardButton.swift; sourceTree = "<group>"; };
 		07C21333CC71CEBF1B10F536 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		08847FA7A9628F8E6667AAA8 /* VoiceModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModelStore.swift; sourceTree = "<group>"; };
 		08EFC487E79222678DEBCE2D /* VoiceModelStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModelStoreTests.swift; sourceTree = "<group>"; };
+		107B1EC7D5A87990BBC88391 /* BuddyGrammarKeyboard.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BuddyGrammarKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		110A9F0B5791E5FE0B6EA441 /* AccessibilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityService.swift; sourceTree = "<group>"; };
+		141E5FE2D6C7CE2647C88CA1 /* KeyboardModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardModel.swift; sourceTree = "<group>"; };
 		16271B2FC5E5812D9E39483F /* ClipboardServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardServiceTests.swift; sourceTree = "<group>"; };
+		196E050A0FA5BFA71A42FE2B /* BuddyGrammarIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BuddyGrammarIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1D460BCD318B73556DFE9B4A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		1F1C2176904C3AD505FACFEA /* AppDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDesign.swift; sourceTree = "<group>"; };
 		23AE1B90882E13C9E9D4B8A3 /* RewriteProviderController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteProviderController.swift; sourceTree = "<group>"; };
 		24BA96E7C16D49B0538BBC5E /* PromptProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptProfile.swift; sourceTree = "<group>"; };
 		25956E545E1998E49CDA6DB7 /* NotesStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesStoreTests.swift; sourceTree = "<group>"; };
@@ -87,22 +144,33 @@
 		291281F679C782F42041C75E /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		2989CD27D097BBE591F008C2 /* MenuBarContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContentView.swift; sourceTree = "<group>"; };
 		3160C56650E7901F8C3AFD52 /* SelectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionService.swift; sourceTree = "<group>"; };
+		32B1A95A454172DBF19DE5DC /* IOSAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSAppModel.swift; sourceTree = "<group>"; };
 		34F4782181AFDD77CEA437F0 /* VoiceInputCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInputCoordinatorTests.swift; sourceTree = "<group>"; };
 		35DEAED4FF77067FD4CF0D45 /* AppUpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateService.swift; sourceTree = "<group>"; };
+		375ED585ECC5B01AD88D6133 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		3E9D411F40A1135B9000949C /* RewriteModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteModels.swift; sourceTree = "<group>"; };
 		4B3C9D45BA8F45D03A1B6302 /* MenuBarStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatus.swift; sourceTree = "<group>"; };
 		4B433DCF6ECD08A7AE725AC2 /* VoiceAuthorizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceAuthorizationService.swift; sourceTree = "<group>"; };
+		4BD14A64CBE3283057306BD3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		4C1DB190A239C3075EE02380 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
 		4EB0B551AD0F880B1B6A02F6 /* OpenRouterClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterClientTests.swift; sourceTree = "<group>"; };
+		5C7B107BDBED6F2D8827A0F3 /* BuddyGrammarIOSUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyGrammarIOSUITests.swift; sourceTree = "<group>"; };
 		5FE7D0958D7D5C83B13F9AA4 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		62C259D995569FB5D4FAD38F /* AudioRecordingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecordingService.swift; sourceTree = "<group>"; };
 		654BDEEFC43D5CBAFAF5173E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6B84FD445147818F2FF33FB1 /* MenuBarStatusModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusModelTests.swift; sourceTree = "<group>"; };
 		6E074A18A6634D312DCDA6CE /* TestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
+		6F4BAA325CEFF349E32F3E10 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		705B126510A088CBC55A5D35 /* LocalModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalModelStore.swift; sourceTree = "<group>"; };
+		75EB93F150231FE0395A7D3A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		760B2FC95A9B8C41EA7EBC4F /* RewriteOutputGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteOutputGuardTests.swift; sourceTree = "<group>"; };
+		8C8F013ADFEFF7083FF6A934 /* IOSAudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSAudioRecorder.swift; sourceTree = "<group>"; };
 		8EAA0F070498E3A8B15AC1BD /* VoiceInputCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInputCoordinator.swift; sourceTree = "<group>"; };
+		8F7ECCB28C2726237865F0E5 /* BuddyGrammarKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = BuddyGrammarKit; path = BuddyGrammarKit; sourceTree = SOURCE_ROOT; };
 		908D2AE224565B3F3CC3BFE1 /* HotkeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyService.swift; sourceTree = "<group>"; };
+		90BA39783117374EA3B329F3 /* DictationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationView.swift; sourceTree = "<group>"; };
 		9161826D72F8255096E1EE40 /* BuddyGrammarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BuddyGrammarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		92721891DC77D19584600BBD /* BuddyGrammarIOSUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BuddyGrammarIOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		93B2492E0958B4C82204DC73 /* NotesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesStore.swift; sourceTree = "<group>"; };
 		95A76C2E024B8D9A5FAC2506 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
 		98B9E4EC78C0C9DFA06298B4 /* SettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStoreTests.swift; sourceTree = "<group>"; };
@@ -110,26 +178,52 @@
 		9A1E262B58351ACF9FA45315 /* NoteItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteItem.swift; sourceTree = "<group>"; };
 		9D5E9835860FA5DBCDCBD143 /* ProfileEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditorView.swift; sourceTree = "<group>"; };
 		9E0527CF127B6BAF75D21411 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		9F0C4FCB6E20B4C640E4044B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A14896C01D53FB7A2F878A84 /* RewriteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteEngine.swift; sourceTree = "<group>"; };
 		A2C3D7C55DF68CEF737684E5 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		A305BF4FE3856ADA021A9EBF /* LaunchAtLoginService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginService.swift; sourceTree = "<group>"; };
 		A5F857916C262F6BADF68E57 /* MenuBarStatusLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusLabel.swift; sourceTree = "<group>"; };
+		A92A5F2A0D9D500BB94A799B /* BuddyGrammarIOSTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyGrammarIOSTests.swift; sourceTree = "<group>"; };
+		AE8C8D9BC822843A946FA161 /* BuddyGrammarIOSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BuddyGrammarIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B3FEDFF340325A43F2BC7FC6 /* BuddyGrammar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BuddyGrammar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B9F8D7B0C705CBCF54997E43 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		BB9A01E9A84014C5C9339135 /* KeyboardRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardRootView.swift; sourceTree = "<group>"; };
 		C125CE81237FFB6068CFDB14 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		C16CA3F46F9C78C0728BA3F0 /* NotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesView.swift; sourceTree = "<group>"; };
+		C32585AD0A94B1CFB35B9A38 /* BuddyGrammarIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyGrammarIOSApp.swift; sourceTree = "<group>"; };
 		CCBEA522FD27E02CB88EBC28 /* OpenRouterClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterClient.swift; sourceTree = "<group>"; };
 		CF316B8B882E8CB4E96F0FB1 /* HotkeyValidationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyValidationTests.swift; sourceTree = "<group>"; };
+		D0A13786A5D5DEEC64D5EC0D /* BuddyGrammarIOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BuddyGrammarIOS.entitlements; sourceTree = "<group>"; };
 		D1536056E4C54D54AC0351C8 /* DebugPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugPanelView.swift; sourceTree = "<group>"; };
+		D2AE246B4AD23D81E3F562AE /* BuddyGrammarKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BuddyGrammarKeyboard.entitlements; sourceTree = "<group>"; };
 		D87DA6B718D13A527DC543A2 /* NeoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeoTheme.swift; sourceTree = "<group>"; };
 		D8A44A3BBBBE4A90563E6076 /* argmax-oss-swift */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "argmax-oss-swift"; path = "Vendor/argmax-oss-swift"; sourceTree = SOURCE_ROOT; };
 		D9D6DCC3348591F36FDF1B6E /* HotkeyDescriptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyDescriptor.swift; sourceTree = "<group>"; };
 		E719D6E75F8753806BDAD870 /* EventSimulationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventSimulationService.swift; sourceTree = "<group>"; };
+		E7321B6EDF2CC0E5BE075612 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		E845A6B23E252000A3774B91 /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
 		EA758E4C1C3D2CB4DA5364C4 /* BuddyGrammar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BuddyGrammar.entitlements; sourceTree = "<group>"; };
+		EE5698D93D654A8D8E12DA2F /* KeyboardLabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardLabView.swift; sourceTree = "<group>"; };
 		FFEA136271E55DAC4050C406 /* ClipboardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		13C87F32BD0B2E0083FBBB4C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2686E9D29D7F4B7DFC7554EE /* BuddyGrammarKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2D8D3223C103B45CCCF5765D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				65A9B0B129F7AF3E059474D1 /* BuddyGrammarKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		8C5BC6A3B997BA547D397A83 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -143,9 +237,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA3579E286E98DBA4CAEE58A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4C076AEB6CA4A029F3CE587A /* BuddyGrammarKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		017B95F0CCC27AC28FDDA35F /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				6F4BAA325CEFF349E32F3E10 /* HomeView.swift */,
+			);
+			path = Home;
+			sourceTree = "<group>";
+		};
 		32B09A2FB96D88288465CF3D /* BuddyGrammarTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -198,6 +308,43 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		57ACECA0EE7E010ECC55EC12 /* BuddyGrammarIOSTests */ = {
+			isa = PBXGroup;
+			children = (
+				A92A5F2A0D9D500BB94A799B /* BuddyGrammarIOSTests.swift */,
+			);
+			path = BuddyGrammarIOSTests;
+			sourceTree = "<group>";
+		};
+		5CD689A6A5F1B7C1A6FFDBBE /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				D0A13786A5D5DEEC64D5EC0D /* BuddyGrammarIOS.entitlements */,
+				4BD14A64CBE3283057306BD3 /* Info.plist */,
+				9F0C4FCB6E20B4C640E4044B /* PrivacyInfo.xcprivacy */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		5FCAF35C38F8ED7262052E4D /* App */ = {
+			isa = PBXGroup;
+			children = (
+				4C1DB190A239C3075EE02380 /* AppRootView.swift */,
+				C32585AD0A94B1CFB35B9A38 /* BuddyGrammarIOSApp.swift */,
+				32B1A95A454172DBF19DE5DC /* IOSAppModel.swift */,
+				8C8F013ADFEFF7083FF6A934 /* IOSAudioRecorder.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		6F84E22C3E057A117F5398CB /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				E7321B6EDF2CC0E5BE075612 /* OnboardingView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
 		78A7869774D78CE0D6A49591 /* BuddyGrammar */ = {
 			isa = PBXGroup;
 			children = (
@@ -209,6 +356,43 @@
 				4A82F77EFBBD8D9F4F5D20BA /* Views */,
 			);
 			path = BuddyGrammar;
+			sourceTree = "<group>";
+		};
+		7D141F51A7790FD2DC07D0ED /* BuddyGrammarIOS */ = {
+			isa = PBXGroup;
+			children = (
+				5FCAF35C38F8ED7262052E4D /* App */,
+				A17584F1BB711764B71F1BC0 /* Features */,
+				C2CC6E1FE36A508177905DDB /* Shared */,
+				5CD689A6A5F1B7C1A6FFDBBE /* Support */,
+			);
+			path = BuddyGrammarIOS;
+			sourceTree = "<group>";
+		};
+		82BDD2969E8C9E5B8774BB70 /* BuddyGrammarKeyboard */ = {
+			isa = PBXGroup;
+			children = (
+				D2AE246B4AD23D81E3F562AE /* BuddyGrammarKeyboard.entitlements */,
+				1D460BCD318B73556DFE9B4A /* Info.plist */,
+				141E5FE2D6C7CE2647C88CA1 /* KeyboardModel.swift */,
+				BB9A01E9A84014C5C9339135 /* KeyboardRootView.swift */,
+				E845A6B23E252000A3774B91 /* KeyboardViewController.swift */,
+				058D399A2D79C86D6571099D /* NextKeyboardButton.swift */,
+				75EB93F150231FE0395A7D3A /* PrivacyInfo.xcprivacy */,
+			);
+			path = BuddyGrammarKeyboard;
+			sourceTree = "<group>";
+		};
+		A17584F1BB711764B71F1BC0 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				D8AD19B1473541F6BB1BB09D /* Dictation */,
+				017B95F0CCC27AC28FDDA35F /* Home */,
+				F36116F0CFC10F75388D6734 /* KeyboardLab */,
+				6F84E22C3E057A117F5398CB /* Onboarding */,
+				F4E0EDB8C6FD44ACF478E0E3 /* Settings */,
+			);
+			path = Features;
 			sourceTree = "<group>";
 		};
 		A469794AC213015BA889750A /* Models */ = {
@@ -250,27 +434,76 @@
 			path = Services;
 			sourceTree = "<group>";
 		};
+		C2CC6E1FE36A508177905DDB /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				1F1C2176904C3AD505FACFEA /* AppDesign.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
 		D506A7407F9AB414E4ACE234 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
 				D8A44A3BBBBE4A90563E6076 /* argmax-oss-swift */,
+				8F7ECCB28C2726237865F0E5 /* BuddyGrammarKit */,
 			);
 			name = Packages;
+			sourceTree = "<group>";
+		};
+		D67C67C95205CB05364B448D /* BuddyGrammarIOSUITests */ = {
+			isa = PBXGroup;
+			children = (
+				5C7B107BDBED6F2D8827A0F3 /* BuddyGrammarIOSUITests.swift */,
+			);
+			path = BuddyGrammarIOSUITests;
+			sourceTree = "<group>";
+		};
+		D8AD19B1473541F6BB1BB09D /* Dictation */ = {
+			isa = PBXGroup;
+			children = (
+				90BA39783117374EA3B329F3 /* DictationView.swift */,
+			);
+			path = Dictation;
 			sourceTree = "<group>";
 		};
 		DD3D94A659C6A0C5673CA5AE /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				B3FEDFF340325A43F2BC7FC6 /* BuddyGrammar.app */,
+				196E050A0FA5BFA71A42FE2B /* BuddyGrammarIOS.app */,
+				AE8C8D9BC822843A946FA161 /* BuddyGrammarIOSTests.xctest */,
+				92721891DC77D19584600BBD /* BuddyGrammarIOSUITests.xctest */,
+				107B1EC7D5A87990BBC88391 /* BuddyGrammarKeyboard.appex */,
 				9161826D72F8255096E1EE40 /* BuddyGrammarTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		F36116F0CFC10F75388D6734 /* KeyboardLab */ = {
+			isa = PBXGroup;
+			children = (
+				EE5698D93D654A8D8E12DA2F /* KeyboardLabView.swift */,
+			);
+			path = KeyboardLab;
+			sourceTree = "<group>";
+		};
+		F4E0EDB8C6FD44ACF478E0E3 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				375ED585ECC5B01AD88D6133 /* SettingsView.swift */,
+			);
+			path = Settings;
 			sourceTree = "<group>";
 		};
 		F590677B8ADA65F06BDBB16F = {
 			isa = PBXGroup;
 			children = (
 				78A7869774D78CE0D6A49591 /* BuddyGrammar */,
+				7D141F51A7790FD2DC07D0ED /* BuddyGrammarIOS */,
+				57ACECA0EE7E010ECC55EC12 /* BuddyGrammarIOSTests */,
+				D67C67C95205CB05364B448D /* BuddyGrammarIOSUITests */,
+				82BDD2969E8C9E5B8774BB70 /* BuddyGrammarKeyboard */,
 				32B09A2FB96D88288465CF3D /* BuddyGrammarTests */,
 				D506A7407F9AB414E4ACE234 /* Packages */,
 				DD3D94A659C6A0C5673CA5AE /* Products */,
@@ -298,6 +531,45 @@
 			productReference = 9161826D72F8255096E1EE40 /* BuddyGrammarTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		0B315D1CB337543979AE0ADC /* BuddyGrammarIOSTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 17891E6709402FF769B3B8D6 /* Build configuration list for PBXNativeTarget "BuddyGrammarIOSTests" */;
+			buildPhases = (
+				9F06FD7D5F1CBD611858E689 /* Sources */,
+				AA3579E286E98DBA4CAEE58A /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BuddyGrammarIOSTests;
+			packageProductDependencies = (
+				35F38000F7CD966A184F9B78 /* BuddyGrammarKit */,
+			);
+			productName = BuddyGrammarIOSTests;
+			productReference = AE8C8D9BC822843A946FA161 /* BuddyGrammarIOSTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		2B114F2C4C3C792E3FA8BB5C /* BuddyGrammarKeyboard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FD8B50E20658579176760016 /* Build configuration list for PBXNativeTarget "BuddyGrammarKeyboard" */;
+			buildPhases = (
+				D99ED3CD898AB9FB88D08990 /* Sources */,
+				8A445A53528B3D52F6053509 /* Resources */,
+				13C87F32BD0B2E0083FBBB4C /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BuddyGrammarKeyboard;
+			packageProductDependencies = (
+				7059D4902A6B899438D9AECF /* BuddyGrammarKit */,
+			);
+			productName = BuddyGrammarKeyboard;
+			productReference = 107B1EC7D5A87990BBC88391 /* BuddyGrammarKeyboard.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		2B83EFBBF5CD825E5C6A9216 /* BuddyGrammar */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = FD94AC696F160F45DF2E223F /* Build configuration list for PBXNativeTarget "BuddyGrammar" */;
@@ -323,6 +595,46 @@
 			productReference = B3FEDFF340325A43F2BC7FC6 /* BuddyGrammar.app */;
 			productType = "com.apple.product-type.application";
 		};
+		52E536CE828B956A71A059D5 /* BuddyGrammarIOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 30269290A9DEE3D4FBB34B7D /* Build configuration list for PBXNativeTarget "BuddyGrammarIOS" */;
+			buildPhases = (
+				B76D93158000CE09517F69E5 /* Sources */,
+				1DEA1F14CEB41AE5679D0710 /* Resources */,
+				2D8D3223C103B45CCCF5765D /* Frameworks */,
+				5002920F34529B0FDD1599E2 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A7199256F38E130537F032FF /* PBXTargetDependency */,
+			);
+			name = BuddyGrammarIOS;
+			packageProductDependencies = (
+				D73ED00B5F8BC037B441E0AC /* BuddyGrammarKit */,
+			);
+			productName = BuddyGrammarIOS;
+			productReference = 196E050A0FA5BFA71A42FE2B /* BuddyGrammarIOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		EF463E49EB11F0C5DDD702B4 /* BuddyGrammarIOSUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0CDB4F46CDC35D6316644A59 /* Build configuration list for PBXNativeTarget "BuddyGrammarIOSUITests" */;
+			buildPhases = (
+				32D8E7AE0D05B875B0585CFD /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4820E2C60EC6DB9DCE85CFD4 /* PBXTargetDependency */,
+			);
+			name = BuddyGrammarIOSUITests;
+			packageProductDependencies = (
+			);
+			productName = BuddyGrammarIOSUITests;
+			productReference = 92721891DC77D19584600BBD /* BuddyGrammarIOSUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -336,9 +648,26 @@
 						DevelopmentTeam = G2442WAF29;
 						ProvisioningStyle = Automatic;
 					};
+					0B315D1CB337543979AE0ADC = {
+						DevelopmentTeam = G2442WAF29;
+						ProvisioningStyle = Automatic;
+					};
+					2B114F2C4C3C792E3FA8BB5C = {
+						DevelopmentTeam = G2442WAF29;
+						ProvisioningStyle = Automatic;
+					};
 					2B83EFBBF5CD825E5C6A9216 = {
 						DevelopmentTeam = G2442WAF29;
 						ProvisioningStyle = Automatic;
+					};
+					52E536CE828B956A71A059D5 = {
+						DevelopmentTeam = G2442WAF29;
+						ProvisioningStyle = Automatic;
+					};
+					EF463E49EB11F0C5DDD702B4 = {
+						DevelopmentTeam = G2442WAF29;
+						ProvisioningStyle = Automatic;
+						TestTargetID = 52E536CE828B956A71A059D5;
 					};
 				};
 			};
@@ -358,18 +687,40 @@
 				7B2517D2C85E33A5E7F43D03 /* XCRemoteSwiftPackageReference "swift-huggingface-mlx" */,
 				F9A893228DBFAD2E07AADB68 /* XCRemoteSwiftPackageReference "swift-transformers-mlx" */,
 				C70FF14490324C2832B8D7DF /* XCLocalSwiftPackageReference "Vendor/argmax-oss-swift" */,
+				6DDBB06283D00490A6641C18 /* XCLocalSwiftPackageReference "BuddyGrammarKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				2B83EFBBF5CD825E5C6A9216 /* BuddyGrammar */,
+				52E536CE828B956A71A059D5 /* BuddyGrammarIOS */,
+				0B315D1CB337543979AE0ADC /* BuddyGrammarIOSTests */,
+				EF463E49EB11F0C5DDD702B4 /* BuddyGrammarIOSUITests */,
+				2B114F2C4C3C792E3FA8BB5C /* BuddyGrammarKeyboard */,
 				0A2DA624B95E71A135BB902A /* BuddyGrammarTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		1DEA1F14CEB41AE5679D0710 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA7E9892F67DBC4ED0A85C95 /* Assets.xcassets in Resources */,
+				6840B5297B8CC48ADFADA06D /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8A445A53528B3D52F6053509 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0F362E1DBE01190CA9AA93CA /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F7DED84FDCF5B648462D0A66 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -381,6 +732,50 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		32D8E7AE0D05B875B0585CFD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3FB237812ABACE13D7F7F967 /* BuddyGrammarIOSUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9F06FD7D5F1CBD611858E689 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4AC106D380AF22BC2F454104 /* BuddyGrammarIOSTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B76D93158000CE09517F69E5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5A51B8F4725DE5CC7BE8C96B /* AppDesign.swift in Sources */,
+				B90FD863CC6748272E27606A /* AppRootView.swift in Sources */,
+				9A498D4B1369CF4D579C3408 /* BuddyGrammarIOSApp.swift in Sources */,
+				363BB05575F5AC7164B29864 /* DictationView.swift in Sources */,
+				7772B7356D1D6C69AFD8EA2C /* HomeView.swift in Sources */,
+				BFEEEEF4C8216517B988BC05 /* IOSAppModel.swift in Sources */,
+				3ED5E97B27EBD5D59545D792 /* IOSAudioRecorder.swift in Sources */,
+				365E6F54A18E39C8F1647403 /* KeyboardLabView.swift in Sources */,
+				EA9F5A96B28672084B1644ED /* OnboardingView.swift in Sources */,
+				CD45A8ADF8FF7686459BE9DA /* SettingsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D99ED3CD898AB9FB88D08990 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2CC9F5881FE9EA4E02848A9B /* KeyboardModel.swift in Sources */,
+				0D0726AC41A79B53F074A620 /* KeyboardRootView.swift in Sources */,
+				BC84F61B197519A6AF5F496C /* KeyboardViewController.swift in Sources */,
+				D26B7CF6F78D5F2AC1429DC9 /* NextKeyboardButton.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E312D77B536F12683D32664C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -450,9 +845,59 @@
 			target = 2B83EFBBF5CD825E5C6A9216 /* BuddyGrammar */;
 			targetProxy = FF0025799D6E005BB800F38A /* PBXContainerItemProxy */;
 		};
+		4820E2C60EC6DB9DCE85CFD4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 52E536CE828B956A71A059D5 /* BuddyGrammarIOS */;
+			targetProxy = B4CC861044170EF84C084F7F /* PBXContainerItemProxy */;
+		};
+		A7199256F38E130537F032FF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2B114F2C4C3C792E3FA8BB5C /* BuddyGrammarKeyboard */;
+			targetProxy = 6D6E092F64EDFE1C170910FF /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		2BA0A066C3855EF0CB3AE94C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.francescooddo.BuddyGrammar.IOSTests;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2D6058FEB6DA52FEF6D18A3D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = BuddyGrammarIOS/Support/BuddyGrammarIOS.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BuddyGrammarIOS/Support/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.francescooddo.BuddyGrammar;
+				PRODUCT_MODULE_NAME = BuddyGrammarIOS;
+				PRODUCT_NAME = BuddyGrammar;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		3675B7F731D30B3A0125F695 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -505,7 +950,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = G2442WAF29;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -523,7 +968,6 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
 				SPARKLE_FEED_URL = "https://raw.githubusercontent.com/oxfrancesco/buddygrammar/main/appcast.xml";
 				SPARKLE_PUBLIC_ED_KEY = "YvlMAWKQ4HQQXIVXWeRI6jCdNrnPFCywBoQNEWNIKTc=";
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -549,6 +993,109 @@
 				PRODUCT_MODULE_NAME = BuddyGrammar;
 				PRODUCT_NAME = BuddyWrite;
 				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		776CC873C820513C4CE04D9C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = BuddyGrammarIOS/Support/BuddyGrammarIOS.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BuddyGrammarIOS/Support/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.francescooddo.BuddyGrammar;
+				PRODUCT_MODULE_NAME = BuddyGrammarIOS;
+				PRODUCT_NAME = BuddyGrammar;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		7CDD79006AB8B60E043844B2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = BuddyGrammarKeyboard/BuddyGrammarKeyboard.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BuddyGrammarKeyboard/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.francescooddo.BuddyGrammar.Keyboard;
+				PRODUCT_MODULE_NAME = BuddyGrammarKeyboard;
+				PRODUCT_NAME = BuddyGrammarKeyboard;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		8B3BAD84658CB23F8CC0CFDC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.francescooddo.BuddyGrammar.IOSUITests;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = BuddyGrammarIOS;
+			};
+			name = Debug;
+		};
+		987FC7402A4D8E07391666E7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = BuddyGrammarKeyboard/BuddyGrammarKeyboard.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BuddyGrammarKeyboard/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.francescooddo.BuddyGrammar.Keyboard;
+				PRODUCT_MODULE_NAME = BuddyGrammarKeyboard;
+				PRODUCT_NAME = BuddyGrammarKeyboard;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A798B65F091EEC5E77D1E0C7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.francescooddo.BuddyGrammar.IOSTests;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -604,7 +1151,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = G2442WAF29;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -629,7 +1176,6 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
 				SPARKLE_FEED_URL = "https://raw.githubusercontent.com/oxfrancesco/buddygrammar/main/appcast.xml";
 				SPARKLE_PUBLIC_ED_KEY = "YvlMAWKQ4HQQXIVXWeRI6jCdNrnPFCywBoQNEWNIKTc=";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -637,6 +1183,25 @@
 				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
+		};
+		DE957620AA3ABAF110A23872 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.francescooddo.BuddyGrammar.IOSUITests;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = BuddyGrammarIOS;
+			};
+			name = Release;
 		};
 		EE3B10565C79F24B18EC52CE /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -661,6 +1226,33 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		0CDB4F46CDC35D6316644A59 /* Build configuration list for PBXNativeTarget "BuddyGrammarIOSUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8B3BAD84658CB23F8CC0CFDC /* Debug */,
+				DE957620AA3ABAF110A23872 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		17891E6709402FF769B3B8D6 /* Build configuration list for PBXNativeTarget "BuddyGrammarIOSTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2BA0A066C3855EF0CB3AE94C /* Debug */,
+				A798B65F091EEC5E77D1E0C7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		30269290A9DEE3D4FBB34B7D /* Build configuration list for PBXNativeTarget "BuddyGrammarIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				776CC873C820513C4CE04D9C /* Debug */,
+				2D6058FEB6DA52FEF6D18A3D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		651AB47E85168083BFE229C1 /* Build configuration list for PBXNativeTarget "BuddyGrammarTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -679,6 +1271,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		FD8B50E20658579176760016 /* Build configuration list for PBXNativeTarget "BuddyGrammarKeyboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				987FC7402A4D8E07391666E7 /* Debug */,
+				7CDD79006AB8B60E043844B2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		FD94AC696F160F45DF2E223F /* Build configuration list for PBXNativeTarget "BuddyGrammar" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -691,6 +1292,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		6DDBB06283D00490A6641C18 /* XCLocalSwiftPackageReference "BuddyGrammarKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = BuddyGrammarKit;
+		};
 		C70FF14490324C2832B8D7DF /* XCLocalSwiftPackageReference "Vendor/argmax-oss-swift" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "Vendor/argmax-oss-swift";
@@ -738,10 +1343,18 @@
 			package = 01B8BC7363A697AD0E839E30 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
 			productName = MLXLLM;
 		};
+		35F38000F7CD966A184F9B78 /* BuddyGrammarKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BuddyGrammarKit;
+		};
 		4F529799108FAF76A993811E /* MLXLMCommon */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 01B8BC7363A697AD0E839E30 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
 			productName = MLXLMCommon;
+		};
+		7059D4902A6B899438D9AECF /* BuddyGrammarKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BuddyGrammarKit;
 		};
 		76DB1AACAF97FE83D6514248 /* WhisperKit */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -756,6 +1369,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F9A893228DBFAD2E07AADB68 /* XCRemoteSwiftPackageReference "swift-transformers-mlx" */;
 			productName = MLXLMTransformers;
+		};
+		D73ED00B5F8BC037B441E0AC /* BuddyGrammarKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BuddyGrammarKit;
 		};
 		EA858F67A711C5DB1252872F /* MLXLMHuggingFace */ = {
 			isa = XCSwiftPackageProductDependency;
