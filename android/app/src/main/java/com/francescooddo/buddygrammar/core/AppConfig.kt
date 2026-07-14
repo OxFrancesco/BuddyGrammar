@@ -2,7 +2,7 @@ package com.francescooddo.buddygrammar.core
 
 object AppConfig {
     const val API_BASE_URL = "https://buddygrammar-api.oddofrancesco000.workers.dev"
-    const val DEFAULT_MODEL = "openai/gpt-5.4-nano"
+    const val DEFAULT_MODEL = "openai/gpt-5.6-luna"
     const val PENDING_TRANSCRIPT_LIFETIME_MS = 24L * 60L * 60L * 1_000L
 
     const val DEFAULT_CORRECTION_INSTRUCTION = """

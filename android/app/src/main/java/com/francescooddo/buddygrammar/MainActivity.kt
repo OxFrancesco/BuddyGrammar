@@ -27,6 +27,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val keyboardMicrophonePermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (!granted) {
+            appState.showError("Microphone access is required for keyboard voice typing.")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -42,6 +50,22 @@ class MainActivity : ComponentActivity() {
                     getSystemService(InputMethodManager::class.java).showInputMethodPicker()
                 },
             )
+        }
+        handleKeyboardPermissionRequest(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleKeyboardPermissionRequest(intent)
+    }
+
+    private fun handleKeyboardPermissionRequest(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_REQUEST_RECORD_AUDIO, false) != true) return
+        intent.removeExtra(EXTRA_REQUEST_RECORD_AUDIO)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            keyboardMicrophonePermission.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
@@ -72,5 +96,9 @@ class MainActivity : ComponentActivity() {
         } else {
             microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
         }
+    }
+
+    companion object {
+        const val EXTRA_REQUEST_RECORD_AUDIO = "com.francescooddo.buddygrammar.REQUEST_RECORD_AUDIO"
     }
 }

@@ -1,5 +1,10 @@
 package com.francescooddo.buddygrammar.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,6 +70,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -72,6 +79,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.francescooddo.buddygrammar.R
 import com.francescooddo.buddygrammar.core.BuddySettings
 
 private val BuddyPurple = Color(0xFF6D4AFF)
@@ -316,7 +325,23 @@ private fun HomeScreen(
                     .background(Brush.linearGradient(listOf(BuddyPurple, Color(0xFF9156F8))))
                     .padding(24.dp),
             ) {
-                Icon(Icons.Rounded.Star, null, tint = Color(0xFFFFE278), modifier = Modifier.size(40.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color.White),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Image(
+                            painter = painterResource(R.drawable.buddygrammar_logo),
+                            contentDescription = "BuddyGrammar logo",
+                            modifier = Modifier.size(46.dp),
+                        )
+                    }
+                    Spacer(Modifier.size(14.dp))
+                    Icon(Icons.Rounded.Star, null, tint = Color(0xFFFFE278), modifier = Modifier.size(40.dp))
+                }
                 Spacer(Modifier.height(18.dp))
                 Text("Make every sentence shine.", color = Color.White, fontSize = 29.sp, fontWeight = FontWeight.ExtraBold)
                 Spacer(Modifier.height(8.dp))
@@ -347,6 +372,8 @@ private fun HomeScreen(
             }
         }
 
+        MicrophonePermissionCard()
+
         Text("Keyboard setup", fontWeight = FontWeight.Bold, fontSize = 20.sp)
         StatusRow("BuddyGrammar enabled", state.keyboardEnabled)
         StatusRow("BuddyGrammar selected", state.keyboardSelected)
@@ -374,6 +401,44 @@ private fun HomeScreen(
             body = "Record in the app, transcribe with ElevenLabs, then insert it from the keyboard mic.",
             action = "Start dictating",
         ) { state.navigate(AppScreen.DICTATION) }
+    }
+}
+
+@Composable
+private fun MicrophonePermissionCard() {
+    val context = LocalContext.current
+    var micGranted by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> micGranted = granted }
+    if (micGranted) return
+
+    Card(colors = CardDefaults.cardColors(containerColor = BuddyLavender)) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Mic, null, tint = BuddyPurple)
+                Spacer(Modifier.size(10.dp))
+                Text("Microphone for voice typing", fontWeight = FontWeight.Bold)
+            }
+            Text(
+                "The keyboard's voice typing and dictation need microphone access. " +
+                    "Keyboards cannot ask for it themselves, so grant it here once.",
+                fontSize = 13.sp,
+                color = BuddyInk.copy(alpha = 0.7f),
+                lineHeight = 19.sp,
+            )
+            Button(onClick = { micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) }) {
+                Text("Allow microphone")
+            }
+        }
     }
 }
 

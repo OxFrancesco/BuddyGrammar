@@ -1,22 +1,38 @@
 package com.francescooddo.buddygrammar.ime
 
-import android.graphics.Color
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.text.InputType
-import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.TextView
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ComposeView
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.francescooddo.buddygrammar.MainActivity
 import com.francescooddo.buddygrammar.core.BuddyGrammarApi
+import com.francescooddo.buddygrammar.core.HandwritingTextFormatter
+import com.francescooddo.buddygrammar.core.PersonalLanguageModel
 import com.francescooddo.buddygrammar.core.PreferencesRepository
-import com.francescooddo.buddygrammar.core.TextContextExtractor
+import com.francescooddo.buddygrammar.core.Suggestion
+import com.francescooddo.buddygrammar.core.SuggestionEngine
 import com.francescooddo.buddygrammar.core.TextCorrectionCandidate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -24,195 +40,200 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-class BuddyGrammarImeService : InputMethodService() {
+data class KeyboardStatus(val message: String, val isError: Boolean = false)
+
+class BuddyGrammarImeService :
+    InputMethodService(),
+    LifecycleOwner,
+    ViewModelStoreOwner,
+    SavedStateRegistryOwner {
+
     private val preferences by lazy { PreferencesRepository(this) }
+    private val personalModel by lazy {
+        val store = getSharedPreferences(PERSONAL_MODEL_PREFS, MODE_PRIVATE)
+        PersonalLanguageModel(
+            initialData = store.getString(PERSONAL_MODEL_KEY, null),
+            onPersist = { data -> store.edit().putString(PERSONAL_MODEL_KEY, data).apply() },
+        )
+    }
     private val api = BuddyGrammarApi()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    private var rootView: LinearLayout? = null
-    private var statusView: TextView? = null
-    private var starButton: Button? = null
-    private var correctionJob: Job? = null
-    private var symbols = false
-    private var uppercase = true
-    private var secureField = false
+    private val lifecycleRegistry = LifecycleRegistry(this)
+    private val store = ViewModelStore()
+    private val savedStateRegistryController = SavedStateRegistryController.create(this)
 
-    override fun onCreateInputView(): View = LinearLayout(this).also { root ->
-        root.orientation = LinearLayout.VERTICAL
-        root.setPadding(dp(5), dp(7), dp(5), dp(7))
-        root.setBackgroundColor(Color.rgb(235, 235, 241))
-        rootView = root
-        renderKeyboard()
+    override val lifecycle: Lifecycle get() = lifecycleRegistry
+    override val viewModelStore: ViewModelStore get() = store
+    override val savedStateRegistry: SavedStateRegistry
+        get() = savedStateRegistryController.savedStateRegistry
+
+    val keyboardState = KeyboardState()
+    val handwriting by lazy { HandwritingController(scope) }
+    val voice by lazy {
+        VoiceTypingController(this) { finalText -> commitDictatedText(finalText) }
     }
+
+    var suggestions by mutableStateOf<List<Suggestion>>(emptyList())
+        private set
+    var status by mutableStateOf<KeyboardStatus?>(null)
+        private set
+    var secureField by mutableStateOf(false)
+        private set
+    var isCorrecting by mutableStateOf(false)
+        private set
+    var returnAction by mutableStateOf(EditorInfo.IME_ACTION_NONE)
+        private set
+    var hasMicPermission by mutableStateOf(false)
+        private set
+
+    private var correctionJob: Job? = null
+    private var statusClearJob: Job? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        savedStateRegistryController.performRestore(null)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+    }
+
+    override fun onCreateInputView(): View {
+        window?.window?.decorView?.let { decorView ->
+            decorView.setViewTreeLifecycleOwner(this)
+            decorView.setViewTreeViewModelStoreOwner(this)
+            decorView.setViewTreeSavedStateRegistryOwner(this)
+        }
+        return ComposeView(this).apply {
+            setViewTreeLifecycleOwner(this@BuddyGrammarImeService)
+            setViewTreeViewModelStoreOwner(this@BuddyGrammarImeService)
+            setViewTreeSavedStateRegistryOwner(this@BuddyGrammarImeService)
+            setContent {
+                KeyboardScreen(service = this@BuddyGrammarImeService)
+            }
+        }
+    }
+
+    override fun onEvaluateFullscreenMode(): Boolean = false
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         secureField = info?.inputType?.let(::isSecureInputType) ?: false
         val inputClass = info?.inputType?.and(InputType.TYPE_MASK_CLASS)
-        symbols = inputClass == InputType.TYPE_CLASS_NUMBER ||
+        val startOnNumbers = inputClass == InputType.TYPE_CLASS_NUMBER ||
             inputClass == InputType.TYPE_CLASS_PHONE ||
             inputClass == InputType.TYPE_CLASS_DATETIME
-        uppercase = !symbols
+        keyboardState.configureForNewInput(startOnNumbers)
+        returnAction = resolveReturnAction(info)
+        hasMicPermission = hasMicrophonePermission()
         cancelCorrection()
-        renderKeyboard()
         showBaselineStatus()
+        refreshTypingState()
+    }
+
+    override fun onWindowShown() {
+        super.onWindowShown()
+        hasMicPermission = hasMicrophonePermission()
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
+        personalModel.persist()
         cancelCorrection()
+        voice.destroy()
+        handwriting.clear()
         super.onFinishInputView(finishingInput)
     }
 
+    override fun onUpdateSelection(
+        oldSelStart: Int,
+        oldSelEnd: Int,
+        newSelStart: Int,
+        newSelEnd: Int,
+        candidatesStart: Int,
+        candidatesEnd: Int,
+    ) {
+        super.onUpdateSelection(
+            oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd,
+        )
+        refreshTypingState()
+    }
+
     override fun onDestroy() {
+        voice.destroy()
+        handwriting.destroy()
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        store.clear()
         scope.cancel()
         super.onDestroy()
     }
 
-    private fun renderKeyboard() {
-        val root = rootView ?: return
-        root.removeAllViews()
-        root.addView(accessoryRow())
-        if (symbols) {
-            addCharacterRow(root, "1234567890".map(Char::toString))
-            addCharacterRow(root, listOf("-", "/", ":", ";", "(", ")", "\$", "&", "@", "\""))
-            val lastRow = row()
-            listOf(".", ",", "?", "!", "'", "[", "]", "_").forEach { key ->
-                lastRow.addView(characterKey(key), weightedKeyParams())
-            }
-            lastRow.addView(functionKey("⌫", "Delete") { deleteBackward() }, fixedKeyParams(52))
-            root.addView(lastRow, rowParams())
-        } else {
-            addCharacterRow(root, "qwertyuiop".map(Char::toString))
-            addCharacterRow(root, "asdfghjkl".map(Char::toString), horizontalInset = 13)
-            val lastRow = row()
-            lastRow.addView(
-                functionKey(if (uppercase) "⇧" else "⇧", if (uppercase) "Shift on" else "Shift off") {
-                    uppercase = !uppercase
-                    renderKeyboard()
-                },
-                fixedKeyParams(52),
-            )
-            "zxcvbnm".map(Char::toString).forEach { key ->
-                lastRow.addView(characterKey(key), weightedKeyParams())
-            }
-            lastRow.addView(functionKey("⌫", "Delete") { deleteBackward() }, fixedKeyParams(52))
-            root.addView(lastRow, rowParams())
-        }
-        root.addView(controlRow(), rowParams())
-        showBaselineStatus()
-    }
+    // region Key handling
 
-    private fun accessoryRow(): View = row().apply {
-        setPadding(dp(2), 0, dp(2), dp(3))
-        statusView = TextView(this@BuddyGrammarImeService).also { status ->
-            status.textSize = 11f
-            status.setTextColor(Color.DKGRAY)
-            status.maxLines = 1
-            status.gravity = Gravity.CENTER_VERTICAL
-            status.contentDescription = "BuddyGrammar keyboard status"
-            addView(status, LinearLayout.LayoutParams(0, dp(34), 1f))
-        }
-        addView(
-            functionKey("🎙", "Insert latest BuddyGrammar dictation", prominent = false) {
-                insertPendingTranscript()
-            },
-            fixedKeyParams(46, 34),
-        )
-        starButton = functionKey("★", "Correct selected text or current sentence", prominent = true) {
-            correctCurrentText()
-        }.also { addView(it, fixedKeyParams(50, 34)) }
-    }
-
-    private fun controlRow(): View = row().apply {
-        addView(functionKey(if (symbols) "ABC" else "123", "Change keyboard layout") {
-            localEdit()
-            symbols = !symbols
-            uppercase = !symbols
-            renderKeyboard()
-        }, fixedKeyParams(56))
-        addView(functionKey("🌐", "Switch keyboard") { switchKeyboard() }, fixedKeyParams(48))
-        addView(characterKey(" ", label = "space"), LinearLayout.LayoutParams(0, dp(44), 1f).withMargins())
-        addView(functionKey("↵", "Return") { insertReturn() }, fixedKeyParams(56))
-    }
-
-    private fun addCharacterRow(root: LinearLayout, keys: List<String>, horizontalInset: Int = 0) {
-        val row = row().apply { setPadding(dp(horizontalInset), 0, dp(horizontalInset), 0) }
-        keys.forEach { key -> row.addView(characterKey(key), weightedKeyParams()) }
-        root.addView(row, rowParams())
-    }
-
-    private fun characterKey(value: String, label: String = value): Button = keyButton(
-        text = if (!symbols && uppercase) value.uppercase() else if (value == " ") "space" else value,
-        contentDescription = label,
-        prominent = false,
-    ) {
+    fun onCharacterKey(value: String) {
         localEdit()
-        currentInputConnection?.commitText(
-            if (!symbols && uppercase) value.uppercase() else value,
-            1,
-        )
-        if (!symbols && uppercase) {
-            uppercase = false
-            renderKeyboard()
+        if (value.length == 1 && value[0] in WORD_BOUNDARY_PUNCTUATION) {
+            learnCompletedWord()
         }
+        val text = if (keyboardState.layer == KeyboardLayer.LETTERS && keyboardState.uppercase) {
+            value.uppercase()
+        } else {
+            value
+        }
+        currentInputConnection?.commitText(text, 1)
+        keyboardState.onCharacterCommitted()
+        refreshTypingState()
     }
 
-    private fun functionKey(
-        text: String,
-        description: String,
-        prominent: Boolean = false,
-        action: () -> Unit,
-    ): Button = keyButton(text, description, prominent, action)
-
-    private fun keyButton(
-        text: String,
-        contentDescription: String,
-        prominent: Boolean,
-        action: () -> Unit,
-    ): Button = Button(this).apply {
-        this.text = text
-        this.contentDescription = contentDescription
-        isAllCaps = false
-        textSize = if (text.length > 3) 12f else 19f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-        setTextColor(if (prominent) Color.WHITE else Color.rgb(25, 25, 28))
-        minWidth = 0
-        minimumWidth = 0
-        minHeight = 0
-        minimumHeight = 0
-        setPadding(dp(2), 0, dp(2), 0)
-        background = roundedBackground(
-            if (prominent) Color.rgb(109, 74, 255) else Color.WHITE,
-            radius = 8,
-        )
-        setOnClickListener { action() }
+    fun onSpaceKey() {
+        localEdit()
+        learnCompletedWord()
+        currentInputConnection?.commitText(" ", 1)
+        refreshTypingState()
     }
 
-    private fun deleteBackward() {
+    fun onDeleteKey() {
         localEdit()
         val connection = currentInputConnection ?: return
         if (!connection.deleteSurroundingTextInCodePoints(1, 0)) {
             connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
             connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL))
         }
+        refreshTypingState()
     }
 
-    private fun insertReturn() {
+    fun onReturnKey() {
         localEdit()
+        learnCompletedWord()
         val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
         val handledAction = action != null && action != EditorInfo.IME_ACTION_NONE &&
             action != EditorInfo.IME_ACTION_UNSPECIFIED &&
             currentInputConnection?.performEditorAction(action) == true
         if (!handledAction) currentInputConnection?.commitText("\n", 1)
-        if (!symbols) {
-            uppercase = true
-            renderKeyboard()
+        refreshTypingState()
+    }
+
+    fun onShiftKey() {
+        keyboardState.onShiftTapped()
+    }
+
+    fun setLayer(layer: KeyboardLayer) {
+        if (keyboardState.layer == KeyboardLayer.VOICE && layer != KeyboardLayer.VOICE) {
+            voice.destroy()
+        }
+        keyboardState.switchLayer(layer)
+        when (layer) {
+            KeyboardLayer.HANDWRITING -> handwriting.prepareModel()
+            KeyboardLayer.LETTERS -> refreshTypingState()
+            else -> Unit
         }
     }
 
-    private fun switchKeyboard() {
+    fun switchKeyboard() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && shouldOfferSwitchingToNextInputMethod()) {
             switchToNextInputMethod(false)
         } else {
@@ -220,7 +241,80 @@ class BuddyGrammarImeService : InputMethodService() {
         }
     }
 
-    private fun correctCurrentText() {
+    fun applySuggestion(suggestion: Suggestion) {
+        localEdit()
+        val connection = currentInputConnection ?: return
+        if (!suggestion.isEmoji) {
+            val before = connection.getTextBeforeCursor(SUGGESTION_CONTEXT, 0)?.toString().orEmpty()
+            val prefix = before.dropLast(suggestion.replaceBeforeCursor.coerceAtMost(before.length))
+            personalModel.learn(previousWord(prefix), suggestion.text.trim())
+        }
+        connection.beginBatchEdit()
+        try {
+            if (suggestion.replaceBeforeCursor > 0) {
+                connection.deleteSurroundingText(suggestion.replaceBeforeCursor, 0)
+            }
+            connection.commitText(
+                suggestion.text + if (suggestion.appendSpace) " " else "",
+                1,
+            )
+        } finally {
+            connection.endBatchEdit()
+        }
+        refreshTypingState()
+    }
+
+    fun commitEmoji(emoji: String) {
+        localEdit()
+        currentInputConnection?.commitText(emoji, 1)
+        refreshTypingState()
+    }
+
+    fun commitHandwriting(text: String) {
+        localEdit()
+        val connection = currentInputConnection ?: return
+        val before = connection.getTextBeforeCursor(SUGGESTION_CONTEXT, 0)?.toString().orEmpty()
+        val formatted = HandwritingTextFormatter.textForInsertion(text, before)
+        connection.commitText(smartSpaced(formatted), 1)
+        handwriting.clear()
+        refreshTypingState()
+    }
+
+    private fun commitDictatedText(text: String) {
+        if (secureField) return
+        localEdit()
+        currentInputConnection?.commitText(smartSpaced(text), 1)
+        refreshTypingState()
+    }
+
+    private fun smartSpaced(text: String): String {
+        val before = currentInputConnection?.getTextBeforeCursor(1, 0)?.toString().orEmpty()
+        val needsSpace = before.isNotEmpty() && !before.last().isWhitespace()
+        return if (needsSpace) " $text" else text
+    }
+
+    // endregion
+
+    // region Microphone permission
+
+    fun hasMicrophonePermission(): Boolean = ContextCompat.checkSelfPermission(
+        this,
+        Manifest.permission.RECORD_AUDIO,
+    ) == PackageManager.PERMISSION_GRANTED
+
+    fun openAppForMicrophonePermission() {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            putExtra(MainActivity.EXTRA_REQUEST_RECORD_AUDIO, true)
+        }
+        startActivity(intent)
+    }
+
+    // endregion
+
+    // region Cloud correction (unchanged flow)
+
+    fun correctCurrentText() {
         cancelCorrection()
         if (secureField) {
             setStatus("Cloud actions are unavailable in secure fields.", error = true)
@@ -233,12 +327,12 @@ class BuddyGrammarImeService : InputMethodService() {
         }
         val snapshot = captureSnapshot()
         if (snapshot == null) {
-            setStatus("Select text or type a sentence first.", error = true)
+            setStatus("Type some text first.", error = true)
             return
         }
 
-        setStatus("Correcting…")
-        starButton?.isEnabled = false
+        setStatus("Correcting…", transient = false)
+        isCorrecting = true
         correctionJob = scope.launch {
             try {
                 val corrected = api.correct(
@@ -262,7 +356,7 @@ class BuddyGrammarImeService : InputMethodService() {
             } catch (error: Throwable) {
                 setStatus(error.message ?: "Correction failed.", error = true)
             } finally {
-                starButton?.isEnabled = true
+                isCorrecting = false
                 correctionJob = null
             }
         }
@@ -281,19 +375,20 @@ class BuddyGrammarImeService : InputMethodService() {
                 anchorAfter = connection.getTextAfterCursor(ANCHOR_LENGTH, 0)?.toString().orEmpty(),
             )
         }
-        val before = connection.getTextBeforeCursor(MAX_CONTEXT + ANCHOR_LENGTH, 0)
+        // No selection: correct the whole visible text of the input, not
+        // just the sentence around the cursor.
+        val before = connection.getTextBeforeCursor(MAX_CONTEXT, 0)
             ?.toString().orEmpty()
-        val after = connection.getTextAfterCursor(MAX_CONTEXT + ANCHOR_LENGTH, 0)
+        val after = connection.getTextAfterCursor(MAX_CONTEXT, 0)
             ?.toString().orEmpty()
-        val cursorCandidate = TextContextExtractor.currentSentence(before, after, MAX_CONTEXT)
-            ?: return null
+        val candidate = TextCorrectionCandidate.from(before + after) ?: return null
         return CorrectionSnapshot(
-            target = CorrectionTarget.CursorSentence,
-            candidate = cursorCandidate.candidate,
-            textBeforeCursor = cursorCandidate.textBeforeCursor,
-            textAfterCursor = cursorCandidate.textAfterCursor,
-            anchorBefore = before.removeSuffix(cursorCandidate.textBeforeCursor).takeLast(ANCHOR_LENGTH),
-            anchorAfter = after.removePrefix(cursorCandidate.textAfterCursor).take(ANCHOR_LENGTH),
+            target = CorrectionTarget.WholeText,
+            candidate = candidate,
+            textBeforeCursor = before,
+            textAfterCursor = after,
+            anchorBefore = "",
+            anchorAfter = "",
         )
     }
 
@@ -304,7 +399,7 @@ class BuddyGrammarImeService : InputMethodService() {
         try {
             return when (snapshot.target) {
                 CorrectionTarget.Selection -> connection.commitText(replacement, 1)
-                CorrectionTarget.CursorSentence -> {
+                CorrectionTarget.WholeText -> {
                     val deleted = connection.deleteSurroundingText(
                         snapshot.textBeforeCursor.length,
                         snapshot.textAfterCursor.length,
@@ -332,7 +427,7 @@ class BuddyGrammarImeService : InputMethodService() {
                     connection.getTextBeforeCursor(ANCHOR_LENGTH, 0)?.toString() == snapshot.anchorBefore &&
                     connection.getTextAfterCursor(ANCHOR_LENGTH, 0)?.toString() == snapshot.anchorAfter
             }
-            CorrectionTarget.CursorSentence -> {
+            CorrectionTarget.WholeText -> {
                 val expectedBefore = snapshot.anchorBefore + snapshot.textBeforeCursor
                 val expectedAfter = snapshot.textAfterCursor + snapshot.anchorAfter
                 connection.getTextBeforeCursor(expectedBefore.length, 0)?.toString() == expectedBefore &&
@@ -341,7 +436,7 @@ class BuddyGrammarImeService : InputMethodService() {
         }
     }
 
-    private fun insertPendingTranscript() {
+    fun insertPendingTranscript() {
         localEdit()
         if (secureField) {
             setStatus("Dictation is unavailable in secure fields.", error = true)
@@ -362,31 +457,84 @@ class BuddyGrammarImeService : InputMethodService() {
         } else {
             setStatus("The editor rejected the dictation. It is still saved.", error = true)
         }
+        refreshTypingState()
     }
+
+    // endregion
 
     private fun localEdit() {
         cancelCorrection()
         showBaselineStatus()
     }
 
+    /**
+     * Records the word being finished (before a space, return, or
+     * punctuation) so predictions adapt to the user's vocabulary.
+     */
+    private fun learnCompletedWord() {
+        if (secureField) return
+        val before = currentInputConnection
+            ?.getTextBeforeCursor(SUGGESTION_CONTEXT, 0)
+            ?.toString()
+            .orEmpty()
+        val word = before.takeLastWhile { it.isLetterOrDigit() || it == '\'' }
+        if (word.isEmpty()) return
+        personalModel.learn(previousWord(before.dropLast(word.length)), word)
+    }
+
+    private fun previousWord(text: String): String? = text
+        .trimEnd()
+        .takeLastWhile { it.isLetterOrDigit() || it == '\'' }
+        .ifEmpty { null }
+
     private fun cancelCorrection() {
         correctionJob?.cancel()
         correctionJob = null
-        starButton?.isEnabled = true
+        isCorrecting = false
+    }
+
+    private fun refreshTypingState() {
+        if (secureField) {
+            suggestions = emptyList()
+            return
+        }
+        val before = currentInputConnection
+            ?.getTextBeforeCursor(SUGGESTION_CONTEXT, 0)
+            ?.toString()
+            .orEmpty()
+        keyboardState.updateAutoShift(before)
+        suggestions = SuggestionEngine.suggest(before, personalModel)
     }
 
     private fun showBaselineStatus() {
-        when {
-            secureField -> setStatus("Normal typing only in secure fields.")
-            !preferences.loadSettings().hasAcceptedCloudProcessing ->
-                setStatus("Allow cloud processing in BuddyGrammar to use ★.", error = true)
-            else -> setStatus("Select text or place the cursor after a sentence, then tap ★.")
+        if (secureField) {
+            setStatus("Normal typing only in secure fields.", transient = false)
+        } else {
+            clearStatus()
         }
     }
 
-    private fun setStatus(message: String, error: Boolean = false) {
-        statusView?.text = message
-        statusView?.setTextColor(if (error) Color.rgb(180, 90, 0) else Color.DKGRAY)
+    private fun setStatus(message: String, error: Boolean = false, transient: Boolean = true) {
+        statusClearJob?.cancel()
+        status = KeyboardStatus(message, error)
+        if (transient) {
+            statusClearJob = scope.launch {
+                delay(STATUS_LIFETIME_MS)
+                status = null
+            }
+        }
+    }
+
+    private fun clearStatus() {
+        statusClearJob?.cancel()
+        statusClearJob = null
+        status = null
+    }
+
+    private fun resolveReturnAction(info: EditorInfo?): Int {
+        val options = info?.imeOptions ?: return EditorInfo.IME_ACTION_NONE
+        if (options and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0) return EditorInfo.IME_ACTION_NONE
+        return options and EditorInfo.IME_MASK_ACTION
     }
 
     private fun isSecureInputType(inputType: Int): Boolean {
@@ -400,34 +548,6 @@ class BuddyGrammarImeService : InputMethodService() {
             variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD)
     }
 
-    private fun row() = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER
-    }
-
-    private fun rowParams() = LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT,
-        LinearLayout.LayoutParams.WRAP_CONTENT,
-    ).apply { bottomMargin = dp(5) }
-
-    private fun weightedKeyParams() = LinearLayout.LayoutParams(0, dp(44), 1f).withMargins()
-
-    private fun fixedKeyParams(widthDp: Int, heightDp: Int = 44) =
-        LinearLayout.LayoutParams(dp(widthDp), dp(heightDp)).withMargins()
-
-    private fun LinearLayout.LayoutParams.withMargins(): LinearLayout.LayoutParams = apply {
-        marginStart = dp(2)
-        marginEnd = dp(2)
-    }
-
-    private fun roundedBackground(color: Int, radius: Int) = GradientDrawable().apply {
-        shape = GradientDrawable.RECTANGLE
-        setColor(color)
-        cornerRadius = dp(radius).toFloat()
-    }
-
-    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
-
     private data class CorrectionSnapshot(
         val target: CorrectionTarget,
         val candidate: TextCorrectionCandidate,
@@ -437,10 +557,15 @@ class BuddyGrammarImeService : InputMethodService() {
         val anchorAfter: String,
     )
 
-    private enum class CorrectionTarget { Selection, CursorSentence }
+    private enum class CorrectionTarget { Selection, WholeText }
 
     private companion object {
         const val MAX_CONTEXT = 1_000
         const val ANCHOR_LENGTH = 64
+        const val SUGGESTION_CONTEXT = 64
+        const val STATUS_LIFETIME_MS = 4_000L
+        const val PERSONAL_MODEL_PREFS = "personal_language_model"
+        const val PERSONAL_MODEL_KEY = "model"
+        val WORD_BOUNDARY_PUNCTUATION = setOf('.', ',', '?', '!', ';', ':')
     }
 }

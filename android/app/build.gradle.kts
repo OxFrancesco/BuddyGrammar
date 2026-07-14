@@ -50,6 +50,11 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.emoji2:emoji2-emojipicker:1.6.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel:2.10.0")
+    implementation("androidx.savedstate:savedstate-ktx:1.5.0")
+    implementation("com.google.mlkit:digital-ink-recognition:19.0.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
