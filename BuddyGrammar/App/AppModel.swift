@@ -9,7 +9,9 @@ import SwiftUI
 final class AppModel {
     static let settingsWindowID = "settings-window"
     static let notesWindowID = "notes-window"
+    #if DEBUG
     static let debugWindowID = "debug-window"
+    #endif
 
     let settingsStore: SettingsStore
     let notesStore: NotesStore
@@ -30,6 +32,9 @@ final class AppModel {
     var apiKeyDraft = ""
     var settingsErrorMessage: String?
     var appleSpeechAvailableForSelectedLocale: Bool?
+    var openRouterModels: [OpenRouterModelSummary] = []
+    var openRouterModelsAreLoading = false
+    var openRouterModelsErrorMessage: String?
     private var environmentStateRevision = 0
 
     private let launchAtLoginService: LaunchAtLoginService
@@ -286,6 +291,21 @@ final class AppModel {
         refreshEnvironmentState()
     }
 
+    func loadOpenRouterModels(forceRefresh: Bool = false) async {
+        guard !openRouterModelsAreLoading else { return }
+        if !forceRefresh, !openRouterModels.isEmpty { return }
+
+        openRouterModelsAreLoading = true
+        openRouterModelsErrorMessage = nil
+        defer { openRouterModelsAreLoading = false }
+
+        do {
+            openRouterModels = try await rewriteProviderController.openRouterModels(forceRefresh: forceRefresh)
+        } catch {
+            openRouterModelsErrorMessage = error.localizedDescription
+        }
+    }
+
     func runProfile(id: UUID) {
         guard let profile = settingsStore.profile(id: id) else { return }
         runProfile(profile)
@@ -505,6 +525,7 @@ final class AppModel {
         return nil
     }
 
+    #if DEBUG
     func copyDebugDiagnostics() {
         clipboardService.writeString(debugDiagnosticsText)
         menuBarStatus.show(.success(message: "Debug info copied"))
@@ -538,6 +559,7 @@ final class AppModel {
         \(localStatuses)
         """
     }
+    #endif
 
     private func apply(settings: AppSettings) {
         do {
@@ -631,12 +653,25 @@ final class AppModel {
 
     private func isUtilityWindow(_ window: NSWindow) -> Bool {
         let identifier = window.identifier?.rawValue
-        if identifier == Self.notesWindowID || identifier == Self.debugWindowID {
+        if identifier == Self.notesWindowID {
             return true
         }
+        #if DEBUG
+        if identifier == Self.debugWindowID {
+            return true
+        }
+        #endif
 
         let title = window.title.localizedLowercase
-        return title.contains("notes") || title.contains("debug")
+        if title.contains("notes") {
+            return true
+        }
+        #if DEBUG
+        if title.contains("debug") {
+            return true
+        }
+        #endif
+        return false
     }
 
     private func installSettingsWindowCloseObserver(for window: NSWindow) {

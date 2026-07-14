@@ -1,5 +1,6 @@
 import SwiftUI
 
+#if DEBUG
 struct DebugPanelView: View {
     @Bindable var model: AppModel
 
@@ -91,26 +92,63 @@ struct DebugPanelView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
+        ViewThatFits(in: .horizontal) {
+            debugHeaderLayout(axis: .horizontal)
+            debugHeaderLayout(axis: .vertical)
+        }
+    }
+
+    private func debugHeaderLayout(axis: Axis) -> some View {
+        let isHorizontal = axis == .horizontal
+
+        return Group {
+            if isHorizontal {
+                HStack(alignment: .center, spacing: 12) {
+                    headerTitle
+                    Spacer()
+                    headerActions
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    headerTitle
+                    headerActions
+                }
+            }
+        }
+    }
+
+    private var headerTitle: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "ladybug.fill")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(NeoTheme.primary)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Debug")
                     .font(.system(size: 22, weight: .black, design: .rounded))
             }
+        }
+    }
 
-            Spacer()
-
-            Button("Copy Diagnostics") {
+    private var headerActions: some View {
+        HStack(spacing: 10) {
+            Button {
                 model.copyDebugDiagnostics()
+            } label: {
+                NeoIconButtonLabel("Copy Diagnostics", systemImage: "doc.on.doc")
             }
             .buttonStyle(NeoBrutalistButton())
 
-            Button("Reveal App") {
+            Button {
                 model.revealCurrentAppInFinder()
+            } label: {
+                NeoIconButtonLabel("Reveal App", systemImage: "app.dashed")
             }
             .buttonStyle(NeoBrutalistButton(isPrimary: false))
 
-            Button("App Support") {
+            Button {
                 model.openAppSupportFolder()
+            } label: {
+                NeoIconButtonLabel("App Support", systemImage: "folder")
             }
             .buttonStyle(NeoBrutalistButton(isPrimary: false))
         }
@@ -178,3 +216,4 @@ struct DebugPanelView: View {
         return status.state.title
     }
 }
+#endif

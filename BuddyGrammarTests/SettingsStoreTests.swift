@@ -19,6 +19,11 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertNil(store.appSettings.voiceHotkey)
     }
 
+    func testLocalGenerationHasNoArtificialOutputLimit() {
+        XCTAssertNil(LocalModelID.qwen3_4b_instruct_2507_4bit.generateParameters.maxTokens)
+        XCTAssertNil(LocalModelID.gemma4_e4b_it_mxfp8.generateParameters.maxTokens)
+    }
+
     func testStandardPersonalityStaysPinnedFirst() {
         let suite = UserDefaults(suiteName: #function)!
         suite.removePersistentDomain(forName: #function)
@@ -51,6 +56,30 @@ final class SettingsStoreTests: XCTestCase {
         let store = SettingsStore(defaults: suite)
         XCTAssertEqual(store.profiles.first?.name, "Standard")
         XCTAssertEqual(store.profiles.first?.hotkey, PromptProfile.legacyGrammarHotkey)
+    }
+
+    func testPreviousStandardPromptMigratesToImprovedPrompt() throws {
+        let suite = UserDefaults(suiteName: #function)!
+        suite.removePersistentDomain(forName: #function)
+
+        let previousStandard = PromptProfile(
+            id: PromptProfile.grammarProfileID,
+            name: "Standard",
+            instruction: PromptProfile.legacyStandardInstruction,
+            hotkey: PromptProfile.defaultStandardHotkey,
+            isEnabled: true,
+            isBuiltIn: true
+        )
+        suite.set(
+            try JSONEncoder().encode([previousStandard]),
+            forKey: "BuddyGrammar.profiles"
+        )
+
+        let store = SettingsStore(defaults: suite)
+
+        XCTAssertEqual(store.profiles.count, 1)
+        XCTAssertEqual(store.profiles[0].instruction, PromptProfile.standardInstruction)
+        XCTAssertTrue(store.profiles[0].instruction.contains("adjacent-key"))
     }
 
     func testCustomizedBuiltInIsPreservedAsCustomAndStandardIsRestored() throws {
@@ -122,6 +151,37 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(profile?.name, "Blank Custom")
         XCTAssertNil(profile?.hotkey)
         XCTAssertFalse(profile?.isEnabled ?? true)
+    }
+
+    func testPersonalityPersistsOpenRouterModelOverride() {
+        let suite = UserDefaults(suiteName: #function)!
+        suite.removePersistentDomain(forName: #function)
+        let store = SettingsStore(defaults: suite)
+
+        var standard = store.profiles[0]
+        standard.openRouterModelID = "anthropic/claude-sonnet-4"
+        store.update(standard)
+
+        let reloaded = SettingsStore(defaults: suite)
+        XCTAssertEqual(reloaded.profiles[0].openRouterModelID, "anthropic/claude-sonnet-4")
+    }
+
+    func testLegacyPersonalityWithoutModelOverrideDecodesAsDefault() throws {
+        let data = Data(
+            """
+            {
+              "id": "B48FDF75-0C5D-4A96-B48D-29D160C6B470",
+              "name": "Standard",
+              "instruction": "Fix grammar.",
+              "hotkey": null,
+              "isEnabled": false,
+              "isBuiltIn": true
+            }
+            """.utf8
+        )
+
+        let profile = try JSONDecoder().decode(PromptProfile.self, from: data)
+        XCTAssertNil(profile.openRouterModelID)
     }
 
     func testSettingsLoadWhenLegacyOverlayMotionModeIsPresent() throws {

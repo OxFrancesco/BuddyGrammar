@@ -33,7 +33,23 @@ enum RewriteProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
 }
 
 enum OpenRouterModel {
-    static let defaultID = "openai/gpt-5.4-nano"
+    static let defaultID = "openai/gpt-5.6-luna"
+}
+
+struct OpenRouterModelSummary: Identifiable, Codable, Hashable, Sendable {
+    let id: String
+    let name: String
+    let contextLength: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case contextLength = "context_length"
+    }
+
+    var displayName: String {
+        name.isEmpty ? id : name
+    }
 }
 
 enum LocalModelID: String, Codable, CaseIterable, Identifiable, Sendable {

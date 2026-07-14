@@ -228,9 +228,9 @@ struct OnboardingView: View {
                     .font(.system(size: 14, weight: .medium, design: .rounded))
 
                 HStack(spacing: 12) {
-                    featurePill(symbol: "keyboard", label: "⌘⇧1")
-                    featurePill(symbol: "cpu", label: model.currentProviderDescription)
-                    featurePill(symbol: "menubar.rectangle", label: "Menu bar")
+                    NeoPill(symbol: "keyboard", label: "⌘⇧1")
+                    NeoPill(symbol: "cpu", label: model.currentProviderDescription)
+                    NeoPill(symbol: "menubar.rectangle", label: "Menu bar")
                 }
 
                 Text("You can add more personalities later from starter templates like Formal, Email, and Twitter Post.")
@@ -280,7 +280,7 @@ struct OnboardingView: View {
                     }
                     .buttonStyle(.plain)
 
-                    neoStatusBadge(
+                    NeoStatusBadge(
                         text: localProviderBadgeText,
                         icon: localProviderBadgeIcon,
                         color: localProviderBadgeColor
@@ -303,18 +303,18 @@ struct OnboardingView: View {
                     .buttonStyle(NeoBrutalistButton())
 
                     if model.hasAPIKey {
-                        neoStatusBadge(text: "Key saved", icon: "checkmark.circle.fill", color: NeoTheme.green)
+                        NeoStatusBadge(text: "Key saved", icon: "checkmark.circle.fill", color: NeoTheme.green)
                     } else {
-                        neoStatusBadge(text: "No key yet", icon: "exclamationmark.triangle.fill", color: NeoTheme.orange)
+                        NeoStatusBadge(text: "No key yet", icon: "exclamationmark.triangle.fill", color: NeoTheme.orange)
                     }
                 }
 
                 if let settingsErrorMessage = model.settingsErrorMessage {
-                    neoStatusBadge(text: settingsErrorMessage, icon: "xmark.circle.fill", color: NeoTheme.destructive)
+                    NeoStatusBadge(text: settingsErrorMessage, icon: "xmark.circle.fill", color: NeoTheme.destructive)
                 }
 
                 if let localModelError = model.localModelStore.lastErrorMessage, model.usesLocalProvider {
-                    neoStatusBadge(text: localModelError, icon: "xmark.circle.fill", color: NeoTheme.destructive)
+                    NeoStatusBadge(text: localModelError, icon: "xmark.circle.fill", color: NeoTheme.destructive)
                 }
             }
         }
@@ -342,9 +342,9 @@ struct OnboardingView: View {
                 }
 
                 if model.accessibilityGranted {
-                    neoStatusBadge(text: "Permission enabled", icon: "checkmark.circle.fill", color: NeoTheme.green)
+                    NeoStatusBadge(text: "Permission enabled", icon: "checkmark.circle.fill", color: NeoTheme.green)
                 } else {
-                    neoStatusBadge(text: "Permission required", icon: "hand.raised.circle.fill", color: NeoTheme.orange)
+                    NeoStatusBadge(text: "Permission required", icon: "hand.raised.circle.fill", color: NeoTheme.orange)
                 }
 
                 if isAccessibilityChecking && !model.accessibilityGranted {
@@ -473,9 +473,9 @@ struct OnboardingView: View {
                 }
 
                 if isReadyToFinish {
-                    neoStatusBadge(text: "Ready to go", icon: "checkmark.seal.fill", color: NeoTheme.green)
+                    NeoStatusBadge(text: "Ready to go", icon: "checkmark.seal.fill", color: NeoTheme.green)
                 } else {
-                    neoStatusBadge(text: "Complete the steps above first", icon: "exclamationmark.triangle.fill", color: NeoTheme.orange)
+                    NeoStatusBadge(text: "Complete the steps above first", icon: "exclamationmark.triangle.fill", color: NeoTheme.orange)
                 }
             }
         }
@@ -520,43 +520,6 @@ struct OnboardingView: View {
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
             .modifier(NeoBrutalistCard())
-    }
-
-    private func featurePill(symbol: String, label: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: symbol)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(NeoTheme.primary)
-            Text(label)
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .foregroundStyle(NeoTheme.accent)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(NeoTheme.muted)
-        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
-                .stroke(NeoTheme.border, lineWidth: 1)
-        )
-    }
-
-    private func neoStatusBadge(text: String, icon: String, color: Color) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .bold))
-            Text(text)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(color.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
-                .stroke(color, lineWidth: NeoTheme.borderWidth)
-        )
     }
 
     private func statusRow(title: String, isComplete: Bool, successText: String, pendingText: String) -> some View {

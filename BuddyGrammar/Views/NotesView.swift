@@ -72,24 +72,6 @@ struct NotesView: View {
                 model.selectedNoteID = model.notesStore.notes.first?.id
             }
         }
-        .toolbar {
-            ToolbarItemGroup {
-                Button {
-                    model.addNote()
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .help("Add note")
-
-                Button {
-                    model.pasteSelectedNote()
-                } label: {
-                    Image(systemName: "doc.on.clipboard")
-                }
-                .disabled(selectedNote?.content.isEmpty ?? true)
-                .help("Paste selected note")
-            }
-        }
     }
 
     private func noteTitleBinding(for id: UUID) -> Binding<String> {

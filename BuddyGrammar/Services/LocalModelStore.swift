@@ -211,7 +211,6 @@ final class LocalModelStore {
 extension LocalModelID {
     var generateParameters: GenerateParameters {
         GenerateParameters(
-            maxTokens: 96,
             temperature: 0,
             topP: 1,
             topK: 0,

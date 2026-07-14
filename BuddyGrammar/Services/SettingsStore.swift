@@ -135,6 +135,7 @@ final class SettingsStore {
                 var standard = PromptProfile.standard
                 standard.hotkey = existing.hotkey
                 standard.isEnabled = existing.hotkey != nil ? existing.isEnabled : false
+                standard.openRouterModelID = existing.openRouterModelID
                 normalized[index] = standard
             } else {
                 var preservedCustom = existing

@@ -45,6 +45,7 @@ struct BuddyGrammarApp: App {
         }
         .defaultSize(width: 920, height: 620)
 
+        #if DEBUG
         Window("Debug", id: AppModel.debugWindowID) {
             DebugPanelView(model: model)
                 .frame(minWidth: 720, minHeight: 520)
@@ -56,5 +57,6 @@ struct BuddyGrammarApp: App {
                 }
         }
         .defaultSize(width: 880, height: 620)
+        #endif
     }
 }

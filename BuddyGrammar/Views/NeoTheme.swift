@@ -188,6 +188,80 @@ struct NeoBrutalistButton: ButtonStyle {
     }
 }
 
+struct NeoIconButtonLabel: View {
+    let title: String
+    let systemImage: String
+
+    init(_ title: String, systemImage: String) {
+        self.title = title
+        self.systemImage = systemImage
+    }
+
+    var body: some View {
+        Label {
+            Text(title)
+                .lineLimit(1)
+        } icon: {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .bold))
+                .frame(width: 14)
+        }
+        .font(.system(size: 13, weight: .bold, design: .rounded))
+    }
+}
+
+struct NeoPill: View {
+    let symbol: String
+    let label: String
+    var foreground: Color = NeoTheme.accent
+    var iconForeground: Color = NeoTheme.primary
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(iconForeground)
+            Text(label)
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundStyle(foreground)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(NeoTheme.muted)
+        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                .stroke(NeoTheme.border, lineWidth: 1)
+        )
+    }
+}
+
+struct NeoStatusBadge: View {
+    let text: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+            Text(text)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .lineLimit(2)
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(color.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                .stroke(color, lineWidth: NeoTheme.borderWidth)
+        )
+    }
+}
+
 // MARK: - Focus Style
 
 extension View {

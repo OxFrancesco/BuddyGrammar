@@ -31,17 +31,27 @@ final class RewriteProviderController {
     }
 
     func rewrite(_ request: RewriteRequest) async throws -> RewriteResult {
-        let engine = currentEngine(for: settingsStore.appSettings.rewriteProvider)
+        let engine = currentEngine(
+            for: settingsStore.appSettings.rewriteProvider,
+            profile: request.profile
+        )
         return try await engine.rewrite(request)
     }
 
-    private func currentEngine(for provider: RewriteProvider) -> any RewriteEngine {
+    func openRouterModels(forceRefresh: Bool = false) async throws -> [OpenRouterModelSummary] {
+        try await openRouterClient.models(
+            apiKey: keychainService.loadAPIKey(),
+            forceRefresh: forceRefresh
+        )
+    }
+
+    private func currentEngine(for provider: RewriteProvider, profile: PromptProfile) -> any RewriteEngine {
         switch provider {
         case .openRouter(let modelID):
             OpenRouterRewriteEngine(
                 client: openRouterClient,
                 apiKey: keychainService.loadAPIKey(),
-                modelID: modelID
+                modelID: profile.openRouterModelID ?? modelID
             )
         case .local(let modelID):
             LocalMLXRewriteEngine(localModelStore: localModelStore, modelID: modelID)

@@ -2,7 +2,9 @@ import Foundation
 
 actor OpenRouterClient {
     private let session: URLSession
-    private let endpoint = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
+    private let completionEndpoint = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
+    private let modelsEndpoint = URL(string: "https://openrouter.ai/api/v1/models?input_modalities=text&output_modalities=text&sort=most-popular")!
+    private var cachedModels: [OpenRouterModelSummary]?
 
     init(session: URLSession = .shared) {
         self.session = session
@@ -15,7 +17,7 @@ actor OpenRouterClient {
             selectedText: request.selectedText
         )
 
-        var urlRequest = URLRequest(url: endpoint)
+        var urlRequest = URLRequest(url: completionEndpoint)
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -25,6 +27,23 @@ actor OpenRouterClient {
         let (data, response) = try await session.data(for: urlRequest)
         let rewritten = try Self.parseResponse(data: data, response: response)
         return RewriteResult(originalText: request.selectedText, rewrittenText: rewritten)
+    }
+
+    func models(apiKey: String?, forceRefresh: Bool = false) async throws -> [OpenRouterModelSummary] {
+        if !forceRefresh, let cachedModels {
+            return cachedModels
+        }
+
+        var request = URLRequest(url: modelsEndpoint)
+        if let apiKey, !apiKey.isEmpty {
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        request.setValue("BuddyWrite", forHTTPHeaderField: "X-Title")
+
+        let (data, response) = try await session.data(for: request)
+        let models = try Self.parseModelsResponse(data: data, response: response)
+        cachedModels = models
+        return models
     }
 
     static func parseResponse(data: Data, response: URLResponse) throws -> String {
@@ -45,6 +64,20 @@ actor OpenRouterClient {
         }
         throw RewriteFailure.unexpectedResponse
     }
+
+    static func parseModelsResponse(data: Data, response: URLResponse) throws -> [OpenRouterModelSummary] {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw RewriteFailure.unexpectedResponse
+        }
+
+        if !(200 ..< 300).contains(httpResponse.statusCode) {
+            let errorMessage = (try? JSONDecoder().decode(OpenRouterErrorEnvelope.self, from: data).error.message)
+                ?? HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
+            throw RewriteFailure.network(errorMessage)
+        }
+
+        return try JSONDecoder().decode(OpenRouterModelsEnvelope.self, from: data).data
+    }
 }
 
 enum OpenRouterRequestFactory {
@@ -52,7 +85,6 @@ enum OpenRouterRequestFactory {
         OpenRouterChatRequest(
             model: modelID,
             temperature: 0,
-            maxCompletionTokens: 96,
             messages: [
                 .init(role: "system", content: instruction),
                 .init(role: "user", content: selectedText)
@@ -88,15 +120,7 @@ actor OpenRouterRewriteEngine: RewriteEngine {
 struct OpenRouterChatRequest: Encodable {
     let model: String
     let temperature: Double
-    let maxCompletionTokens: Int
     let messages: [OpenRouterMessage]
-
-    enum CodingKeys: String, CodingKey {
-        case model
-        case temperature
-        case messages
-        case maxCompletionTokens = "max_completion_tokens"
-    }
 }
 
 struct OpenRouterMessage: Codable {
@@ -126,6 +150,10 @@ private struct OpenRouterErrorEnvelope: Decodable {
 
 private struct OpenRouterErrorPayload: Decodable {
     let message: String
+}
+
+private struct OpenRouterModelsEnvelope: Decodable {
+    let data: [OpenRouterModelSummary]
 }
 
 private enum OpenRouterContent: Decodable {

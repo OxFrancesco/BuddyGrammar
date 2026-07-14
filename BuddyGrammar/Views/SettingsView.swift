@@ -4,14 +4,20 @@ struct SettingsView: View {
     @Bindable var model: AppModel
 
     private enum Tab: String, CaseIterable, Identifiable {
-        case general, notes, debug, models, voice, personalities
+        case general, notes
+        #if DEBUG
+        case debug
+        #endif
+        case models, voice, personalities
         var id: Self { self }
 
         var title: String {
             switch self {
             case .general: "General"
             case .notes: "Notes"
+            #if DEBUG
             case .debug: "Debug"
+            #endif
             case .models: "Models"
             case .voice: "Voice"
             case .personalities: "Personalities"
@@ -22,7 +28,9 @@ struct SettingsView: View {
             switch self {
             case .general: "gearshape"
             case .notes: "note.text"
+            #if DEBUG
             case .debug: "ladybug"
+            #endif
             case .models: "cpu"
             case .voice: "mic"
             case .personalities: "slider.horizontal.3"
@@ -159,8 +167,10 @@ struct SettingsView: View {
             generalTab
         case .notes:
             NotesView(model: model)
+        #if DEBUG
         case .debug:
             DebugPanelView(model: model)
+        #endif
         case .models:
             modelsTab
         case .voice:
@@ -172,8 +182,12 @@ struct SettingsView: View {
 
     private func contentPadding(compact: Bool) -> CGFloat {
         switch selectedTab {
-        case .notes, .debug:
+        case .notes:
             compact ? 8 : 0
+        #if DEBUG
+        case .debug:
+            compact ? 8 : 0
+        #endif
         default:
             compact ? 16 : 24
         }
@@ -372,7 +386,7 @@ struct SettingsView: View {
                     .foregroundStyle(NeoTheme.mutedForeground)
 
                 HStack(spacing: 8) {
-                    featurePill(symbol: "shippingbox", label: model.selectedLocalModel.badge)
+                    NeoPill(symbol: "shippingbox", label: model.selectedLocalModel.badge)
                     localModelStatusPill(status: model.selectedLocalModelStatus)
                 }
 
@@ -449,7 +463,7 @@ struct SettingsView: View {
                         }
 
                         HStack(spacing: 8) {
-                            featurePill(symbol: "waveform", label: "Apple STT")
+                            NeoPill(symbol: "waveform", label: "Apple STT")
                             appleSpeechAvailabilityPill
                         }
                     }
@@ -475,7 +489,7 @@ struct SettingsView: View {
                             .foregroundStyle(NeoTheme.mutedForeground)
 
                         HStack(spacing: 8) {
-                            featurePill(symbol: "externaldrive.fill", label: model.voiceModelStore.fallbackModelID.badge)
+                            NeoPill(symbol: "externaldrive.fill", label: model.voiceModelStore.fallbackModelID.badge)
                             voiceModelStatusPill(status: model.voiceFallbackStatus)
                         }
 
@@ -609,8 +623,7 @@ struct SettingsView: View {
                         }
                     }
                 } label: {
-                    Text("Add")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                    NeoIconButtonLabel("Add", systemImage: "plus")
                         .padding(.horizontal, 18)
                         .padding(.vertical, 10)
                         .foregroundStyle(NeoTheme.foreground)
@@ -623,8 +636,10 @@ struct SettingsView: View {
                 }
                 .focusEffectDisabled()
 
-                Button("Delete") {
+                Button {
                     model.deleteSelectedPersonality()
+                } label: {
+                    NeoIconButtonLabel("Delete", systemImage: "trash")
                 }
                 .buttonStyle(NeoBrutalistButton(isPrimary: false, isDisabled: selectedProfile?.isBuiltIn ?? true))
                 .disabled(selectedProfile?.isBuiltIn ?? true)
@@ -638,8 +653,16 @@ struct SettingsView: View {
                 ProfileEditorView(
                     profile: profile,
                     conflictLabel: model.profileHotkeyConflictLabel(for: profile.id, hotkey: profile.hotkey),
+                    openRouterModels: model.openRouterModels,
+                    defaultOpenRouterModelID: model.settingsStore.appSettings.rewriteProvider.openRouterModelID
+                        ?? OpenRouterModel.defaultID,
+                    modelsAreLoading: model.openRouterModelsAreLoading,
+                    modelsErrorMessage: model.openRouterModelsErrorMessage,
                     onChange: { updated in
                         model.settingsStore.update(updated)
+                    },
+                    onRefreshModels: {
+                        await model.loadOpenRouterModels(forceRefresh: true)
                     },
                     onMoveUp: {
                         model.moveSelectedPersonality(.up)
@@ -652,6 +675,9 @@ struct SettingsView: View {
                     }
                 )
                 .id(profile.id)
+                .task {
+                    await model.loadOpenRouterModels()
+                }
             } else {
                 ContentUnavailableView("No Personality Selected", systemImage: "slider.horizontal.below.rectangle")
             }
@@ -683,25 +709,6 @@ struct SettingsView: View {
             .frame(height: 1)
     }
 
-    private func featurePill(symbol: String, label: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: symbol)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(NeoTheme.primary)
-            Text(label)
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .foregroundStyle(NeoTheme.accent)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(NeoTheme.muted)
-        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
-                .stroke(NeoTheme.border, lineWidth: 1)
-        )
-    }
-
     private func localModelStatusPill(status: LocalModelStatus) -> some View {
         let progressSuffix: String
         if let progress = status.progress, status.state == .downloading {
@@ -724,20 +731,11 @@ struct SettingsView: View {
             color = NeoTheme.mutedForeground
         }
 
-        return HStack(spacing: 6) {
-            Image(systemName: iconName(for: status.state))
-                .font(.system(size: 12, weight: .bold))
-            Text(status.state.title + progressSuffix)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(NeoTheme.muted)
-        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
-                .stroke(NeoTheme.border, lineWidth: 1)
+        return NeoPill(
+            symbol: iconName(for: status.state),
+            label: status.state.title + progressSuffix,
+            foreground: color,
+            iconForeground: color
         )
     }
 
@@ -761,20 +759,11 @@ struct SettingsView: View {
             icon = "clock"
         }
 
-        return HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .bold))
-            Text(label)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(NeoTheme.muted)
-        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
-                .stroke(NeoTheme.border, lineWidth: 1)
+        return NeoPill(
+            symbol: icon,
+            label: label,
+            foreground: color,
+            iconForeground: color
         )
     }
 
@@ -791,20 +780,11 @@ struct SettingsView: View {
             color = NeoTheme.mutedForeground
         }
 
-        return HStack(spacing: 6) {
-            Image(systemName: voiceModelIconName(for: status.state))
-                .font(.system(size: 12, weight: .bold))
-            Text(status.state.title)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(NeoTheme.muted)
-        .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
-                .stroke(NeoTheme.border, lineWidth: 1)
+        return NeoPill(
+            symbol: voiceModelIconName(for: status.state),
+            label: status.state.title,
+            foreground: color,
+            iconForeground: color
         )
     }
 
