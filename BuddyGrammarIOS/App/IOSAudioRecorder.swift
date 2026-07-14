@@ -39,21 +39,23 @@ final class IOSAudioRecorder: NSObject, AVAudioRecorderDelegate {
 
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(
-            .record,
+            .playAndRecord,
             mode: .spokenAudio,
-            options: [.allowBluetoothHFP, .duckOthers]
+            options: [.allowBluetoothHFP, .duckOthers, .defaultToSpeaker]
         )
         try session.setActive(true)
 
         let url = FileManager.default.temporaryDirectory
             .appending(path: "BuddyGrammar-\(UUID().uuidString)")
             .appendingPathExtension("m4a")
+        // Speech-to-text only needs 16 kHz mono; smaller files upload
+        // noticeably faster than the 44.1 kHz/96 kbps defaults.
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: 44_100,
+            AVSampleRateKey: 16_000,
             AVNumberOfChannelsKey: 1,
             AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
-            AVEncoderBitRateKey: 96_000,
+            AVEncoderBitRateKey: 32_000,
         ]
 
         let recorder = try AVAudioRecorder(url: url, settings: settings)

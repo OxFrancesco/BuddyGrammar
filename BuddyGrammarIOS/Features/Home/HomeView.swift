@@ -12,14 +12,15 @@ struct HomeView: View {
             AppBackground()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 12) {
                     header
-                    readinessCard
-                    quickActions
-                    pendingTranscriptCard
-                    starKeyCard
+                    statusRow
+                    dictateAction
+                    quickDictationRow
+                    pendingTranscriptRow
+                    keyboardLabRow
                 }
-                .padding(18)
+                .padding(20)
             }
             .scrollIndicators(.hidden)
         }
@@ -35,165 +36,131 @@ struct HomeView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 15) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.buddyAccent)
-                    .frame(width: 64, height: 64)
-                Image(systemName: "star.fill")
-                    .font(.system(size: 29, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-            .accessibilityHidden(true)
+        HStack(spacing: 16) {
+            WaveformMark(
+                isAnimating: model.dictationPhase.isRecording,
+                barWidth: 5
+            )
+            .frame(height: 30)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Your writing copilot")
-                    .font(.title2.bold())
-                Text("Correct and dictate from any app.")
-                    .foregroundStyle(.secondary)
-            }
+            Text(model.dictationPhase.isRecording ? "Listening…" : "Ready when you are")
+                .font(.system(.title3, design: .rounded, weight: .semibold))
         }
-        .padding(.vertical, 4)
-    }
-
-    private var readinessCard: some View {
-        AppCard {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Cloud features")
-                            .font(.headline)
-                        Text(model.isCloudReady ? "Ready to correct and dictate" : "Finish setup to unlock every feature")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Image(systemName: model.isCloudReady ? "checkmark.seal.fill" : "sparkles")
-                        .font(.title2)
-                        .foregroundStyle(model.isCloudReady ? Color.green : Color.buddyAccent)
-                }
-
-                HStack(spacing: 8) {
-                    StatusBadge(title: "Service", isReady: true)
-                    StatusBadge(
-                        title: "Consent",
-                        isReady: model.settings.hasAcceptedCloudProcessing
-                    )
-                    StatusBadge(title: "Keyboard", isReady: model.isSharedContainerReady)
-                }
-
-                if !model.isCloudReady {
-                    Button("Open Settings", systemImage: "arrow.right") {
-                        model.selectedTab = .settings
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .accessibilityIdentifier("home.openSettings")
-                }
-            }
-        }
-    }
-
-    private var quickActions: some View {
-        HStack(spacing: 12) {
-            Button {
-                model.selectedTab = .dictation
-            } label: {
-                QuickActionLabel(
-                    title: "Dictate",
-                    subtitle: "Speech to text",
-                    systemImage: "waveform",
-                    tint: .buddyAccent
-                )
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("home.startDictation")
-
-            NavigationLink(value: HomeRoute.keyboardLab) {
-                QuickActionLabel(
-                    title: "Keyboard Lab",
-                    subtitle: "Try the star key",
-                    systemImage: "keyboard",
-                    tint: .indigo
-                )
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("home.openKeyboardLab")
-        }
+        .padding(.vertical, 10)
     }
 
     @ViewBuilder
-    private var pendingTranscriptCard: some View {
+    private var statusRow: some View {
+        if !model.isCloudReady {
+            Button {
+                model.selectedTab = .settings
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .foregroundStyle(Color.orange)
+                    Text(
+                        model.isSharedContainerReady
+                            ? "Allow cloud processing to finish setup"
+                            : "Reinstall the app to restore keyboard sharing"
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(16)
+                .background(.regularMaterial, in: .rect(cornerRadius: 16))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home.openSettings")
+        }
+    }
+
+    private var dictateAction: some View {
+        Button {
+            model.selectedTab = .dictation
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "waveform.badge.mic")
+                    .font(.title3.weight(.semibold))
+                Text("Dictate")
+                    .font(.headline)
+                Spacer()
+            }
+            .foregroundStyle(.white)
+            .padding(18)
+            .background(Color.buddyAccent, in: .rect(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.startDictation")
+    }
+
+    private var quickDictationRow: some View {
+        Toggle(isOn: quickDictationBinding) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Skip app switching")
+                    .font(.subheadline.weight(.medium))
+                Text("Keeps the mic ready in a tucked-away window")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .background(.regularMaterial, in: .rect(cornerRadius: 16))
+        .accessibilityIdentifier("home.quickDictation")
+    }
+
+    @ViewBuilder
+    private var pendingTranscriptRow: some View {
         if let transcript = model.pendingTranscript {
-            AppCard {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Label("Ready for keyboard", systemImage: "text.cursor")
-                            .font(.headline)
-                        Spacer()
-                        Text(transcript.createdAt, style: .time)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Text(transcript.text)
-                        .font(.body)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Saved for the keyboard")
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .lineLimit(4)
-                        .accessibilityIdentifier("home.pendingTranscript")
-
-                    Button("Clear", systemImage: "trash", role: .destructive) {
+                    Spacer()
+                    Button("Clear", role: .destructive) {
                         model.clearTranscript()
                     }
-                    .font(.subheadline.weight(.semibold))
+                    .font(.caption.weight(.semibold))
                     .accessibilityIdentifier("home.clearPending")
                 }
-            }
-        }
-    }
-
-    private var starKeyCard: some View {
-        AppCard {
-            VStack(alignment: .leading, spacing: 12) {
-                Label("How the star works", systemImage: "star.fill")
-                    .font(.headline)
-                    .foregroundStyle(Color.buddyAccent)
-                Text("Select text, or place the cursor after a sentence, then tap ★. BuddyGrammar replaces only that text after the correction is ready.")
+                Text(transcript.text)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Label("The keyboard keeps working normally when Full Access is off.", systemImage: "lock.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .accessibilityIdentifier("home.pendingTranscript")
             }
+            .padding(16)
+            .background(.regularMaterial, in: .rect(cornerRadius: 16))
         }
     }
-}
 
-private struct QuickActionLabel: View {
-    let title: String
-    let subtitle: String
-    let systemImage: String
-    let tint: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 11) {
-            Image(systemName: systemImage)
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(tint)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
+    private var keyboardLabRow: some View {
+        NavigationLink(value: HomeRoute.keyboardLab) {
+            HStack(spacing: 12) {
+                Image(systemName: "keyboard")
+                    .foregroundStyle(Color.buddyAccent)
+                Text("Try the keyboard")
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.primary)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
             }
+            .padding(16)
+            .background(.regularMaterial, in: .rect(cornerRadius: 16))
         }
-        .frame(maxWidth: .infinity, minHeight: 102, alignment: .leading)
-        .padding(16)
-        .background(.regularMaterial, in: .rect(cornerRadius: 20))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.primary.opacity(0.07), lineWidth: 1)
-        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.openKeyboardLab")
+    }
+
+    private var quickDictationBinding: Binding<Bool> {
+        Binding(
+            get: { model.settings.enablesQuickDictation },
+            set: { model.setQuickDictation(enabled: $0) }
+        )
     }
 }

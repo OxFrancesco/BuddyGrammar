@@ -71,6 +71,36 @@ final class BuddyGrammarIOSUITests: XCTestCase {
     }
 
     @MainActor
+    func testKeyboardSettingsExposeLocalCorrectionAndUndoDuration() {
+        let app = launchApp()
+        app.tabBars.buttons["Settings"].tap()
+
+        let automaticModel = app.descendants(matching: .any)[
+            "settings.automaticModelUpdates"
+        ]
+        XCTAssertTrue(automaticModel.waitForExistence(timeout: 5))
+        XCTAssertEqual(automaticModel.value as? String, "1")
+
+        let localCorrection = app.descendants(matching: .any)[
+            "settings.automaticallyCorrectWords"
+        ]
+        for _ in 0..<3 where !localCorrection.exists {
+            app.swipeUp()
+        }
+
+        XCTAssertTrue(localCorrection.waitForExistence(timeout: 5))
+        let undoDuration = app.descendants(matching: .any)[
+            "settings.correctionUndoDuration"
+        ]
+        for _ in 0..<3 where !undoDuration.exists {
+            app.swipeUp()
+        }
+
+        XCTAssertTrue(undoDuration.waitForExistence(timeout: 5))
+        attachScreenshot(named: "Keyboard correction settings", app: app)
+    }
+
+    @MainActor
     func testLiveKeyboardStarCorrectionWhenEnabled() throws {
         #if !KEYBOARD_E2E
         throw XCTSkip(
@@ -91,25 +121,16 @@ final class BuddyGrammarIOSUITests: XCTestCase {
         let globeCoordinate = app.coordinate(
             withNormalizedOffset: CGVector(dx: 0.12, dy: 0.94)
         )
-        globeCoordinate.press(forDuration: 1.5)
-
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let appChoice = app.staticTexts["BuddyGrammar"].firstMatch
-        let springboardChoice = springboard.staticTexts["BuddyGrammar"].firstMatch
-
-        if appChoice.waitForExistence(timeout: 3) {
-            appChoice.tap()
-        } else {
-            XCTAssertTrue(
-                springboardChoice.waitForExistence(timeout: 3),
-                "The keyboard input-mode list should include BuddyGrammar."
-            )
-            springboardChoice.tap()
+        let star = app.buttons["keyboard.star"]
+        for _ in 0..<8 where !star.exists {
+            globeCoordinate.tap()
+            if star.waitForExistence(timeout: 2) {
+                break
+            }
         }
 
-        let star = app.buttons["keyboard.star"]
         XCTAssertTrue(
-            star.waitForExistence(timeout: 8),
+            star.exists,
             "The real BuddyGrammar keyboard extension should become active."
         )
         attachScreenshot(named: "BuddyGrammar keyboard active", app: app)
@@ -144,7 +165,124 @@ final class BuddyGrammarIOSUITests: XCTestCase {
         let value = String(describing: input.value)
         XCTAssertEqual(value.first?.isUppercase, true)
 
+        let undo = app.buttons["keyboard.undo"]
+        XCTAssertTrue(
+            undo.waitForExistence(timeout: 2),
+            "Undo should appear after the star correction finishes."
+        )
+        undo.tap()
+
+        let restored = NSPredicate { _, _ in
+            String(describing: input.value) == original
+        }
+        XCTAssertEqual(
+            XCTWaiter().wait(
+                for: [XCTNSPredicateExpectation(predicate: restored, object: nil)],
+                timeout: 3
+            ),
+            .completed,
+            "Undo should restore the exact pre-correction text."
+        )
+
         attachScreenshot(named: "BuddyGrammar star correction", app: app)
+    }
+
+    @MainActor
+    func testLiveKeyboardDictationRoundTripWhenEnabled() throws {
+        #if !KEYBOARD_E2E
+        throw XCTSkip(
+            "Run with the KEYBOARD_E2E compilation condition after enabling the signed keyboard, Full Access, and device UI Automation."
+        )
+        #endif
+
+        let app = launchApp()
+        let openKeyboardLab = app.buttons["home.openKeyboardLab"]
+        XCTAssertTrue(openKeyboardLab.waitForExistence(timeout: 8))
+        openKeyboardLab.tap()
+
+        var input = app.descendants(matching: .any)["keyboardLab.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        input.tap()
+        input.typeKey(.downArrow, modifierFlags: .command)
+
+        let globeCoordinate = app.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.12, dy: 0.94)
+        )
+        var microphone = app.buttons["keyboard.mic"]
+        for _ in 0..<8 where !microphone.exists {
+            globeCoordinate.tap()
+            if microphone.waitForExistence(timeout: 2) {
+                break
+            }
+        }
+
+        XCTAssertTrue(
+            microphone.exists,
+            "The real BuddyGrammar keyboard extension should become active."
+        )
+        microphone.tap()
+
+        let dictationScreen = app.descendants(matching: .any)["dictation.screen"]
+        XCTAssertTrue(
+            dictationScreen.waitForExistence(timeout: 12),
+            "The keyboard microphone should open BuddyGrammar dictation."
+        )
+        let recordButton = app.buttons["dictation.recordButton"]
+        XCTAssertTrue(recordButton.waitForExistence(timeout: 8))
+        XCTAssertEqual(recordButton.label, "Stop recording")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["dictation.keyboardInstructions"]
+                .waitForExistence(timeout: 5),
+            "Keyboard-started recording should explain how to return and stop."
+        )
+        attachScreenshot(named: "Keyboard dictation recording", app: app)
+
+        // The connected Mac speaks the test phrase while this recording window is open.
+        Thread.sleep(forTimeInterval: 24)
+
+        app.tabBars.buttons["Home"].tap()
+        input = app.descendants(matching: .any)["keyboardLab.input"]
+        if !input.waitForExistence(timeout: 3) {
+            let reopenKeyboardLab = app.buttons["home.openKeyboardLab"]
+            XCTAssertTrue(reopenKeyboardLab.waitForExistence(timeout: 5))
+            reopenKeyboardLab.tap()
+            input = app.descendants(matching: .any)["keyboardLab.input"]
+        }
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        input.tap()
+        input.typeKey(.downArrow, modifierFlags: .command)
+
+        microphone = app.buttons["keyboard.mic"]
+        for _ in 0..<8 where !microphone.exists {
+            globeCoordinate.tap()
+            if microphone.waitForExistence(timeout: 2) {
+                break
+            }
+        }
+        XCTAssertTrue(microphone.waitForExistence(timeout: 5))
+        XCTAssertEqual(microphone.label, "Stop voice dictation")
+
+        let original = String(describing: input.value)
+        microphone.tap()
+
+        let inserted = NSPredicate { _, _ in
+            String(describing: input.value) != original
+        }
+        XCTAssertEqual(
+            XCTWaiter().wait(
+                for: [XCTNSPredicateExpectation(predicate: inserted, object: nil)],
+                timeout: 60
+            ),
+            .completed,
+            "The completed transcript should be inserted into the original text field."
+        )
+
+        let transcript = String(describing: input.value).lowercased()
+        XCTAssertTrue(
+            transcript.contains("buddy") || transcript.contains("dictation"),
+            "Expected the spoken test phrase, received: \(transcript)"
+        )
+        attachScreenshot(named: "Keyboard dictation inserted", app: app)
     }
 
     @MainActor

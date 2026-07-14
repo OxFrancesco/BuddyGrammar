@@ -7,16 +7,38 @@ extension Color {
 
 struct AppBackground: View {
     var body: some View {
-        LinearGradient(
-            colors: [
-                Color(.systemGroupedBackground),
-                Color.buddyAccent.opacity(0.08),
-                Color(.systemGroupedBackground),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
+        Color(.systemGroupedBackground)
+            .ignoresSafeArea()
+    }
+}
+
+/// The BuddyGrammar mark: five waveform bars. It echoes the keyboard's
+/// dictation key and the companion window, and animates while recording.
+struct WaveformMark: View {
+    var isAnimating = false
+    var tint: Color = .buddyAccent
+    var barWidth: CGFloat = 6
+
+    private static let restingHeights: [CGFloat] = [0.38, 0.72, 1.0, 0.58, 0.82]
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.16, paused: !isAnimating)) { context in
+            let beat = context.date.timeIntervalSinceReferenceDate * 6
+            HStack(spacing: barWidth * 0.8) {
+                ForEach(0..<5, id: \.self) { index in
+                    let resting = Self.restingHeights[index]
+                    let scale = isAnimating
+                        ? 0.35 + 0.65 * abs(sin(beat + Double(index) * 1.1))
+                        : resting
+                    Capsule()
+                        .fill(tint)
+                        .frame(width: barWidth)
+                        .scaleEffect(y: scale, anchor: .center)
+                }
+            }
+            .animation(.easeInOut(duration: 0.16), value: isAnimating)
+        }
+        .accessibilityHidden(true)
     }
 }
 

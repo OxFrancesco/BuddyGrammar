@@ -7,15 +7,27 @@ struct SettingsView: View {
     @Environment(\.openURL) private var openURL
 
     @State private var modelID: String
+    @State private var usesAutomaticModelUpdates: Bool
     @State private var correctionInstruction: String
     @State private var autoCorrectDictation: Bool
+    @State private var automaticallyCorrectWords: Bool
+    @State private var correctionUndoDuration: TimeInterval
     @State private var acceptsCloudProcessing: Bool
 
     init(model: IOSAppModel) {
         self.model = model
         _modelID = State(initialValue: model.settings.openRouterModelID)
+        _usesAutomaticModelUpdates = State(
+            initialValue: model.settings.usesAutomaticModelUpdates
+        )
         _correctionInstruction = State(initialValue: model.settings.correctionInstruction)
         _autoCorrectDictation = State(initialValue: model.settings.autoCorrectDictation)
+        _automaticallyCorrectWords = State(
+            initialValue: model.settings.automaticallyCorrectWords
+        )
+        _correctionUndoDuration = State(
+            initialValue: model.settings.correctionUndoDuration
+        )
         _acceptsCloudProcessing = State(
             initialValue: model.settings.hasAcceptedCloudProcessing
         )
@@ -35,10 +47,27 @@ struct SettingsView: View {
             }
 
             Section("Correction") {
-                TextField("OpenRouter model", text: $modelID)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityIdentifier("settings.modelID")
+                Toggle(
+                    "Update correction model automatically",
+                    isOn: $usesAutomaticModelUpdates
+                )
+                .accessibilityIdentifier("settings.automaticModelUpdates")
+
+                if usesAutomaticModelUpdates {
+                    LabeledContent(
+                        "Active model",
+                        value: BuddyGrammarConfiguration.defaultOpenRouterModelID
+                    )
+                    .accessibilityIdentifier("settings.activeModel")
+                    Text("BuddyGrammar will move to the current recommended model when the app is updated.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    TextField("OpenRouter model", text: $modelID)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("settings.modelID")
+                }
 
                 TextField("Instructions", text: $correctionInstruction, axis: .vertical)
                     .lineLimit(5...9)
@@ -46,6 +75,43 @@ struct SettingsView: View {
 
                 Toggle("Correct dictation automatically", isOn: $autoCorrectDictation)
                     .accessibilityIdentifier("settings.autoCorrectDictation")
+            }
+
+            Section {
+                Toggle("Correct words while typing", isOn: $automaticallyCorrectWords)
+                    .accessibilityIdentifier("settings.automaticallyCorrectWords")
+
+                Stepper(
+                    value: $correctionUndoDuration,
+                    in: 1...10,
+                    step: 1
+                ) {
+                    LabeledContent(
+                        "Star undo window",
+                        value: undoDurationLabel
+                    )
+                }
+                .accessibilityIdentifier("settings.correctionUndoDuration")
+            } header: {
+                Text("Keyboard")
+            } footer: {
+                Text("Word correction uses the on-device dictionary and keyboard-aware typo matching. After a ★ correction, Undo stays visible for this duration.")
+            }
+
+            Section {
+                Toggle(isOn: quickDictationBinding) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Skip app switching")
+                        Text("Keep BuddyGrammar ready in a small Picture in Picture window so the keyboard mic starts instantly.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityIdentifier("settings.quickDictation")
+            } header: {
+                Text("Quick dictation")
+            } footer: {
+                Text("After enabling, leave the app so the companion window appears, then drag it off the screen edge to tuck it away. The microphone turns on only when you start dictation from the keyboard. If iOS closes the window, the keyboard falls back to opening the app.")
             }
 
             Section {
@@ -73,8 +139,11 @@ struct SettingsView: View {
                 Button("Save preferences", systemImage: "checkmark.circle.fill") {
                     model.updateSettings(
                         modelID: modelID,
+                        usesAutomaticModelUpdates: usesAutomaticModelUpdates,
                         correctionInstruction: correctionInstruction,
                         autoCorrectDictation: autoCorrectDictation,
+                        automaticallyCorrectWords: automaticallyCorrectWords,
+                        correctionUndoDuration: correctionUndoDuration,
                         acceptsCloudProcessing: acceptsCloudProcessing
                     )
                 }
@@ -85,7 +154,7 @@ struct SettingsView: View {
                     guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
                     openURL(url)
                 }
-                Text("Then open Keyboards, add BuddyGrammar, and enable Allow Full Access for star corrections. Apple requires you to enable this toggle manually.")
+                Text("Then open Keyboards, add BuddyGrammar, and enable Allow Full Access for star corrections and AI handwriting fallback. Apple requires you to enable this toggle manually.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } header: {
@@ -101,14 +170,39 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .accessibilityIdentifier("settings.screen")
+        .onChange(of: model.settings, initial: true) { _, settings in
+            synchronizeDraft(with: settings)
+        }
+    }
+
+    private var quickDictationBinding: Binding<Bool> {
+        Binding(
+            get: { model.settings.enablesQuickDictation },
+            set: { model.setQuickDictation(enabled: $0) }
+        )
     }
 
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
     }
 
+    private var undoDurationLabel: String {
+        let seconds = Int(correctionUndoDuration.rounded())
+        return seconds == 1 ? "1 second" : "\(seconds) seconds"
+    }
+
     private var buildNumber: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+    }
+
+    private func synchronizeDraft(with settings: BuddyGrammarSettings) {
+        modelID = settings.openRouterModelID
+        usesAutomaticModelUpdates = settings.usesAutomaticModelUpdates
+        correctionInstruction = settings.correctionInstruction
+        autoCorrectDictation = settings.autoCorrectDictation
+        automaticallyCorrectWords = settings.automaticallyCorrectWords
+        correctionUndoDuration = settings.correctionUndoDuration
+        acceptsCloudProcessing = settings.hasAcceptedCloudProcessing
     }
 }
 
@@ -127,7 +221,7 @@ private struct PrivacyPolicyView: View {
 
                 policySection(
                     title: "Star corrections",
-                    text: "When you tap ★ after allowing cloud processing, the selected text or current sentence, your correction instruction, and model choice are sent through the BuddyGrammar service to OpenRouter. OpenRouter and the selected model provider process this content to return the correction. BuddyGrammar requests zero-data-retention routing from OpenRouter."
+                    text: "When you tap ★ after allowing cloud processing, the selected text or current sentence, your correction instruction, and model choice are sent through the BuddyGrammar service to OpenRouter. If on-device handwriting recognition cannot read a drawing, BuddyGrammar can send a normalized black-and-white image of those strokes to the same model as a fallback. OpenRouter and the selected model provider process this content to return the result. BuddyGrammar requests zero-data-retention routing from OpenRouter."
                 )
 
                 policySection(

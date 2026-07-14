@@ -12,7 +12,10 @@ let package = Package(
         .library(name: "BuddyGrammarKit", targets: ["BuddyGrammarKit"]),
     ],
     targets: [
-        .target(name: "BuddyGrammarKit"),
+        .target(
+            name: "BuddyGrammarKit",
+            resources: [.process("Resources")]
+        ),
         .testTarget(
             name: "BuddyGrammarKitTests",
             dependencies: ["BuddyGrammarKit"]

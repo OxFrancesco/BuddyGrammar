@@ -4,7 +4,9 @@ public final class SharedPreferences: @unchecked Sendable {
     private enum Key {
         static let settings = "BuddyGrammar.iOS.settings"
         static let pendingTranscript = "BuddyGrammar.iOS.pendingTranscript"
+        static let keyboardDictationSession = "BuddyGrammar.iOS.keyboardDictationSession"
         static let installationIdentifier = "BuddyGrammar.iOS.installationIdentifier"
+        static let companionHeartbeat = "BuddyGrammar.iOS.companionHeartbeat"
     }
 
     private let defaults: UserDefaults
@@ -52,6 +54,108 @@ public final class SharedPreferences: @unchecked Sendable {
 
     public func clearPendingTranscript() {
         defaults.removeObject(forKey: Key.pendingTranscript)
+    }
+
+    @discardableResult
+    public func beginKeyboardDictationSession(
+        id: UUID = UUID(),
+        now: Date = .now
+    ) throws -> KeyboardDictationSession {
+        let session = KeyboardDictationSession(
+            id: id,
+            createdAt: now,
+            updatedAt: now,
+            phase: .launching
+        )
+        try save(session, forKey: Key.keyboardDictationSession)
+        return session
+    }
+
+    public func loadKeyboardDictationSession(
+        now: Date = .now
+    ) -> KeyboardDictationSession? {
+        guard let session = load(
+            KeyboardDictationSession.self,
+            forKey: Key.keyboardDictationSession
+        ) else {
+            return nil
+        }
+        guard now.timeIntervalSince(session.updatedAt)
+            <= BuddyGrammarConfiguration.keyboardDictationSessionLifetime else {
+            clearKeyboardDictationSession(id: session.id)
+            return nil
+        }
+        return session
+    }
+
+    @discardableResult
+    public func updateKeyboardDictationSession(
+        id: UUID,
+        phase: KeyboardDictationSession.Phase,
+        transcript: String? = nil,
+        errorMessage: String? = nil,
+        now: Date = .now
+    ) throws -> KeyboardDictationSession? {
+        guard let session = loadKeyboardDictationSession(now: now),
+              session.id == id else {
+            return nil
+        }
+        let updated = session.updating(
+            phase: phase,
+            transcript: transcript,
+            errorMessage: errorMessage,
+            at: now
+        )
+        try save(updated, forKey: Key.keyboardDictationSession)
+        return updated
+    }
+
+    @discardableResult
+    public func requestKeyboardDictationStop(
+        id: UUID,
+        now: Date = .now
+    ) throws -> KeyboardDictationSession? {
+        guard let session = loadKeyboardDictationSession(now: now),
+              session.id == id,
+              session.phase == .recording else {
+            return nil
+        }
+        return try updateKeyboardDictationSession(
+            id: id,
+            phase: .stopRequested,
+            now: now
+        )
+    }
+
+    public func clearKeyboardDictationSession(id: UUID? = nil) {
+        if let id,
+           let session = load(
+               KeyboardDictationSession.self,
+               forKey: Key.keyboardDictationSession
+           ),
+           session.id != id {
+            return
+        }
+        defaults.removeObject(forKey: Key.keyboardDictationSession)
+    }
+
+    public func recordCompanionHeartbeat(now: Date = .now) {
+        defaults.set(now.timeIntervalSinceReferenceDate, forKey: Key.companionHeartbeat)
+    }
+
+    public func clearCompanionHeartbeat() {
+        defaults.removeObject(forKey: Key.companionHeartbeat)
+    }
+
+    public func isCompanionAlive(
+        now: Date = .now,
+        tolerance: TimeInterval = BuddyGrammarConfiguration.companionHeartbeatTolerance
+    ) -> Bool {
+        let storedValue = defaults.double(forKey: Key.companionHeartbeat)
+        guard storedValue > 0 else { return false }
+        let heartbeat = Date(timeIntervalSinceReferenceDate: storedValue)
+        let age = now.timeIntervalSince(heartbeat)
+        return age >= -tolerance && age <= tolerance
     }
 
     public func installationIdentifier() -> UUID {

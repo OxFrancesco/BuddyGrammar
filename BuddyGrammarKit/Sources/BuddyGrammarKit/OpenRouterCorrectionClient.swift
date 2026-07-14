@@ -32,6 +32,17 @@ public actor OpenRouterCorrectionClient {
         self.endpoint = endpoint
     }
 
+    /// Opens the TLS connection to the API ahead of time so the first
+    /// correction does not pay DNS + TLS setup on top of model latency.
+    public func warmUpConnection() async {
+        var request = URLRequest(
+            url: BuddyGrammarConfiguration.apiBaseURL.appending(path: "health"),
+            timeoutInterval: 10
+        )
+        request.httpMethod = "GET"
+        _ = try? await session.data(for: request)
+    }
+
     public func correct(
         text: String,
         clientID: UUID,

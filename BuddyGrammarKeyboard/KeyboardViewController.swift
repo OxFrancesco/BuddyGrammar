@@ -13,6 +13,13 @@ final class KeyboardControllerBridge {
     func handleInputModeList(from view: UIView, with event: UIEvent) {
         controller?.handleInputModeList(from: view, with: event)
     }
+
+    /// True only on devices where the system does not already provide a
+    /// keyboard switcher, in which case Apple requires the keyboard to show
+    /// its own globe key.
+    var needsInputModeSwitchKey: Bool {
+        controller?.needsInputModeSwitchKey ?? false
+    }
 }
 
 @MainActor
@@ -20,11 +27,12 @@ final class KeyboardViewController: UIInputViewController {
     private let model = KeyboardModel()
     private lazy var controllerBridge = KeyboardControllerBridge(controller: self)
     private var hostingController: UIHostingController<KeyboardRootView>?
+    private var heightConstraint: NSLayoutConstraint?
     private var documentGeneration: UInt64 = 0
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        primaryLanguage = "en-US"
+        primaryLanguage = Locale.preferredLanguages.first ?? "en-US"
         hasDictationKey = false
 
         let rootView = KeyboardRootView(model: model, controllerBridge: controllerBridge)
@@ -43,21 +51,44 @@ final class KeyboardViewController: UIInputViewController {
         hostingController.didMove(toParent: self)
         self.hostingController = hostingController
 
-        let preferredHeight = view.heightAnchor.constraint(equalToConstant: 302)
-        preferredHeight.priority = .defaultHigh
-        preferredHeight.isActive = true
+        let heightConstraint = view.heightAnchor.constraint(
+            equalToConstant: preferredKeyboardHeight(for: view.bounds.size)
+        )
+        heightConstraint.priority = .defaultHigh
+        heightConstraint.isActive = true
+        self.heightConstraint = heightConstraint
+
+        registerForTraitChanges([UITraitVerticalSizeClass.self, UITraitHorizontalSizeClass.self]) {
+            (controller: KeyboardViewController, _: UITraitCollection) in
+            controller.updatePreferredHeight()
+        }
 
         model.connect(delegate: self)
+        let lexiconCompletion: @Sendable (UILexicon) -> Void = { [weak self] lexicon in
+            Task { @MainActor [weak self] in
+                self?.model.updateSupplementaryLexicon(lexicon)
+            }
+        }
+        requestSupplementaryLexicon(completion: lexiconCompletion)
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        model.refreshAvailability()
+        updatePreferredHeight()
+        model.activate()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         model.deactivate()
         super.viewWillDisappear(animated)
+    }
+
+    override func viewWillTransition(
+        to size: CGSize,
+        with coordinator: any UIViewControllerTransitionCoordinator
+    ) {
+        super.viewWillTransition(to: size, with: coordinator)
+        heightConstraint?.constant = preferredKeyboardHeight(for: size)
     }
 
     override func textDidChange(_ textInput: (any UITextInput)?) {
@@ -71,11 +102,33 @@ final class KeyboardViewController: UIInputViewController {
         documentGeneration &+= 1
         model.documentContextDidChange()
     }
+
+    private func updatePreferredHeight() {
+        heightConstraint?.constant = preferredKeyboardHeight(for: view.bounds.size)
+    }
+
+    private func preferredKeyboardHeight(for size: CGSize) -> CGFloat {
+        if traitCollection.userInterfaceIdiom == .pad {
+            return 330
+        }
+        let referenceSize = size == .zero ? view.window?.bounds.size ?? size : size
+        let isLandscape = traitCollection.verticalSizeClass == .compact
+            || referenceSize.width > referenceSize.height && referenceSize.height > 0
+        return isLandscape ? 220 : 302
+    }
 }
 
 extension KeyboardViewController: KeyboardModelDelegate {
     var keyboardHasFullAccess: Bool {
         hasFullAccess
+    }
+
+    var contextBeforeInput: String? {
+        textDocumentProxy.documentContextBeforeInput
+    }
+
+    var keyboardLanguage: String {
+        primaryLanguage ?? Locale.preferredLanguages.first ?? "en-US"
     }
 
     func insertText(_ text: String) {
@@ -86,6 +139,19 @@ extension KeyboardViewController: KeyboardModelDelegate {
     func deleteBackward() {
         documentGeneration &+= 1
         textDocumentProxy.deleteBackward()
+    }
+
+    func openHostApplication(_ url: URL) -> Bool {
+        let selector = NSSelectorFromString("openURL:")
+        var responder: UIResponder? = self
+        while let current = responder {
+            if current.responds(to: selector), !(current is UIInputViewController) {
+                current.perform(selector, with: url)
+                return true
+            }
+            responder = current.next
+        }
+        return false
     }
 
     func captureCorrectionSnapshot() -> DocumentCorrectionSnapshot? {
@@ -110,8 +176,10 @@ extension KeyboardViewController: KeyboardModelDelegate {
             )
         }
 
-        guard let before,
-              let candidate = TextContextExtractor.precedingSentence(from: before) else {
+        // No selection: correct the whole visible text of the input, not
+        // just the sentence before the cursor.
+        let wholeText = (before ?? "") + (after ?? "")
+        guard let candidate = TextCorrectionCandidate(capturedText: wholeText) else {
             return nil
         }
 
@@ -121,31 +189,66 @@ extension KeyboardViewController: KeyboardModelDelegate {
             contextBeforeInput: before,
             selectedText: selected,
             contextAfterInput: after,
-            target: .precedingSentence,
+            target: .wholeText(charactersAfterCursor: after?.utf16.count ?? 0),
             candidate: candidate
         )
     }
 
-    func applyCorrection(_ replacement: String, to snapshot: DocumentCorrectionSnapshot) -> Bool {
+    func applyCorrection(
+        _ replacement: String,
+        to snapshot: DocumentCorrectionSnapshot
+    ) -> AppliedCorrection? {
         let proxy = textDocumentProxy
         guard snapshot.generation == documentGeneration,
               proxy.documentIdentifier as UUID == snapshot.documentIdentifier,
               proxy.documentContextBeforeInput == snapshot.contextBeforeInput,
               proxy.selectedText == snapshot.selectedText,
               proxy.documentContextAfterInput == snapshot.contextAfterInput else {
-            return false
+            return nil
         }
 
         documentGeneration &+= 1
         switch snapshot.target {
         case .selection:
             proxy.insertText(replacement)
-        case .precedingSentence:
+        case .wholeText(let charactersAfterCursor):
+            if charactersAfterCursor > 0 {
+                // Move the cursor to the end of the text so the delete
+                // loop can remove the entire captured text.
+                proxy.adjustTextPosition(byCharacterOffset: charactersAfterCursor)
+            }
             for _ in snapshot.candidate.capturedText {
                 proxy.deleteBackward()
             }
             proxy.insertText(replacement)
         }
+
+        return AppliedCorrection(
+            documentIdentifier: proxy.documentIdentifier as UUID,
+            contextBeforeInput: proxy.documentContextBeforeInput,
+            selectedText: proxy.selectedText,
+            contextAfterInput: proxy.documentContextAfterInput,
+            originalText: snapshot.candidate.capturedText,
+            replacementText: replacement
+        )
+    }
+
+    func canUndoCorrection(_ correction: AppliedCorrection) -> Bool {
+        let proxy = textDocumentProxy
+        return proxy.documentIdentifier as UUID == correction.documentIdentifier
+            && proxy.documentContextBeforeInput == correction.contextBeforeInput
+            && proxy.selectedText == correction.selectedText
+            && proxy.documentContextAfterInput == correction.contextAfterInput
+    }
+
+    func undoCorrection(_ correction: AppliedCorrection) -> Bool {
+        guard canUndoCorrection(correction) else { return false }
+
+        documentGeneration &+= 1
+        for _ in correction.replacementText {
+            textDocumentProxy.deleteBackward()
+        }
+        textDocumentProxy.insertText(correction.originalText)
         return true
     }
 }

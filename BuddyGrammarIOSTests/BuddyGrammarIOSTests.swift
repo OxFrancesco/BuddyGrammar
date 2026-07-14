@@ -27,5 +27,7 @@ final class BuddyGrammarIOSTests: XCTestCase {
         XCTAssertFalse(settings.hasAcceptedCloudProcessing)
         XCTAssertFalse(settings.hasCompletedOnboarding)
         XCTAssertTrue(settings.autoCorrectDictation)
+        XCTAssertTrue(settings.automaticallyCorrectWords)
+        XCTAssertEqual(settings.correctionUndoDuration, 3)
     }
 }

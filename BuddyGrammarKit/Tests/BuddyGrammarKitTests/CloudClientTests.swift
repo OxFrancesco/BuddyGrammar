@@ -78,6 +78,39 @@ final class CloudClientTests: XCTestCase {
         XCTAssertEqual(result.languageCode, "en")
     }
 
+    func testHandwritingClientSendsPNGToSameConfiguredModel() async throws {
+        let session = makeSession()
+        let endpoint = URL(string: "https://example.test/handwriting")!
+        let clientID = UUID(uuidString: "83001D6E-7DAA-4BB5-AC9A-07F70129AD11")!
+        let imageData = Data([0x89, 0x50, 0x4E, 0x47])
+        MockURLProtocol.handler = { request in
+            XCTAssertEqual(request.url, endpoint)
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "image/png")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "X-BuddyGrammar-Client-ID"), clientID.uuidString)
+            XCTAssertEqual(request.value(forHTTPHeaderField: "X-Buddy-Model-ID"), "test/model")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "X-Buddy-Language-Code"), "en")
+            XCTAssertEqual(try requestBody(from: request), imageData)
+
+            let response = HTTPURLResponse(
+                url: endpoint,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data(#"{"text":"Hello world"}"#.utf8))
+        }
+
+        let client = HandwritingRecognitionClient(session: session, endpoint: endpoint)
+        let result = try await client.recognize(
+            imageData: imageData,
+            clientID: clientID,
+            modelID: "test/model",
+            languageCode: "en"
+        )
+
+        XCTAssertEqual(result, "Hello world")
+    }
+
     private func makeSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]
