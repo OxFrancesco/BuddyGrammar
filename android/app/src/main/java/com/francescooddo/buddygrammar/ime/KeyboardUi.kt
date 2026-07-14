@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.emoji2.emojipicker.EmojiPickerView
 import com.francescooddo.buddygrammar.core.Suggestion
+import com.francescooddo.buddygrammar.core.SuggestionKind
 
 private val BuddyPurple = Color(0xFF6D4AFF)
 
@@ -210,18 +211,47 @@ private fun SuggestionSlot(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val isCorrection = suggestion.kind == SuggestionKind.CORRECTION
     Surface(
         onClick = onClick,
-        modifier = modifier.height(34.dp),
+        modifier = modifier
+            .height(34.dp)
+            .semantics {
+                contentDescription = if (isCorrection) {
+                    "Correction suggestion: ${suggestion.text}"
+                } else {
+                    "Text suggestion: ${suggestion.text}"
+                }
+            },
         shape = RoundedCornerShape(8.dp),
-        color = Color.Transparent,
+        color = if (isCorrection) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+        } else {
+            Color.Transparent
+        },
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Row(
+            modifier = Modifier.padding(horizontal = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (isCorrection) {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(13.dp),
+                )
+            }
             Text(
                 text = suggestion.text,
                 fontSize = if (suggestion.isEmoji) 20.sp else 15.sp,
                 fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = if (isCorrection) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

@@ -618,7 +618,7 @@ function responseHeaders(
 function extractOpenRouterText(input: unknown): string | null {
   if (!isRecord(input) || !Array.isArray(input.choices)) return null;
   const first = input.choices[0];
-  if (!isRecord(first) || !isRecord(first.message)) return null;
+  if (!isRecord(first) || first.finish_reason !== "stop" || !isRecord(first.message)) return null;
   const content = first.message.content;
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return null;

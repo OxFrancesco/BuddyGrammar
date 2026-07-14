@@ -27,13 +27,14 @@ The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 4. Return to BuddyGrammar and tap **Choose BuddyGrammar now**.
 5. Open **Keyboard Lab** and focus the sample field.
 
-The keyboard provides normal letter and symbol layouts, shift, delete, globe, space, and return controls. Tap ★ to correct selected text or the sentence immediately before the cursor. The mic key inserts the most recent app dictation saved within 24 hours.
+The keyboard provides normal letter and symbol layouts, shift, delete, globe, space, and return controls. Tap ★ to correct selected text or the current sentence around the cursor. The mic key inserts the most recent app dictation saved within 24 hours.
 
 ## Privacy behavior
 
 - Text is sent only after ★ is tapped.
 - Audio is sent only after the user stops an app recording.
 - Password and other secure input fields disable cloud correction and transcript insertion.
+- Language-scoped vocabulary and context frequency counts stay on device to personalize suggestions.
 - No app data is included in Android cloud backup or device transfer.
 - A correction is discarded if the underlying editor text changes before the response arrives.
 

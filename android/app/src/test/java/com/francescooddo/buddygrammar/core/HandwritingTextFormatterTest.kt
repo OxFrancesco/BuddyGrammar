@@ -64,4 +64,32 @@ class HandwritingTextFormatterTest {
             HandwritingTextFormatter.textForInsertion("when i arrive", "text me "),
         )
     }
+
+    @Test
+    fun `applies the standalone I rule only in English`() {
+        assertEquals(
+            "I arrive",
+            HandwritingTextFormatter.textForInsertion("i arrive", "then ", "en-US"),
+        )
+        assertEquals(
+            "I libri",
+            HandwritingTextFormatter.textForInsertion("I libri", "vedo ", "it-IT"),
+        )
+        assertEquals(
+            "i libri",
+            HandwritingTextFormatter.textForInsertion("i libri", "vedo ", "it-IT"),
+        )
+    }
+
+    @Test
+    fun `preserves German noun and all caps recognition casing`() {
+        assertEquals(
+            "Haus",
+            HandwritingTextFormatter.textForInsertion("Haus", "das ", "de-DE"),
+        )
+        assertEquals(
+            "HAUS",
+            HandwritingTextFormatter.textForInsertion("HAUS", "das ", "de-DE"),
+        )
+    }
 }

@@ -100,7 +100,7 @@ enum KeyboardDictationPhase: Equatable {
 
 enum DocumentCorrectionTarget: Equatable, Sendable {
     case selection
-    case wholeText(charactersAfterCursor: Int)
+    case currentSentence(charactersAfterCursor: Int)
 }
 
 struct DocumentCorrectionSnapshot: Equatable, Sendable {
@@ -124,6 +124,7 @@ struct AppliedCorrection: Equatable, Sendable {
 
 struct KeyboardSuggestion: Identifiable, Equatable {
     enum Kind: Equatable {
+        case correction
         case completion
         case emoji
         case prediction
@@ -141,6 +142,7 @@ protocol KeyboardModelDelegate: AnyObject {
     var keyboardHasFullAccess: Bool { get }
     var contextBeforeInput: String? { get }
     var keyboardLanguage: String { get }
+    var allowsAutomaticTextCorrection: Bool { get }
 
     func insertText(_ text: String)
     func deleteBackward()
@@ -158,25 +160,33 @@ protocol KeyboardModelDelegate: AnyObject {
 struct WordCompletionSource {
     private let checker = UITextChecker()
 
-    func completions(for partial: String, language: String = "en_US") -> [String] {
+    func completions(
+        for partial: String,
+        language: String = "en_US",
+        supplementalReplacements: [String: String]
+    ) -> [String] {
         let range = NSRange(location: 0, length: (partial as NSString).length)
-        if let completions = checker.completions(forPartialWordRange: range, in: partial, language: language),
-           !completions.isEmpty {
-            return completions
+        var candidates = supplementalReplacements
+            .filter { input, replacement in
+                input.hasPrefix(partial.lowercased())
+                    || replacement.lowercased().hasPrefix(partial.lowercased())
+            }
+            .map(\.value)
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        if let completions = checker.completions(
+            forPartialWordRange: range,
+            in: partial,
+            language: language
+        ) {
+            candidates.append(contentsOf: completions)
         }
-        return checker.guesses(forWordRange: range, in: partial, language: language) ?? []
+        return candidates
     }
 
-    func correction(
+    func spellingCandidates(
         for word: String,
-        language: String,
-        supplementalReplacements: [String: String]
-    ) -> String? {
-        if let replacement = supplementalReplacements[word.lowercased()],
-           replacement.caseInsensitiveCompare(word) != .orderedSame {
-            return replacement
-        }
-
+        language: String
+    ) -> [String] {
         let range = NSRange(location: 0, length: (word as NSString).length)
         let misspelledRange = checker.rangeOfMisspelledWord(
             in: word,
@@ -185,17 +195,38 @@ struct WordCompletionSource {
             wrap: false,
             language: language
         )
-        guard misspelledRange.location != NSNotFound,
-              misspelledRange.length == range.length else {
+        if misspelledRange.location != NSNotFound,
+           misspelledRange.length == range.length {
+            return checker.guesses(
+                forWordRange: range,
+                in: word,
+                language: language
+            ) ?? []
+        }
+        return []
+    }
+
+    /// Supplementary lexicon entries are exact user shortcuts, not fuzzy
+    /// spelling guesses. Keeping that provenance lets the intelligence layer
+    /// apply them directly at a word boundary without edit-distance filtering.
+    func shortcutReplacement(
+        for word: String,
+        supplementalReplacements: [String: String]
+    ) -> String? {
+        guard let replacement = supplementalReplacements[word.lowercased()],
+              !replacement.isEmpty,
+              replacement.caseInsensitiveCompare(word) != .orderedSame else {
             return nil
         }
-        let guesses = checker.guesses(
-            forWordRange: range,
-            in: word,
-            language: language
-        ) ?? []
-        return LocalWordCorrector.bestCorrection(for: word, candidates: guesses)
+        return replacement
     }
+}
+
+private struct DeferredCorrectionLearning {
+    let text: String
+    let precedingContext: String?
+    let languageCode: String?
+    let resultingContext: String?
 }
 
 @MainActor
@@ -209,6 +240,7 @@ final class KeyboardModel {
     private(set) var suggestions: [KeyboardSuggestion] = []
     private(set) var canUndoCorrection = false
     private(set) var dictationPhase: KeyboardDictationPhase = .idle
+    private(set) var hasPendingTranscript = false
 
     @ObservationIgnored private weak var delegate: KeyboardModelDelegate?
     @ObservationIgnored private let correctionClient: OpenRouterCorrectionClient
@@ -223,19 +255,23 @@ final class KeyboardModel {
     @ObservationIgnored private var companionFallbackTask: Task<Void, Never>?
     @ObservationIgnored private var baselineStatus: KeyboardStatus = .fullAccessRequired
     @ObservationIgnored private var pendingCorrectionUndo: AppliedCorrection?
+    @ObservationIgnored private var deferredCorrectionLearning: DeferredCorrectionLearning?
     @ObservationIgnored private var supplementalReplacements: [String: String] = [:]
     @ObservationIgnored private var cachedSwipeEngine: SwipeTypingEngine?
     @ObservationIgnored private var didWarmUpConnection = false
-    @ObservationIgnored private let personalModel = PersonalLanguageModel()
+    @ObservationIgnored private let textIntelligence: TextIntelligence
+    @ObservationIgnored private var observedTextSuffix = ObservedTextSuffix()
 
     init(
         correctionClient: OpenRouterCorrectionClient = OpenRouterCorrectionClient(),
         handwritingClient: HandwritingRecognitionClient = HandwritingRecognitionClient(),
-        preferences: SharedPreferences? = SharedPreferences()
+        preferences: SharedPreferences? = SharedPreferences(),
+        textIntelligence: TextIntelligence = TextIntelligence()
     ) {
         self.correctionClient = correctionClient
         self.handwritingClient = handwritingClient
         self.preferences = preferences
+        self.textIntelligence = textIntelligence
     }
 
     func connect(delegate: KeyboardModelDelegate) {
@@ -245,6 +281,7 @@ final class KeyboardModel {
 
     func activate() {
         refreshAvailability()
+        refreshPendingTranscriptAvailability()
         refreshSuggestions()
         refreshKeyboardDictationSession()
         startDictationMonitor()
@@ -280,8 +317,9 @@ final class KeyboardModel {
     func insertCharacter(_ character: String) {
         cancelCorrectionForLocalEdit()
         if Self.autocorrectionBoundaryCharacters.contains(character) {
-            applyLocalWordCorrectionIfNeeded()
-            learnCompletedWord()
+            commitCurrentWord()
+        } else {
+            observedTextSuffix.clear()
         }
         let output = shiftState.isShifted && layoutMode == .letters
             ? character.uppercased()
@@ -296,16 +334,14 @@ final class KeyboardModel {
 
     func insertSpace() {
         cancelCorrectionForLocalEdit()
-        applyLocalWordCorrectionIfNeeded()
-        learnCompletedWord()
+        commitCurrentWord()
         delegate?.insertText(" ")
         refreshSuggestions()
     }
 
     func insertReturn() {
         cancelCorrectionForLocalEdit()
-        applyLocalWordCorrectionIfNeeded()
-        learnCompletedWord()
+        commitCurrentWord()
         delegate?.insertText("\n")
         if layoutMode == .letters, shiftState == .lowercase {
             shiftState = .uppercase
@@ -315,6 +351,7 @@ final class KeyboardModel {
 
     func deleteBackward() {
         cancelCorrectionForLocalEdit()
+        observedTextSuffix.clear()
         delegate?.deleteBackward()
         refreshSuggestions()
     }
@@ -343,18 +380,24 @@ final class KeyboardModel {
 
     func insertSuggestion(_ suggestion: KeyboardSuggestion) {
         cancelCorrectionForLocalEdit()
-        if suggestion.kind != .emoji {
-            let context = delegate?.contextBeforeInput ?? ""
-            let prefix = String(context.dropLast(suggestion.deleteCount))
-            personalModel.learn(
-                previousWord: lastWord(in: prefix),
-                word: suggestion.insertion.trimmingCharacters(in: .whitespaces)
-            )
-        }
+        observedTextSuffix.clear()
+        let context = delegate?.contextBeforeInput ?? ""
+        let prefix = String(context.dropLast(suggestion.deleteCount))
         for _ in 0..<suggestion.deleteCount {
             delegate?.deleteBackward()
         }
         delegate?.insertText(suggestion.insertion)
+        if suggestion.kind != .emoji {
+            textIntelligence.observeCommittedText(
+                suggestion.insertion,
+                precededBy: prefix,
+                languageCode: delegate?.keyboardLanguage
+            )
+            observedTextSuffix.observe(
+                committedText: suggestion.insertion,
+                contextBeforeInput: prefix + suggestion.insertion
+            )
+        }
         if layoutMode == .letters, shiftState == .uppercase {
             shiftState = .lowercase
         }
@@ -363,6 +406,7 @@ final class KeyboardModel {
 
     func insertEmoji(_ emoji: String) {
         cancelCorrectionForLocalEdit()
+        observedTextSuffix.clear()
         delegate?.insertText(emoji)
         refreshSuggestions()
     }
@@ -372,22 +416,58 @@ final class KeyboardModel {
         let context = delegate?.contextBeforeInput
         let formatted = HandwritingTextFormatter.textForInsertion(
             text,
-            contextBeforeInput: context
+            contextBeforeInput: context,
+            languageCode: delegate?.keyboardLanguage
         )
-        insertTextRespectingContext(formatted, context: context)
+        commitRecognizedText(formatted, context: context)
         refreshSuggestions()
     }
 
-    private func insertDictatedText(_ text: String) {
+    private func insertDictatedText(
+        _ text: String,
+        languageCode: String? = nil
+    ) {
         cancelCorrectionForLocalEdit()
         let context = delegate?.contextBeforeInput
-        insertTextRespectingContext(text, context: context)
+        commitRecognizedText(
+            text,
+            context: context,
+            languageCode: languageCode
+        )
         refreshSuggestions()
     }
 
-    private func insertTextRespectingContext(_ text: String, context: String?) {
-        let needsLeadingSpace = context?.last.map { !$0.isWhitespace } ?? false
-        delegate?.insertText(needsLeadingSpace ? " \(text)" : text)
+    private func commitRecognizedText(
+        _ text: String,
+        context: String?,
+        languageCode: String? = nil
+    ) {
+        observedTextSuffix.clear()
+        let whitespaceToDelete = RecognizedTextFormatter.whitespaceToDeleteBefore(
+            text,
+            contextBeforeInput: context
+        )
+        for _ in 0..<whitespaceToDelete {
+            delegate?.deleteBackward()
+        }
+        let retainedContext = context.map {
+            String($0.dropLast(whitespaceToDelete))
+        }
+        let insertion = RecognizedTextFormatter.textForInsertion(
+            text,
+            contextBeforeInput: retainedContext
+        )
+        guard !insertion.isEmpty else { return }
+        delegate?.insertText(insertion)
+        textIntelligence.observeCommittedText(
+            insertion,
+            precededBy: retainedContext,
+            languageCode: languageCode ?? delegate?.keyboardLanguage
+        )
+        observedTextSuffix.observe(
+            committedText: insertion,
+            contextBeforeInput: (retainedContext ?? "") + insertion
+        )
     }
 
     func updateSupplementaryLexicon(_ lexicon: UILexicon) {
@@ -410,21 +490,27 @@ final class KeyboardModel {
 
         cancelCorrectionForLocalEdit()
         let word = applyingShift(to: best)
-        insertTextRespectingContext(word, context: context)
+        commitRecognizedText(word, context: context)
         if shiftState == .uppercase {
             shiftState = .lowercase
         }
 
-        // Offer the runner-up words as one-tap replacements.
-        suggestions = candidates.dropFirst().map { alternate in
-            let display = applyingShift(to: alternate, matching: word)
-            return KeyboardSuggestion(
-                id: "swipe-\(alternate)",
-                kind: .completion,
-                display: display,
-                deleteCount: word.count,
-                insertion: display
-            )
+        // Offer runner-up replacements only when the host editor allows
+        // dictionary intelligence. Structured and no-suggestion fields must
+        // stay free of candidates even after a direct swipe gesture.
+        if delegate?.allowsAutomaticTextCorrection == true {
+            suggestions = candidates.dropFirst().map { alternate in
+                let display = applyingShift(to: alternate, matching: word)
+                return KeyboardSuggestion(
+                    id: "swipe-\(alternate)",
+                    kind: .completion,
+                    display: display,
+                    deleteCount: word.count,
+                    insertion: display
+                )
+            }
+        } else {
+            suggestions = []
         }
     }
 
@@ -476,138 +562,162 @@ final class KeyboardModel {
     }
 
     func refreshSuggestions() {
-        let analysis = TypingContextAnalyzer.analyze(delegate?.contextBeforeInput)
-        var next: [KeyboardSuggestion] = []
-
-        switch analysis.mode {
-        case .typingWord(let partial):
-            let completions = rankedCompletions(for: partial, limit: 2)
-            next = completions.map { word in
-                KeyboardSuggestion(
-                    id: "completion-\(word)",
-                    kind: .completion,
-                    display: word,
-                    deleteCount: partial.count,
-                    insertion: word + " "
-                )
-            }
-            if let emoji = SuggestionEmojiMap.emoji(for: partial) {
-                next.append(
-                    KeyboardSuggestion(
-                        id: "emoji-\(emoji)",
-                        kind: .emoji,
-                        display: emoji,
-                        deleteCount: partial.count,
-                        insertion: emoji
-                    )
-                )
-            }
-        case .betweenWords(let lastWord):
-            next = NextWordPredictor.predictions(
-                after: lastWord,
-                personal: personalModel,
-                limit: 2
-            ).map { word in
-                let display = analysis.isAtSentenceStart ? capitalized(word) : word
-                return KeyboardSuggestion(
-                    id: "prediction-\(display)",
-                    kind: .prediction,
-                    display: display,
-                    deleteCount: 0,
-                    insertion: display + " "
-                )
-            }
-            if let lastWord, let emoji = SuggestionEmojiMap.emoji(for: lastWord) {
-                next.append(
-                    KeyboardSuggestion(
-                        id: "emoji-\(emoji)",
-                        kind: .emoji,
-                        display: emoji,
-                        deleteCount: lastWord.count + 1,
-                        insertion: emoji + " "
-                    )
-                )
-            }
-        case .empty:
-            next = NextWordPredictor.predictions(after: nil, limit: 2).map { word in
-                let display = capitalized(word)
-                return KeyboardSuggestion(
-                    id: "prediction-\(display)",
-                    kind: .prediction,
-                    display: display,
-                    deleteCount: 0,
-                    insertion: display + " "
-                )
-            }
+        guard delegate?.allowsAutomaticTextCorrection == true else {
+            suggestions = []
+            return
         }
-
+        let context = delegate?.contextBeforeInput
+        let analysis = TypingContextAnalyzer.analyze(context)
+        let emojiSuggestion = emojiSuggestion(for: analysis)
+        let textLimit = emojiSuggestion == nil ? 3 : 2
+        var next = localTextSuggestions(for: context, limit: textLimit).map {
+            keyboardSuggestion(from: $0)
+        }
+        if let emojiSuggestion {
+            next.append(emojiSuggestion)
+        }
         suggestions = Array(next.prefix(3))
     }
 
-    /// Completions ranked by how likely the user actually wants them: their
-    /// own frequent words first, then common English words by corpus
-    /// frequency, with UITextChecker's (alphabetical) list as a fallback.
-    private func rankedCompletions(for partial: String, limit: Int) -> [String] {
-        var ranked: [String] = []
-        func append(_ candidates: [String]) {
-            for candidate in candidates
-            where candidate.caseInsensitiveCompare(partial) != .orderedSame
-                && !ranked.contains(where: { $0.caseInsensitiveCompare(candidate) == .orderedSame }) {
-                ranked.append(candidate)
-                if ranked.count == limit { return }
+    private func localTextSuggestions(
+        for context: String?,
+        limit: Int
+    ) -> [TextSuggestion] {
+        let languageCode = delegate?.keyboardLanguage
+        guard case .typingWord(let partial) = TypingContextAnalyzer.analyze(context).mode else {
+            return textIntelligence.suggestions(
+                for: context,
+                languageCode: languageCode,
+                limit: limit
+            )
+        }
+
+        let checkerLanguage = languageCode?
+            .replacingOccurrences(of: "-", with: "_") ?? "en_US"
+        return textIntelligence.suggestions(
+            for: context,
+            shortcutReplacement: completionSource.shortcutReplacement(
+                for: partial,
+                supplementalReplacements: supplementalReplacements
+            ),
+            spellingCandidates: completionSource.spellingCandidates(
+                for: partial,
+                language: checkerLanguage
+            ),
+            completionCandidates: completionSource.completions(
+                for: partial,
+                language: checkerLanguage,
+                supplementalReplacements: supplementalReplacements
+            ),
+            languageCode: languageCode,
+            limit: limit
+        )
+    }
+
+    private func keyboardSuggestion(from suggestion: TextSuggestion) -> KeyboardSuggestion {
+        let kind: KeyboardSuggestion.Kind
+        let idPrefix: String
+        switch suggestion.kind {
+        case .correction:
+            kind = .correction
+            idPrefix = "correction"
+        case .completion:
+            kind = .completion
+            idPrefix = "completion"
+        case .prediction:
+            kind = .prediction
+            idPrefix = "prediction"
+        }
+
+        return KeyboardSuggestion(
+            id: "\(idPrefix)-\(suggestion.text)",
+            kind: kind,
+            display: suggestion.text,
+            deleteCount: suggestion.replacementLength,
+            insertion: suggestion.text + " "
+        )
+    }
+
+    private func emojiSuggestion(
+        for analysis: TypingContextAnalysis
+    ) -> KeyboardSuggestion? {
+        switch analysis.mode {
+        case .typingWord(let partial):
+            guard let emoji = SuggestionEmojiMap.emoji(for: partial) else { return nil }
+            return KeyboardSuggestion(
+                id: "emoji-\(emoji)",
+                kind: .emoji,
+                display: emoji,
+                deleteCount: partial.count,
+                insertion: emoji
+            )
+        case .betweenWords(let lastWord):
+            guard let lastWord,
+                  let emoji = SuggestionEmojiMap.emoji(for: lastWord) else {
+                return nil
             }
+            return KeyboardSuggestion(
+                id: "emoji-\(emoji)",
+                kind: .emoji,
+                display: emoji,
+                deleteCount: lastWord.count + 1,
+                insertion: emoji + " "
+            )
+        case .empty:
+            return nil
         }
-        append(personalModel.completions(forPrefix: partial, limit: limit))
-        if ranked.count < limit {
-            append(WordFrequencyLexicon.shared.completions(forPrefix: partial, limit: limit + 1))
-        }
-        if ranked.count < limit {
-            let language = delegate?.keyboardLanguage
-                .replacingOccurrences(of: "-", with: "_") ?? "en_US"
-            append(completionSource.completions(for: partial, language: language))
-        }
-        return ranked.map { matchingCase($0, toTyped: partial) }
     }
 
-    private func matchingCase(_ word: String, toTyped typed: String) -> String {
-        if word == "I" { return word }
-        if typed.count > 1,
-           typed.contains(where: \.isLetter),
-           typed.allSatisfy({ !$0.isLetter || $0.isUppercase }) {
-            return word.uppercased()
-        }
-        if typed.first?.isUppercase == true {
-            return capitalized(word)
-        }
-        return word
-    }
-
-    /// Records the word being finished (before a space, return, or
-    /// punctuation) so predictions adapt to the user's vocabulary.
-    private func learnCompletedWord() {
+    /// Corrects (when enabled) and learns the word being finished before its
+    /// boundary is inserted, so both actions share the same ranking seam.
+    private func commitCurrentWord() {
         let context = delegate?.contextBeforeInput
+        if observedTextSuffix.consumeIfUnchanged(contextBeforeInput: context) {
+            return
+        }
         guard case .typingWord(let word) = TypingContextAnalyzer.analyze(context).mode else {
             return
         }
         let prefix = String((context ?? "").dropLast(word.count))
-        personalModel.learn(previousWord: lastWord(in: prefix), word: word)
+        var committedWord = word
+
+        let settings = preferences?.loadSettings() ?? .default
+        if settings.automaticallyCorrectWords,
+           delegate?.allowsAutomaticTextCorrection == true,
+           let correction = localTextSuggestions(for: context, limit: 3)
+               .first(where: { $0.kind == .correction }) {
+            for _ in word {
+                delegate?.deleteBackward()
+            }
+            delegate?.insertText(correction.text)
+            committedWord = correction.text
+        }
+
+        textIntelligence.observeCommittedText(
+            committedWord,
+            precededBy: prefix,
+            languageCode: delegate?.keyboardLanguage
+        )
     }
 
     func documentContextDidChange() {
-        refreshSuggestions()
         if let pendingCorrectionUndo,
            delegate?.canUndoCorrection(pendingCorrectionUndo) != true {
             clearCorrectionUndo()
         }
+        observedTextSuffix.retainIfUnchanged(
+            contextBeforeInput: delegate?.contextBeforeInput
+        )
+        refreshSuggestions()
         guard correctionTask != nil else { return }
         cancelCorrection()
         setQuietly(baselineStatus)
     }
 
     func deactivate() {
-        personalModel.persist()
         cancelCorrection()
         clearCorrectionUndo()
+        textIntelligence.persist()
         dictationMonitorTask?.cancel()
         dictationMonitorTask = nil
         companionFallbackTask?.cancel()
@@ -658,6 +768,7 @@ final class KeyboardModel {
         }
 
         let requestID = UUID()
+        let languageCode = delegate?.keyboardLanguage
         correctionRequestID = requestID
         present(.correcting)
 
@@ -678,9 +789,23 @@ final class KeyboardModel {
                 correctionTask = nil
                 correctionRequestID = nil
                 if let appliedCorrection {
+                    observedTextSuffix.clear()
+                    let learningContext: String?
+                    switch snapshot.target {
+                    case .selection:
+                        learningContext = snapshot.contextBeforeInput
+                    case .currentSentence:
+                        learningContext = nil
+                    }
                     beginCorrectionUndo(
                         appliedCorrection,
-                        duration: settings.correctionUndoDuration
+                        duration: settings.correctionUndoDuration,
+                        learning: DeferredCorrectionLearning(
+                            text: replacement,
+                            precedingContext: learningContext,
+                            languageCode: languageCode,
+                            resultingContext: appliedCorrection.contextBeforeInput
+                        )
                     )
                     present(.corrected)
                 } else {
@@ -699,8 +824,9 @@ final class KeyboardModel {
 
     func undoLastCorrection() {
         guard let pendingCorrectionUndo else { return }
+        clearCorrectionUndo(acceptLearning: false)
+        observedTextSuffix.clear()
         let didUndo = delegate?.undoCorrection(pendingCorrectionUndo) ?? false
-        clearCorrectionUndo()
         present(didUndo ? .correctionUndone : .staleContext)
         refreshSuggestions()
     }
@@ -721,12 +847,19 @@ final class KeyboardModel {
 
         guard let transcript = preferences.loadPendingTranscript(),
               !transcript.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            hasPendingTranscript = false
             present(.noPendingTranscript)
             return
         }
 
-        delegate?.insertText(transcript.text)
+        let context = delegate?.contextBeforeInput
+        commitRecognizedText(
+            transcript.text,
+            context: context,
+            languageCode: transcript.languageCode
+        )
         preferences.clearPendingTranscript()
+        hasPendingTranscript = false
         present(.transcriptInserted)
         refreshSuggestions()
     }
@@ -889,8 +1022,9 @@ final class KeyboardModel {
             }
             preferences.clearKeyboardDictationSession(id: session.id)
             preferences.clearPendingTranscript()
+            hasPendingTranscript = false
             dictationPhase = .idle
-            insertDictatedText(transcript)
+            insertDictatedText(transcript, languageCode: session.languageCode)
             present(.transcriptInserted)
         case .failed:
             preferences.clearKeyboardDictationSession(id: session.id)
@@ -908,36 +1042,19 @@ final class KeyboardModel {
         present(status)
     }
 
-    private func applyLocalWordCorrectionIfNeeded() {
-        let settings = preferences?.loadSettings() ?? .default
-        guard settings.automaticallyCorrectWords,
-              case .typingWord(let word) = TypingContextAnalyzer
-                .analyze(delegate?.contextBeforeInput)
-                .mode else {
-            return
-        }
-
-        let language = delegate?.keyboardLanguage.replacingOccurrences(of: "-", with: "_")
-            ?? "en_US"
-        guard let replacement = completionSource.correction(
-            for: word,
-            language: language,
-            supplementalReplacements: supplementalReplacements
-        ) else {
-            return
-        }
-
-        for _ in word {
-            delegate?.deleteBackward()
-        }
-        delegate?.insertText(replacement)
+    private func refreshPendingTranscriptAvailability() {
+        hasPendingTranscript = preferences?.loadPendingTranscript().map {
+            !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        } ?? false
     }
 
     private func beginCorrectionUndo(
         _ correction: AppliedCorrection,
-        duration: TimeInterval
+        duration: TimeInterval,
+        learning: DeferredCorrectionLearning
     ) {
         pendingCorrectionUndo = correction
+        deferredCorrectionLearning = learning
         canUndoCorrection = true
         undoDismissTask?.cancel()
         undoDismissTask = Task { [weak self] in
@@ -947,11 +1064,26 @@ final class KeyboardModel {
         }
     }
 
-    private func clearCorrectionUndo() {
+    private func clearCorrectionUndo(acceptLearning: Bool = true) {
         undoDismissTask?.cancel()
         undoDismissTask = nil
+        let learning = deferredCorrectionLearning
+        deferredCorrectionLearning = nil
         pendingCorrectionUndo = nil
         canUndoCorrection = false
+
+        guard acceptLearning, let learning else { return }
+        textIntelligence.observeCommittedText(
+            learning.text,
+            precededBy: learning.precedingContext,
+            languageCode: learning.languageCode
+        )
+        if delegate?.contextBeforeInput == learning.resultingContext {
+            observedTextSuffix.observe(
+                committedText: learning.text,
+                contextBeforeInput: learning.resultingContext
+            )
+        }
     }
 
     private func present(_ newStatus: KeyboardStatus) {

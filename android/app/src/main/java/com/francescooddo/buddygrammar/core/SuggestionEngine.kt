@@ -8,12 +8,16 @@ package com.francescooddo.buddygrammar.core
  * @property appendSpace whether a trailing space should follow the committed text
  * @property isEmoji true when the suggestion replaces a keyword with an emoji
  */
+enum class SuggestionKind { CORRECTION, COMPLETION, PREDICTION, EMOJI }
+
 data class Suggestion(
     val text: String,
     val replaceBeforeCursor: Int,
     val appendSpace: Boolean,
-    val isEmoji: Boolean = false,
-)
+    val kind: SuggestionKind = SuggestionKind.COMPLETION,
+) {
+    val isEmoji: Boolean get() = kind == SuggestionKind.EMOJI
+}
 
 /**
  * Pure-Kotlin suggestion engine: prefix completions while typing a word,
@@ -156,12 +160,18 @@ object SuggestionEngine {
      * cursor, blending the user's own [personal] vocabulary with the static
      * word list and bigram table.
      */
-    fun suggest(textBeforeCursor: String, personal: PersonalLanguageModel? = null): List<Suggestion> {
+    fun suggest(
+        textBeforeCursor: String,
+        personal: PersonalLanguageModel? = null,
+        languageTag: String = LanguageSupport.DEFAULT_LANGUAGE_TAG,
+        suggestionsAllowed: Boolean = true,
+    ): List<Suggestion> {
+        if (!suggestionsAllowed) return emptyList()
         val currentWord = currentWord(textBeforeCursor)
         return if (currentWord.isNotEmpty()) {
-            completionSuggestions(textBeforeCursor, currentWord, personal)
+            completionSuggestions(textBeforeCursor, currentWord, personal, languageTag)
         } else {
-            predictionSuggestions(textBeforeCursor, personal)
+            predictionSuggestions(textBeforeCursor, personal, languageTag)
         }
     }
 
@@ -175,13 +185,19 @@ object SuggestionEngine {
         textBeforeCursor: String,
         currentWord: String,
         personal: PersonalLanguageModel?,
+        languageTag: String,
     ): List<Suggestion> {
         val prefix = currentWord.lowercase()
-        val personalWords = personal?.completions(prefix, 2).orEmpty()
-        val staticWords = WordList.words.asSequence()
-            .filter { it.length > prefix.length && it.startsWith(prefix) }
-            .take(MAX_SUGGESTIONS)
-            .toList()
+        val usesEnglishPriors = LanguageSupport.usesEnglishPriors(languageTag)
+        val personalWords = personal?.completions(prefix, 2, languageTag).orEmpty()
+        val staticWords = if (usesEnglishPriors) {
+            WordList.words.asSequence()
+                .filter { it.length > prefix.length && it.startsWith(prefix) }
+                .take(MAX_SUGGESTIONS)
+                .toList()
+        } else {
+            emptyList()
+        }
         val completions = (personalWords + staticWords)
             .distinct()
             .take(MAX_SUGGESTIONS)
@@ -189,11 +205,29 @@ object SuggestionEngine {
         val emoji = EmojiSuggestions.emojiFor(currentWord)
 
         val slots = mutableListOf<Suggestion>()
+        val correction = if (
+            usesEnglishPriors &&
+            (personal?.usageCount(currentWord, languageTag) == 0 || personal == null)
+        ) {
+            LocalWordCorrector.bestCorrection(currentWord)
+        } else {
+            null
+        }
+        correction?.let { word ->
+            slots += Suggestion(
+                text = matchCase(word, currentWord),
+                replaceBeforeCursor = currentWord.length,
+                appendSpace = true,
+                kind = SuggestionKind.CORRECTION,
+            )
+        }
         completions.forEach { word ->
+            if (slots.any { it.text.equals(word, ignoreCase = true) }) return@forEach
             slots += Suggestion(
                 text = word,
                 replaceBeforeCursor = currentWord.length,
                 appendSpace = true,
+                kind = SuggestionKind.COMPLETION,
             )
         }
         if (emoji != null) {
@@ -201,7 +235,7 @@ object SuggestionEngine {
                 text = emoji,
                 replaceBeforeCursor = currentWord.length,
                 appendSpace = false,
-                isEmoji = true,
+                kind = SuggestionKind.EMOJI,
             )
             if (slots.size >= MAX_SUGGESTIONS) {
                 slots[MAX_SUGGESTIONS - 1] = emojiSuggestion
@@ -215,6 +249,7 @@ object SuggestionEngine {
     private fun predictionSuggestions(
         textBeforeCursor: String,
         personal: PersonalLanguageModel?,
+        languageTag: String,
     ): List<Suggestion> {
         val trailingWhitespace = textBeforeCursor.takeLastWhile { it.isWhitespace() }
         val beforeWhitespace = textBeforeCursor.dropLast(trailingWhitespace.length)
@@ -222,17 +257,31 @@ object SuggestionEngine {
         val capitalize = isSentenceStart(textBeforeCursor)
 
         // The user's own habits outrank the generic bigram table.
-        val personalPredictions = personal?.predictions(lastWord, 2).orEmpty()
-        val predicted = (personalPredictions + bigrams[lastWord.lowercase()].orEmpty())
+        val personalPredictions = personal
+            ?.predictions(wordsInCurrentSentence(beforeWhitespace).takeLast(2), 2, languageTag)
+            .orEmpty()
+        val usesEnglishPriors = LanguageSupport.usesEnglishPriors(languageTag)
+        val staticPredictions = if (usesEnglishPriors) {
+            bigrams[lastWord.lowercase()].orEmpty()
+        } else {
+            emptyList()
+        }
+        val predicted = (personalPredictions + staticPredictions)
             .distinct()
             .take(2)
-        val words = (predicted + fallbackPredictions)
+        val fallbacks = if (usesEnglishPriors) fallbackPredictions else emptyList()
+        val words = (predicted + fallbacks)
             .distinctBy { it.lowercase() }
             .take(2)
             .map { word -> if (capitalize) matchCase(word, "X") else word }
 
         val slots = words.map { word ->
-            Suggestion(text = word, replaceBeforeCursor = 0, appendSpace = true)
+            Suggestion(
+                text = word,
+                replaceBeforeCursor = 0,
+                appendSpace = true,
+                kind = SuggestionKind.PREDICTION,
+            )
         }.toMutableList()
 
         if (lastWord.isNotEmpty() && trailingWhitespace.isNotEmpty()) {
@@ -241,7 +290,7 @@ object SuggestionEngine {
                     text = emoji,
                     replaceBeforeCursor = lastWord.length + trailingWhitespace.length,
                     appendSpace = false,
-                    isEmoji = true,
+                    kind = SuggestionKind.EMOJI,
                 )
             }
         }
@@ -250,6 +299,12 @@ object SuggestionEngine {
 
     private fun currentWord(textBeforeCursor: String): String =
         textBeforeCursor.takeLastWhile { it.isLetterOrDigit() || it == '\'' }
+
+    private fun wordsInCurrentSentence(text: String): List<String> {
+        val boundary = text.indexOfLast { it in SENTENCE_TERMINATORS }
+        val sentence = text.substring(if (boundary >= 0) boundary + 1 else 0)
+        return WORD_PATTERN.findAll(sentence).map { it.value }.toList()
+    }
 
     private fun matchCase(word: String, typed: String): String = when {
         word == "I" -> word
@@ -260,5 +315,6 @@ object SuggestionEngine {
         else -> word
     }
 
-    private val SENTENCE_TERMINATORS = setOf('.', '!', '?', '\n')
+    private val SENTENCE_TERMINATORS = setOf('.', '!', '?', '\n', '…')
+    private val WORD_PATTERN = Regex("[\\p{L}\\p{N}]+(?:'[\\p{L}\\p{N}]+)*")
 }

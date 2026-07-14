@@ -159,4 +159,42 @@ final class SuggestionLogicTests: XCTestCase {
             "I"
         )
     }
+
+    func testHandwritingPreservesNonEnglishRecognizerCasingAndText() {
+        XCTAssertEqual(
+            HandwritingTextFormatter.textForInsertion(
+                "i bambini",
+                contextBeforeInput: "vedo ",
+                languageCode: "ita"
+            ),
+            "i bambini"
+        )
+        XCTAssertEqual(
+            HandwritingTextFormatter.textForInsertion(
+                "Haus",
+                contextBeforeInput: "das ",
+                languageCode: "de-DE"
+            ),
+            "Haus"
+        )
+        XCTAssertEqual(
+            HandwritingTextFormatter.textForInsertion(
+                "HAUS",
+                contextBeforeInput: "das ",
+                languageCode: "deu"
+            ),
+            "HAUS"
+        )
+    }
+
+    func testHandwritingStillAppliesEnglishPronounRule() {
+        XCTAssertEqual(
+            HandwritingTextFormatter.textForInsertion(
+                "i agree",
+                contextBeforeInput: "and ",
+                languageCode: "eng"
+            ),
+            "I agree"
+        )
+    }
 }

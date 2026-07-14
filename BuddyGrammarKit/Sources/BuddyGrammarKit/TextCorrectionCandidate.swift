@@ -27,8 +27,24 @@ public struct TextCorrectionCandidate: Equatable, Sendable {
     }
 }
 
+public struct CursorTextCorrectionCandidate: Equatable, Sendable {
+    public let candidate: TextCorrectionCandidate
+    public let textBeforeCursor: String
+    public let textAfterCursor: String
+
+    public init(
+        candidate: TextCorrectionCandidate,
+        textBeforeCursor: String,
+        textAfterCursor: String
+    ) {
+        self.candidate = candidate
+        self.textBeforeCursor = textBeforeCursor
+        self.textAfterCursor = textAfterCursor
+    }
+}
+
 public enum TextContextExtractor {
-    private static let sentenceTerminators: Set<Character> = [".", "!", "?", "\n"]
+    private static let sentenceTerminators: Set<Character> = [".", "!", "?", "\n", "…"]
 
     public static func precedingSentence(
         from context: String,
@@ -56,5 +72,51 @@ public enum TextContextExtractor {
         }
 
         return TextCorrectionCandidate(capturedText: String(bounded[startIndex...]))
+    }
+
+    public static func currentSentence(
+        contextBeforeCursor: String,
+        contextAfterCursor: String,
+        maximumCharacters: Int = 1_000
+    ) -> CursorTextCorrectionCandidate? {
+        guard maximumCharacters > 0 else { return nil }
+        let before = String(contextBeforeCursor.suffix(maximumCharacters))
+        let after = String(contextAfterCursor.prefix(maximumCharacters))
+
+        if let lastContentIndex = before.lastIndex(where: { !$0.isWhitespace }),
+           sentenceTerminators.contains(before[lastContentIndex]) {
+            guard let preceding = precedingSentence(
+                from: before,
+                maximumCharacters: maximumCharacters
+            ) else {
+                return nil
+            }
+            return CursorTextCorrectionCandidate(
+                candidate: preceding,
+                textBeforeCursor: preceding.capturedText,
+                textAfterCursor: ""
+            )
+        }
+
+        let leftStart = before.lastIndex(where: { sentenceTerminators.contains($0) })
+            .map { before.index(after: $0) }
+            ?? before.startIndex
+        let left = String(before[leftStart...])
+
+        let right: String
+        if let terminator = after.firstIndex(where: { sentenceTerminators.contains($0) }) {
+            right = String(after[...terminator])
+        } else {
+            right = after
+        }
+
+        guard let candidate = TextCorrectionCandidate(capturedText: left + right) else {
+            return nil
+        }
+        return CursorTextCorrectionCandidate(
+            candidate: candidate,
+            textBeforeCursor: left,
+            textAfterCursor: right
+        )
     }
 }

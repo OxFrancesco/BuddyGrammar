@@ -32,7 +32,7 @@ data class CursorCorrectionCandidate(
 )
 
 object TextContextExtractor {
-    private val terminators = setOf('.', '!', '?', '\n')
+    private val terminators = setOf('.', '!', '?', '\n', '…')
 
     fun precedingSentence(context: String, maximumCharacters: Int = 1_000): TextCorrectionCandidate? {
         if (context.isEmpty() || maximumCharacters <= 0) return null

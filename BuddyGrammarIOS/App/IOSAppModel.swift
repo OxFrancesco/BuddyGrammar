@@ -120,6 +120,7 @@ final class IOSAppModel {
         settings = loadedSettings
         pendingTranscript = loadedTranscript
         transcriptDraft = loadedTranscript?.text ?? ""
+        detectedLanguageCode = loadedTranscript?.languageCode
 
         if !isSharedContainerReady {
             alert = AppAlert(
@@ -269,9 +270,14 @@ final class IOSAppModel {
             guard let clientID = preferences?.installationIdentifier() else {
                 throw SharedContainerError.unavailable
             }
+            let languageHint = Locale.preferredLanguages.first?
+                .split(separator: "-")
+                .first
+                .map(String.init)
             let transcript = try await transcriptionClient.transcribe(
                 audioData: audioData,
-                clientID: clientID
+                clientID: clientID,
+                languageCode: languageHint
             )
 
             detectedLanguageCode = transcript.languageCode
@@ -293,12 +299,16 @@ final class IOSAppModel {
             }
 
             transcriptDraft = finalText
-            try savePendingTranscript(finalText)
+            try savePendingTranscript(
+                finalText,
+                languageCode: transcript.languageCode
+            )
             if let keyboardSessionID {
                 try preferences?.updateKeyboardDictationSession(
                     id: keyboardSessionID,
                     phase: .ready,
-                    transcript: finalText
+                    transcript: finalText,
+                    languageCode: transcript.languageCode
                 )
             }
             dictationPhase = .ready
@@ -349,7 +359,10 @@ final class IOSAppModel {
         }
 
         do {
-            try savePendingTranscript(text)
+            try savePendingTranscript(
+                text,
+                languageCode: detectedLanguageCode
+            )
             dictationPhase = .ready
             showNotice("Ready in the BuddyGrammar keyboard", kind: .success)
         } catch {
@@ -510,11 +523,17 @@ final class IOSAppModel {
         backgroundTaskIdentifier = .invalid
     }
 
-    private func savePendingTranscript(_ text: String) throws {
+    private func savePendingTranscript(
+        _ text: String,
+        languageCode: String?
+    ) throws {
         guard let preferences else {
             throw SharedContainerError.unavailable
         }
-        let transcript = PendingTranscript(text: text)
+        let transcript = PendingTranscript(
+            text: text,
+            languageCode: languageCode
+        )
         try preferences.savePendingTranscript(transcript)
         pendingTranscript = transcript
     }

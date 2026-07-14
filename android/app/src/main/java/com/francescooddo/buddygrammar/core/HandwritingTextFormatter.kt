@@ -1,13 +1,18 @@
 package com.francescooddo.buddygrammar.core
 
 /**
- * Adapts recognized handwriting to the sentence context at the cursor:
- * normalizes ALL-CAPS recognitions, restores the standalone pronoun "I",
- * capitalizes at a sentence start, and demotes a stray leading capital in
- * the middle of a sentence.
+ * Applies English-only casing cleanup to recognized handwriting. Recognition
+ * in every other language is preserved verbatim so noun and script-specific
+ * casing rules are not overwritten by English heuristics.
  */
 object HandwritingTextFormatter {
-    fun textForInsertion(recognizedText: String, contextBeforeCursor: String): String {
+    fun textForInsertion(
+        recognizedText: String,
+        contextBeforeCursor: String,
+        languageTag: String = LanguageSupport.DEFAULT_LANGUAGE_TAG,
+    ): String {
+        val usesEnglishRules = LanguageSupport.usesEnglishPriors(languageTag)
+        if (!usesEnglishRules) return recognizedText
         var text = recognizedText
 
         val letters = text.filter { it.isLetter() }

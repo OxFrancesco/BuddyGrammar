@@ -580,6 +580,11 @@ private fun SettingsScreen(state: BuddyGrammarAppState, onOpenKeyboardSettings: 
             body = "Polish the transcript before saving it for the keyboard.",
             checked = draft.autoCorrectDictation,
         ) { draft = draft.copy(autoCorrectDictation = it) }
+        SettingSwitch(
+            title = "Correct words while typing",
+            body = "Fix clear keyboard typos on-device when you type punctuation, space, or return.",
+            checked = draft.automaticallyCorrectWords,
+        ) { draft = draft.copy(automaticallyCorrectWords = it) }
         OutlinedTextField(
             value = draft.modelId,
             onValueChange = { draft = draft.copy(modelId = it) },
@@ -688,6 +693,7 @@ private fun PrivacyScreen(state: BuddyGrammarAppState) {
         ) {
             PrivacyPoint("Only on request", "Text leaves the device only when you tap ★. Audio leaves only after you finish a recording.")
             PrivacyPoint("Protected credentials", "OpenRouter and ElevenLabs keys live on the BuddyGrammar worker and are not bundled with the app or keyboard.")
+            PrivacyPoint("On-device personalization", "The keyboard stores language-scoped vocabulary and context frequency counts locally to improve suggestions. These counts are never sent for prediction.")
             PrivacyPoint("Minimal local data", "Settings, a random installation ID, and the latest transcript are stored locally. Transcripts expire from keyboard access after 24 hours.")
             PrivacyPoint("Secure fields", "The keyboard blocks cloud correction and transcript insertion in password and other secure inputs.")
         }

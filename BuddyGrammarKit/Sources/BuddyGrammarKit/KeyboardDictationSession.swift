@@ -15,6 +15,7 @@ public struct KeyboardDictationSession: Codable, Equatable, Sendable {
     public let updatedAt: Date
     public let phase: Phase
     public let transcript: String?
+    public let languageCode: String?
     public let errorMessage: String?
 
     public init(
@@ -23,6 +24,7 @@ public struct KeyboardDictationSession: Codable, Equatable, Sendable {
         updatedAt: Date,
         phase: Phase,
         transcript: String? = nil,
+        languageCode: String? = nil,
         errorMessage: String? = nil
     ) {
         self.id = id
@@ -30,12 +32,14 @@ public struct KeyboardDictationSession: Codable, Equatable, Sendable {
         self.updatedAt = updatedAt
         self.phase = phase
         self.transcript = transcript
+        self.languageCode = languageCode
         self.errorMessage = errorMessage
     }
 
     public func updating(
         phase: Phase,
         transcript: String? = nil,
+        languageCode: String? = nil,
         errorMessage: String? = nil,
         at date: Date
     ) -> KeyboardDictationSession {
@@ -45,6 +49,7 @@ public struct KeyboardDictationSession: Codable, Equatable, Sendable {
             updatedAt: date,
             phase: phase,
             transcript: transcript,
+            languageCode: languageCode ?? self.languageCode,
             errorMessage: errorMessage
         )
     }

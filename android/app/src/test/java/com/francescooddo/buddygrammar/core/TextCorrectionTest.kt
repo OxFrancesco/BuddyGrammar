@@ -63,6 +63,18 @@ class TextCorrectionTest {
     }
 
     @Test
+    fun `treats ellipsis as a current sentence boundary`() {
+        val candidate = TextContextExtractor.currentSentence(
+            contextBeforeCursor = "Previous thought… this sentence ",
+            contextAfterCursor = "need fixing… Next sentence",
+        )
+
+        assertEquals(" this sentence need fixing…", candidate?.candidate?.capturedText)
+        assertEquals(" this sentence ", candidate?.textBeforeCursor)
+        assertEquals("need fixing…", candidate?.textAfterCursor)
+    }
+
+    @Test
     fun `guard rejects explanations and oversized output`() {
         assertThrows(IllegalArgumentException::class.java) {
             CorrectionOutputGuard.sanitize("Here is the corrected text: Fine.", "bad")

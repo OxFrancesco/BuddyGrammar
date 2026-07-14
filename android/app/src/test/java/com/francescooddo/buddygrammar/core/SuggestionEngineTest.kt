@@ -92,4 +92,65 @@ class SuggestionEngineTest {
         assertTrue(SuggestionEngine.suggest("th").size <= SuggestionEngine.MAX_SUGGESTIONS)
         assertTrue(SuggestionEngine.suggest("love ").size <= SuggestionEngine.MAX_SUGGESTIONS)
     }
+
+    @Test
+    fun `uses two word personal context for next word predictions`() {
+        val model = PersonalLanguageModel()
+        repeat(2) { model.learnCommittedText("I like coffee") }
+        repeat(4) { model.learnCommittedText("They like tea") }
+
+        assertEquals("coffee", SuggestionEngine.suggest("I like ", model).first().text)
+        assertEquals("tea", SuggestionEngine.suggest("They like ", model).first().text)
+    }
+
+    @Test
+    fun `puts an obvious typo correction before prefix completions`() {
+        val suggestion = SuggestionEngine.suggest("teh").first()
+
+        assertEquals("the", suggestion.text)
+        assertEquals(SuggestionKind.CORRECTION, suggestion.kind)
+        assertEquals(3, suggestion.replaceBeforeCursor)
+        assertTrue(suggestion.appendSpace)
+        assertFalse(suggestion.isEmoji)
+    }
+
+    @Test
+    fun `classifies a word extending the prefix as a completion`() {
+        val suggestions = SuggestionEngine.suggest("hel")
+
+        assertTrue(suggestions.isNotEmpty())
+        assertTrue(suggestions.none { it.kind == SuggestionKind.CORRECTION })
+        assertTrue(suggestions.all { it.kind == SuggestionKind.COMPLETION })
+    }
+
+    @Test
+    fun `suppresses English priors and local corrections outside English`() {
+        assertTrue(SuggestionEngine.suggest("hel", languageTag = "it-IT").isEmpty())
+        assertTrue(SuggestionEngine.suggest("teh", languageTag = "it-IT").isEmpty())
+        assertTrue(SuggestionEngine.suggest("unknown ", languageTag = "it-IT").isEmpty())
+        assertTrue(SuggestionEngine.suggest("hel").isNotEmpty())
+    }
+
+    @Test
+    fun `still offers language scoped personal predictions outside English`() {
+        val model = PersonalLanguageModel()
+        repeat(2) {
+            model.learnCommittedText("mi piace caffè", languageTag = "it-IT")
+            model.learnCommittedText("mi piace tea", languageTag = "en-US")
+        }
+
+        val italian = SuggestionEngine.suggest("mi piace ", model, languageTag = "it-IT")
+        assertEquals(listOf("caffè"), italian.map { it.text })
+        assertTrue(italian.all { it.kind == SuggestionKind.PREDICTION })
+    }
+
+    @Test
+    fun `editor policy can disable every suggestion including emoji`() {
+        assertTrue(
+            SuggestionEngine.suggest("hel", suggestionsAllowed = false).isEmpty(),
+        )
+        assertTrue(
+            SuggestionEngine.suggest("love", suggestionsAllowed = false).isEmpty(),
+        )
+    }
 }

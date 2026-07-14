@@ -93,6 +93,7 @@ public final class SharedPreferences: @unchecked Sendable {
         id: UUID,
         phase: KeyboardDictationSession.Phase,
         transcript: String? = nil,
+        languageCode: String? = nil,
         errorMessage: String? = nil,
         now: Date = .now
     ) throws -> KeyboardDictationSession? {
@@ -103,6 +104,7 @@ public final class SharedPreferences: @unchecked Sendable {
         let updated = session.updating(
             phase: phase,
             transcript: transcript,
+            languageCode: languageCode,
             errorMessage: errorMessage,
             at: now
         )

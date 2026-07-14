@@ -50,4 +50,30 @@ final class TextContextExtractorTests: XCTestCase {
 
         XCTAssertEqual(candidate.requestText.count, 1_000)
     }
+
+    func testExtractsCurrentSentenceAcrossTheCursor() throws {
+        let candidate = try XCTUnwrap(
+            TextContextExtractor.currentSentence(
+                contextBeforeCursor: "Previous. this sentence ",
+                contextAfterCursor: "need fixing. Next"
+            )
+        )
+
+        XCTAssertEqual(candidate.candidate.capturedText, " this sentence need fixing.")
+        XCTAssertEqual(candidate.textBeforeCursor, " this sentence ")
+        XCTAssertEqual(candidate.textAfterCursor, "need fixing.")
+        XCTAssertEqual(candidate.candidate.requestText, "this sentence need fixing.")
+    }
+
+    func testUsesPrecedingSentenceWhenCursorFollowsPunctuation() throws {
+        let candidate = try XCTUnwrap(
+            TextContextExtractor.currentSentence(
+                contextBeforeCursor: "Previous. this need fixing.  ",
+                contextAfterCursor: "Next sentence"
+            )
+        )
+
+        XCTAssertEqual(candidate.candidate.capturedText, " this need fixing.  ")
+        XCTAssertEqual(candidate.textAfterCursor, "")
+    }
 }

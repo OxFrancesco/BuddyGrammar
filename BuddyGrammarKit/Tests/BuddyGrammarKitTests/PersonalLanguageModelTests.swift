@@ -69,6 +69,128 @@ final class PersonalLanguageModelTests: XCTestCase {
             ["vibes", "morning"]
         )
     }
+
+    func testLearnsAndPersistsTwoWordContexts() throws {
+        let suiteName = "PersonalLanguageModelTrigramTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let model = PersonalLanguageModel(defaults: defaults)
+        for _ in 0..<2 {
+            model.learn(previousWords: ["good", "morning"], word: "team")
+            model.learn(previousWords: ["tomorrow", "morning"], word: "flight")
+        }
+        model.persist()
+
+        let reloaded = PersonalLanguageModel(defaults: defaults)
+        XCTAssertEqual(
+            reloaded.predictions(after: ["good", "morning"], limit: 1),
+            ["team"]
+        )
+        XCTAssertEqual(
+            reloaded.predictions(after: ["tomorrow", "morning"], limit: 1),
+            ["flight"]
+        )
+    }
+
+    func testLoadsLegacyStorageWithoutTrigramData() throws {
+        let suiteName = "PersonalLanguageModelLegacyTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(
+            Data(#"{"unigrams":{"legacy":3},"bigrams":{"see":{"you":2}}}"#.utf8),
+            forKey: "personalLanguageModel.v1"
+        )
+
+        let reloaded = PersonalLanguageModel(defaults: defaults)
+
+        XCTAssertEqual(reloaded.completions(forPrefix: "leg", limit: 1), ["legacy"])
+        XCTAssertEqual(reloaded.predictions(after: "see", limit: 1), ["you"])
+        XCTAssertEqual(
+            reloaded.predictions(after: "see", languageCode: "en-GB", limit: 1),
+            ["you"]
+        )
+        XCTAssertEqual(
+            reloaded.predictions(after: "see", languageCode: "it-IT", limit: 1),
+            []
+        )
+    }
+
+    func testEnglishLanguageCodesShareTheLegacyUnscopedCorpus() {
+        let model = makeModel()
+        for _ in 0..<2 {
+            model.learn(previousWord: "see", word: "tomorrow", languageCode: "en-US")
+        }
+
+        XCTAssertEqual(model.predictions(after: "see", limit: 1), ["tomorrow"])
+        XCTAssertEqual(
+            model.predictions(after: "see", languageCode: "en-GB", limit: 1),
+            ["tomorrow"]
+        )
+    }
+
+    func testISO639ThreeLetterCodesShareCanonicalLanguageScopes() {
+        XCTAssertEqual(LanguageSupport.primaryCode(for: "eng"), "en")
+        XCTAssertEqual(LanguageSupport.primaryCode(for: "ita"), "it")
+
+        let model = makeModel()
+        for _ in 0..<2 {
+            model.learn(previousWord: "see", word: "tomorrow", languageCode: "eng")
+            model.learn(previousWord: "ciao", word: "bella", languageCode: "it-IT")
+        }
+
+        XCTAssertEqual(
+            model.predictions(after: "see", languageCode: "en-US", limit: 1),
+            ["tomorrow"]
+        )
+        XCTAssertEqual(
+            model.predictions(after: "ciao", languageCode: "ita", limit: 1),
+            ["bella"]
+        )
+    }
+
+    func testLanguageNamespacesIsolatePredictionsAndUsage() {
+        let model = makeModel()
+        for _ in 0..<2 {
+            model.learn(previousWord: "ciao", word: "hello", languageCode: "en-US")
+            model.learn(previousWord: "ciao", word: "bella", languageCode: "it-IT")
+        }
+
+        XCTAssertEqual(
+            model.predictions(after: "ciao", languageCode: "en-US", limit: 2),
+            ["hello"]
+        )
+        XCTAssertEqual(
+            model.predictions(after: "ciao", languageCode: "it-CH", limit: 2),
+            ["bella"]
+        )
+        XCTAssertEqual(model.usageCount(for: "bella", languageCode: "en-US"), 0)
+        XCTAssertEqual(model.usageCount(for: "bella", languageCode: "it-IT"), 2)
+    }
+
+    func testItalianNamespacePersistsAndDoesNotLeakIntoEnglishCompletions() throws {
+        let suiteName = "PersonalLanguageModelLanguageTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let model = PersonalLanguageModel(defaults: defaults)
+        for _ in 0..<3 {
+            model.learn(previousWord: "ciao", word: "italiano", languageCode: "it_IT")
+        }
+        model.persist()
+
+        let reloaded = PersonalLanguageModel(defaults: defaults)
+        XCTAssertEqual(
+            reloaded.predictions(after: "ciao", languageCode: "it-CH", limit: 1),
+            ["italiano"]
+        )
+        XCTAssertEqual(
+            reloaded.completions(forPrefix: "it", languageCode: "it-IT", limit: 1),
+            ["italiano"]
+        )
+        XCTAssertEqual(reloaded.predictions(after: "ciao", limit: 1), [])
+        XCTAssertEqual(reloaded.completions(forPrefix: "it", limit: 1), [])
+    }
 }
 
 final class WordFrequencyLexiconTests: XCTestCase {

@@ -2,6 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { handleRequest, RateLimiter, type Env } from "../src/index";
 
 const clientID = "test-client-1234567890";
+const rejectedOpenRouterFinishReasons = [
+  ["length", { finish_reason: "length" }],
+  ["content_filter", { finish_reason: "content_filter" }],
+  ["an unknown value", { finish_reason: "unexpected" }],
+  ["missing", {}],
+] as const;
 
 function environment(overrides: Partial<Env> = {}): Env {
   const namespace = {
@@ -49,7 +55,9 @@ describe("BuddyGrammar Worker", () => {
         instruction: "Correct grammar only.",
         sourceText: "this are corrected",
       });
-      return Response.json({ choices: [{ message: { content: "This is corrected." } }] });
+      return Response.json({
+        choices: [{ finish_reason: "stop", message: { content: "This is corrected." } }],
+      });
     });
     const response = await handleRequest(
       request("/v1/correct", {
@@ -71,6 +79,38 @@ describe("BuddyGrammar Worker", () => {
     expect(responseText).not.toContain("worker-openrouter-secret");
     expect(providerFetch).toHaveBeenCalledOnce();
   });
+
+  it.each(rejectedOpenRouterFinishReasons)(
+    "rejects correction when OpenRouter finish_reason is %s",
+    async (_label, finishReason) => {
+      const providerFetch = vi.fn(async () =>
+        Response.json({
+          choices: [{ ...finishReason, message: { content: "Partial correction" } }],
+        }),
+      );
+      const response = await handleRequest(
+        request("/v1/correct", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            text: "this needs correction",
+            modelID: "openai/gpt-5.6-luna",
+            instruction: "Correct grammar only.",
+          }),
+        }),
+        environment(),
+        { fetch: providerFetch as typeof fetch },
+      );
+
+      expect(response.status).toBe(502);
+      expect(await response.json()).toEqual({
+        error: {
+          code: "invalid_provider_response",
+          message: "Correction could not be completed.",
+        },
+      });
+    },
+  );
 
   it("rejects unapproved correction models before calling OpenRouter", async () => {
     const providerFetch = vi.fn();
@@ -165,7 +205,9 @@ describe("BuddyGrammar Worker", () => {
       expect(body.messages[1].content[1].image_url.url).toBe(
         "data:image/png;base64,iVBORw==",
       );
-      return Response.json({ choices: [{ message: { content: "Hello world" } }] });
+      return Response.json({
+        choices: [{ finish_reason: "stop", message: { content: "Hello world" } }],
+      });
     });
     const response = await handleRequest(
       request("/v1/handwriting", {
@@ -185,6 +227,37 @@ describe("BuddyGrammar Worker", () => {
     expect(await response.json()).toEqual({ text: "Hello world" });
     expect(providerFetch).toHaveBeenCalledOnce();
   });
+
+  it.each(rejectedOpenRouterFinishReasons)(
+    "rejects handwriting when OpenRouter finish_reason is %s",
+    async (_label, finishReason) => {
+      const providerFetch = vi.fn(async () =>
+        Response.json({
+          choices: [{ ...finishReason, message: { content: "Partial handwriting" } }],
+        }),
+      );
+      const response = await handleRequest(
+        request("/v1/handwriting", {
+          method: "POST",
+          headers: {
+            "content-type": "image/png",
+            "x-buddy-model-id": "openai/gpt-5.6-luna",
+          },
+          body: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+        }),
+        environment(),
+        { fetch: providerFetch as typeof fetch },
+      );
+
+      expect(response.status).toBe(502);
+      expect(await response.json()).toEqual({
+        error: {
+          code: "invalid_provider_response",
+          message: "Handwriting could not be recognized.",
+        },
+      });
+    },
+  );
 
   it("returns a generic error without leaking a provider body", async () => {
     const providerFetch = vi.fn(async () => new Response("sensitive provider diagnostic", { status: 500 }));

@@ -131,6 +131,45 @@ extension KeyboardViewController: KeyboardModelDelegate {
         primaryLanguage ?? Locale.preferredLanguages.first ?? "en-US"
     }
 
+    var allowsAutomaticTextCorrection: Bool {
+        let proxy = textDocumentProxy
+        guard proxy.autocorrectionType != .no,
+              proxy.spellCheckingType != .no,
+              proxy.isSecureTextEntry != true else {
+            return false
+        }
+
+        switch proxy.keyboardType {
+        case .URL, .emailAddress, .phonePad, .namePhonePad,
+             .numberPad, .decimalPad, .asciiCapableNumberPad:
+            return false
+        default:
+            break
+        }
+
+        guard let contentType = proxy.textContentType ?? nil else { return true }
+        return !Self.correctionSensitiveContentTypes.contains(contentType)
+    }
+
+    private static let correctionSensitiveContentTypes: [UITextContentType] = [
+        .URL,
+        .emailAddress,
+        .telephoneNumber,
+        .name,
+        .givenName,
+        .middleName,
+        .familyName,
+        .namePrefix,
+        .nameSuffix,
+        .nickname,
+        .organizationName,
+        .username,
+        .password,
+        .newPassword,
+        .oneTimeCode,
+        .creditCardNumber,
+    ]
+
     func insertText(_ text: String) {
         documentGeneration &+= 1
         textDocumentProxy.insertText(text)
@@ -176,10 +215,13 @@ extension KeyboardViewController: KeyboardModelDelegate {
             )
         }
 
-        // No selection: correct the whole visible text of the input, not
-        // just the sentence before the cursor.
-        let wholeText = (before ?? "") + (after ?? "")
-        guard let candidate = TextCorrectionCandidate(capturedText: wholeText) else {
+        // No selection: keep the explicit correction request scoped to the
+        // active sentence. This matches the UI promise and minimizes text
+        // sent for cloud processing.
+        guard let sentence = TextContextExtractor.currentSentence(
+            contextBeforeCursor: before ?? "",
+            contextAfterCursor: after ?? ""
+        ) else {
             return nil
         }
 
@@ -189,8 +231,10 @@ extension KeyboardViewController: KeyboardModelDelegate {
             contextBeforeInput: before,
             selectedText: selected,
             contextAfterInput: after,
-            target: .wholeText(charactersAfterCursor: after?.utf16.count ?? 0),
-            candidate: candidate
+            target: .currentSentence(
+                charactersAfterCursor: sentence.textAfterCursor.utf16.count
+            ),
+            candidate: sentence.candidate
         )
     }
 
@@ -211,10 +255,10 @@ extension KeyboardViewController: KeyboardModelDelegate {
         switch snapshot.target {
         case .selection:
             proxy.insertText(replacement)
-        case .wholeText(let charactersAfterCursor):
+        case .currentSentence(let charactersAfterCursor):
             if charactersAfterCursor > 0 {
-                // Move the cursor to the end of the text so the delete
-                // loop can remove the entire captured text.
+                // Move to the end of the sentence before replacing the
+                // bounded captured range.
                 proxy.adjustTextPosition(byCharacterOffset: charactersAfterCursor)
             }
             for _ in snapshot.candidate.capturedText {

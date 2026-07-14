@@ -20,6 +20,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
 enum class AppScreen {
     HOME,
@@ -49,7 +50,7 @@ class BuddyGrammarAppState(context: Context) {
         private set
     var transcript by mutableStateOf(initialPendingTranscript?.text.orEmpty())
         private set
-    var detectedLanguage by mutableStateOf<String?>(null)
+    var detectedLanguage by mutableStateOf(initialPendingTranscript?.languageCode)
         private set
     var isRecording by mutableStateOf(false)
         private set
@@ -100,8 +101,8 @@ class BuddyGrammarAppState(context: Context) {
             return
         }
         transcript = value
-        preferences.savePendingTranscript(value)
-        pendingTranscript = PendingTranscript(value, System.currentTimeMillis())
+        preferences.savePendingTranscript(value, languageCode = detectedLanguage)
+        pendingTranscript = PendingTranscript(value, System.currentTimeMillis(), detectedLanguage)
         showNotice("Saved for the keyboard microphone button.")
     }
 
@@ -140,7 +141,11 @@ class BuddyGrammarAppState(context: Context) {
         scope.launch {
             try {
                 val audio = withContext(Dispatchers.IO) { recording.readBytes() }
-                val result = api.transcribe(audio, preferences.installationId())
+                val result = api.transcribe(
+                    audio,
+                    preferences.installationId(),
+                    primaryDeviceLanguage(),
+                )
                 var correctionWarning: String? = null
                 val finalText = if (settings.autoCorrectDictation) {
                     showNotice("Polishing the transcript…")
@@ -160,8 +165,15 @@ class BuddyGrammarAppState(context: Context) {
                 }
                 transcript = finalText
                 detectedLanguage = result.languageCode
-                preferences.savePendingTranscript(finalText)
-                pendingTranscript = PendingTranscript(finalText, System.currentTimeMillis())
+                preferences.savePendingTranscript(
+                    finalText,
+                    languageCode = result.languageCode,
+                )
+                pendingTranscript = PendingTranscript(
+                    finalText,
+                    System.currentTimeMillis(),
+                    result.languageCode,
+                )
                 showNotice(
                     correctionWarning?.let { "Transcript saved without correction: $it" }
                         ?: "Transcript saved and ready for the keyboard.",
@@ -185,7 +197,10 @@ class BuddyGrammarAppState(context: Context) {
     fun refresh() {
         settings = preferences.loadSettings()
         pendingTranscript = preferences.loadPendingTranscript()
-        if (transcript.isEmpty()) transcript = pendingTranscript?.text.orEmpty()
+        if (transcript.isEmpty()) {
+            transcript = pendingTranscript?.text.orEmpty()
+            detectedLanguage = pendingTranscript?.languageCode
+        }
         refreshKeyboardStatus()
     }
 
@@ -210,6 +225,15 @@ class BuddyGrammarAppState(context: Context) {
 
     private fun showNotice(message: String) {
         notice = AppNotice(message)
+    }
+
+    private fun primaryDeviceLanguage(): String {
+        val configured = appContext.resources.configuration.locales
+            .takeIf { !it.isEmpty }
+            ?.get(0)
+            ?.language
+            ?.takeIf { it.isNotBlank() }
+        return configured ?: Locale.getDefault().language
     }
 
     fun close() {

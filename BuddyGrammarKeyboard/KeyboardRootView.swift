@@ -78,7 +78,7 @@ private struct KeyboardSuggestionBar: View {
                 .accessibilityIdentifier("keyboard.undo")
                 .accessibilityHint("Restores the text from before the star correction")
                 .transition(.move(edge: .top).combined(with: .opacity))
-            } else if model.isStatusPresented {
+            } else if model.isStatusPresented, model.status != .ready {
                 StatusIndicator(status: model.status)
                     .frame(maxWidth: .infinity)
             } else {
@@ -105,6 +105,17 @@ private struct KeyboardSuggestionBar: View {
             .buttonStyle(KeyboardAccessoryButtonStyle())
             .accessibilityIdentifier("keyboard.handwriting")
             .accessibilityLabel("Handwriting input")
+
+            if model.hasPendingTranscript {
+                Button(action: model.insertPendingTranscript) {
+                    Image(systemName: "tray.and.arrow.down.fill")
+                        .frame(width: 34, height: 32)
+                }
+                .buttonStyle(KeyboardAccessoryButtonStyle())
+                .accessibilityIdentifier("keyboard.savedTranscript")
+                .accessibilityLabel("Insert saved transcript")
+                .accessibilityHint("Inserts dictation saved by BuddyGrammar")
+            }
 
             Button(action: model.toggleDictation) {
                 Group {
@@ -147,7 +158,7 @@ private struct KeyboardSuggestionBar: View {
             .disabled(model.status == .correcting)
             .accessibilityIdentifier("keyboard.star")
             .accessibilityLabel("Correct text")
-            .accessibilityHint("Corrects selected text, or the sentence immediately before the cursor")
+            .accessibilityHint("Corrects selected text or the current sentence")
         }
         .frame(maxWidth: .infinity)
         .animation(.snappy, value: model.canUndoCorrection)
@@ -174,18 +185,43 @@ private struct SuggestionSlots: View {
                 Button {
                     model.insertSuggestion(suggestion)
                 } label: {
-                    Text(suggestion.display)
-                        .font(.subheadline)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity, minHeight: 32)
+                    HStack(spacing: 4) {
+                        if suggestion.kind == .correction {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.caption2)
+                                .foregroundStyle(Color.orange)
+                                .accessibilityHidden(true)
+                        }
+                        Text(suggestion.display)
+                            .font(
+                                .subheadline.weight(
+                                    suggestion.kind == .correction ? .semibold : .regular
+                                )
+                            )
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 32)
                 }
                 .buttonStyle(KeyboardAccessoryButtonStyle())
                 .accessibilityIdentifier("keyboard.suggestion.\(suggestion.id)")
-                .accessibilityLabel("Insert \(suggestion.display)")
+                .accessibilityLabel(accessibilityLabel(for: suggestion))
+                .accessibilityHint(accessibilityHint(for: suggestion))
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func accessibilityLabel(for suggestion: KeyboardSuggestion) -> String {
+        suggestion.kind == .correction
+            ? "Correct to \(suggestion.display)"
+            : "Insert \(suggestion.display)"
+    }
+
+    private func accessibilityHint(for suggestion: KeyboardSuggestion) -> String {
+        suggestion.kind == .correction
+            ? "Replaces the current word with this correction"
+            : "Inserts this suggestion"
     }
 }
 

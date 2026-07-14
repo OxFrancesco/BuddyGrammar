@@ -216,7 +216,7 @@ private struct PrivacyPolicyView: View {
 
                 policySection(
                     title: "What stays on your device",
-                    text: "Normal keyboard input is not sent anywhere. Provider API keys are never included in the app or keyboard. A dictated transcript is kept in the app’s shared container until you insert or clear it, and is discarded when next read after 24 hours. BuddyGrammar has no advertising or analytics SDKs."
+                    text: "Normal keyboard input is not sent anywhere. BuddyGrammar stores learned vocabulary and context frequency counts locally to personalize suggestions and predictions. Provider API keys are never included in the app or keyboard. A dictated transcript is kept in the app’s shared container until you insert or clear it, and is discarded when next read after 24 hours. BuddyGrammar has no advertising or analytics SDKs."
                 )
 
                 policySection(

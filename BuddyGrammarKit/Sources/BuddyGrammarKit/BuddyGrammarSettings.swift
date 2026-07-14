@@ -115,10 +115,16 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
 
 public struct PendingTranscript: Codable, Equatable, Sendable {
     public let text: String
+    public let languageCode: String?
     public let createdAt: Date
 
-    public init(text: String, createdAt: Date = .now) {
+    public init(
+        text: String,
+        languageCode: String? = nil,
+        createdAt: Date = .now
+    ) {
         self.text = text
+        self.languageCode = languageCode
         self.createdAt = createdAt
     }
 }

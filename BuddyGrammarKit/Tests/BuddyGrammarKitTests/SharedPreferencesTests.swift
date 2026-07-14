@@ -138,11 +138,13 @@ final class SharedPreferencesTests: XCTestCase {
             id: sessionID,
             phase: .ready,
             transcript: "Hello from the keyboard.",
+            languageCode: "it",
             now: startedAt.addingTimeInterval(4)
         )
 
         XCTAssertEqual(ready?.phase, .ready)
         XCTAssertEqual(ready?.transcript, "Hello from the keyboard.")
+        XCTAssertEqual(ready?.languageCode, "it")
         XCTAssertEqual(
             preferences.loadKeyboardDictationSession(now: startedAt.addingTimeInterval(4)),
             ready
@@ -168,6 +170,7 @@ final class SharedPreferencesTests: XCTestCase {
         let now = Date(timeIntervalSince1970: 123)
         let transcript = PendingTranscript(
             text: "A dictated sentence.",
+            languageCode: "en",
             createdAt: now
         )
 
@@ -176,6 +179,24 @@ final class SharedPreferencesTests: XCTestCase {
 
         preferences.clearPendingTranscript()
         XCTAssertNil(preferences.loadPendingTranscript(now: now))
+    }
+
+    func testPendingTranscriptDecodesLegacyPayloadWithoutLanguage() throws {
+        struct LegacyPendingTranscript: Encodable {
+            let text: String
+            let createdAt: Date
+        }
+
+        let data = try JSONEncoder().encode(
+            LegacyPendingTranscript(
+                text: "Legacy transcript",
+                createdAt: Date(timeIntervalSince1970: 123)
+            )
+        )
+        let transcript = try JSONDecoder().decode(PendingTranscript.self, from: data)
+
+        XCTAssertEqual(transcript.text, "Legacy transcript")
+        XCTAssertNil(transcript.languageCode)
     }
 
     func testExpiredPendingTranscriptIsDiscarded() throws {

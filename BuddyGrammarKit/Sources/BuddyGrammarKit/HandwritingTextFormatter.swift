@@ -3,8 +3,12 @@ import Foundation
 public enum HandwritingTextFormatter {
     public static func textForInsertion(
         _ recognizedText: String,
-        contextBeforeInput: String?
+        contextBeforeInput: String?,
+        languageCode: String? = nil
     ) -> String {
+        guard LanguageSupport.usesEnglishPriors(languageCode: languageCode) else {
+            return recognizedText
+        }
         var text = recognizedText
 
         let letters = text.filter(\.isLetter)

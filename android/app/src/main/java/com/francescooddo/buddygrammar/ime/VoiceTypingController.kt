@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import java.util.Locale
 
 /**
  * Wraps [SpeechRecognizer] for in-keyboard dictation on the VOICE layer.
@@ -17,6 +18,7 @@ import androidx.compose.runtime.setValue
 class VoiceTypingController(
     private val context: Context,
     private val onFinalText: (String) -> Unit,
+    private val languageTagProvider: () -> String = { Locale.getDefault().toLanguageTag() },
 ) {
     var isListening by mutableStateOf(false)
         private set
@@ -54,6 +56,9 @@ class VoiceTypingController(
             )
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
+            languageTagProvider().trim().takeIf(String::isNotEmpty)?.let { languageTag ->
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageTag)
+            }
         }
         runCatching { speechRecognizer.startListening(intent) }
             .onSuccess { isListening = true }

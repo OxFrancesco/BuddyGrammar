@@ -177,6 +177,21 @@ public enum NextWordPredictor {
     public static func predictions(
         after word: String?,
         personal: PersonalLanguageModel? = nil,
+        languageCode: String? = nil,
+        limit: Int = 2
+    ) -> [String] {
+        predictions(
+            after: word.map { [$0] } ?? [],
+            personal: personal,
+            languageCode: languageCode,
+            limit: limit
+        )
+    }
+
+    public static func predictions(
+        after words: [String],
+        personal: PersonalLanguageModel? = nil,
+        languageCode: String? = nil,
         limit: Int = 2
     ) -> [String] {
         guard limit > 0 else { return [] }
@@ -188,8 +203,12 @@ public enum NextWordPredictor {
             }
         }
         // The user's own habits outrank the generic bigram table.
-        append(personal?.predictions(after: word, limit: limit) ?? [])
-        if let word, let continuations = bigrams[word.lowercased()] {
+        append(personal?.predictions(
+            after: words,
+            languageCode: languageCode,
+            limit: limit
+        ) ?? [])
+        if let word = words.last, let continuations = bigrams[word.lowercased()] {
             append(continuations)
         }
         append(fallback)

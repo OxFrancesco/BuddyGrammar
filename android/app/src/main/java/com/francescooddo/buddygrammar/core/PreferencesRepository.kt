@@ -17,6 +17,7 @@ class PreferencesRepository(context: Context) {
             AppConfig.DEFAULT_CORRECTION_INSTRUCTION.trimIndent(),
         ) ?: AppConfig.DEFAULT_CORRECTION_INSTRUCTION.trimIndent(),
         autoCorrectDictation = preferences.getBoolean(KEY_AUTO_CORRECT, true),
+        automaticallyCorrectWords = preferences.getBoolean(KEY_AUTOMATIC_WORD_CORRECTION, true),
         hasAcceptedCloudProcessing = preferences.getBoolean(KEY_CLOUD_CONSENT, false),
         hasCompletedOnboarding = preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false),
     )
@@ -26,6 +27,7 @@ class PreferencesRepository(context: Context) {
             .putString(KEY_MODEL_ID, settings.modelId)
             .putString(KEY_INSTRUCTION, settings.correctionInstruction)
             .putBoolean(KEY_AUTO_CORRECT, settings.autoCorrectDictation)
+            .putBoolean(KEY_AUTOMATIC_WORD_CORRECTION, settings.automaticallyCorrectWords)
             .putBoolean(KEY_CLOUD_CONSENT, settings.hasAcceptedCloudProcessing)
             .putBoolean(KEY_ONBOARDING_COMPLETE, settings.hasCompletedOnboarding)
             .apply()
@@ -40,28 +42,41 @@ class PreferencesRepository(context: Context) {
         }
     }
 
-    fun savePendingTranscript(text: String, nowMillis: Long = System.currentTimeMillis()) {
-        preferences.edit()
+    fun savePendingTranscript(
+        text: String,
+        nowMillis: Long = System.currentTimeMillis(),
+        languageCode: String? = null,
+    ) {
+        val editor = preferences.edit()
             .putString(KEY_TRANSCRIPT_TEXT, text)
             .putLong(KEY_TRANSCRIPT_DATE, nowMillis)
-            .apply()
+        val normalizedLanguage = languageCode?.trim()?.takeIf(String::isNotEmpty)
+        if (normalizedLanguage == null) {
+            editor.remove(KEY_TRANSCRIPT_LANGUAGE)
+        } else {
+            editor.putString(KEY_TRANSCRIPT_LANGUAGE, normalizedLanguage)
+        }
+        editor.apply()
     }
 
     fun loadPendingTranscript(nowMillis: Long = System.currentTimeMillis()): PendingTranscript? {
-        val text = preferences.getString(KEY_TRANSCRIPT_TEXT, null)?.trim().orEmpty()
-        val createdAt = preferences.getLong(KEY_TRANSCRIPT_DATE, 0L)
-        if (text.isEmpty() || createdAt <= 0L) return null
-        if (nowMillis - createdAt > AppConfig.PENDING_TRANSCRIPT_LIFETIME_MS) {
+        val transcript = restorePendingTranscript(
+            text = preferences.getString(KEY_TRANSCRIPT_TEXT, null),
+            createdAtMillis = preferences.getLong(KEY_TRANSCRIPT_DATE, 0L),
+            languageCode = preferences.getString(KEY_TRANSCRIPT_LANGUAGE, null),
+        ) ?: return null
+        if (nowMillis - transcript.createdAtMillis > AppConfig.PENDING_TRANSCRIPT_LIFETIME_MS) {
             clearPendingTranscript()
             return null
         }
-        return PendingTranscript(text = text, createdAtMillis = createdAt)
+        return transcript
     }
 
     fun clearPendingTranscript() {
         preferences.edit()
             .remove(KEY_TRANSCRIPT_TEXT)
             .remove(KEY_TRANSCRIPT_DATE)
+            .remove(KEY_TRANSCRIPT_LANGUAGE)
             .apply()
     }
 
@@ -70,10 +85,12 @@ class PreferencesRepository(context: Context) {
         const val KEY_MODEL_ID = "settings.modelId"
         const val KEY_INSTRUCTION = "settings.instruction"
         const val KEY_AUTO_CORRECT = "settings.autoCorrectDictation"
+        const val KEY_AUTOMATIC_WORD_CORRECTION = "settings.automaticallyCorrectWords"
         const val KEY_CLOUD_CONSENT = "settings.cloudConsent"
         const val KEY_ONBOARDING_COMPLETE = "settings.onboardingComplete"
         const val KEY_INSTALLATION_ID = "installation.identifier"
         const val KEY_TRANSCRIPT_TEXT = "transcript.text"
         const val KEY_TRANSCRIPT_DATE = "transcript.createdAt"
+        const val KEY_TRANSCRIPT_LANGUAGE = "transcript.languageCode"
     }
 }
