@@ -12,7 +12,7 @@ Every `POST` requires `X-BuddyGrammar-Client-ID`, a stable per-install identifie
   ```json
   {
     "text": "this need fixing",
-    "modelID": "openai/gpt-5.4-nano",
+    "modelID": "openai/gpt-5.6-luna",
     "instruction": "Correct grammar and punctuation only."
   }
   ```
@@ -21,9 +21,11 @@ Every `POST` requires `X-BuddyGrammar-Client-ID`, a stable per-install identifie
 
 - `POST /v1/transcribe` accepts the M4A recording bytes directly with `Content-Type: audio/mp4`. Send the optional language in `X-Buddy-Language-Code`. It returns the ElevenLabs-compatible fields `text`, `language_code`, and `language_probability`. The Worker, not the client, constructs ElevenLabs' multipart request and server-controlled fields.
 
+- `POST /v1/handwriting` accepts a normalized `image/png` plus `X-Buddy-Model-ID` and an optional language header. It sends the image to the same allowlisted OpenRouter model used for corrections and returns `{ "text": "..." }`. The keyboard calls this only when on-device Vision recognition has no result.
+
 The Worker rejects unexpected fields, oversized payloads, unsupported content types, disallowed models/origins, and malformed language/client identifiers. It returns generic provider errors and does not log prompt, completion, or audio content. Wrangler observability is disabled in `wrangler.toml`.
 
-The Durable Object limiter enforces both per-install and per-IP fixed windows: correction is limited to 30/client/minute and 180/IP/minute; transcription to 8/client/minute and 40/IP/minute. The client identifier is hashed before being used as the Durable Object name. This controls ordinary misuse but is not proof that a request came from the signed app; add Apple App Attest before a broad public launch.
+The Durable Object limiter enforces both per-install and per-IP fixed windows: correction is limited to 30/client/minute and 180/IP/minute; transcription to 8/client/minute and 40/IP/minute; handwriting fallback to 12/client/minute and 80/IP/minute. The client identifier is hashed before being used as the Durable Object name. This controls ordinary misuse but is not proof that a request came from the signed app; add Apple App Attest before a broad public launch.
 
 ## Local checks
 
