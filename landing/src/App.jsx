@@ -13,7 +13,7 @@ const steps = [
   { title: 'Select text anywhere', desc: 'Highlight text in any application — a browser, Notes, Slack, your editor.' },
   { title: 'Press ⌘⇧1', desc: 'The default Standard personality fires and BuddyWrite grabs the selection.' },
   { title: 'Or dictate locally', desc: 'Use the dictation shortcut to record your voice, transcribe it locally, and run it through your chosen personality.' },
-  { title: 'AI rewrites it', desc: 'The text is sent to OpenRouter (gpt-5.4-nano) and rewritten in seconds.' },
+  { title: 'AI rewrites it', desc: 'The text is sent to OpenRouter (GPT-5.6 Luna) and rewritten in seconds.' },
   { title: 'Fixed text appears', desc: 'The corrected text replaces your selection — or lands in the clipboard.' },
 ]
 
