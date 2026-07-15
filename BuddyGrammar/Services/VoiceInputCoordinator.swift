@@ -298,7 +298,16 @@ final class VoiceInputCoordinator {
             return
         }
 
-        recorder.setPCM16SampleHandler { [session] data in
+        recorder.setPCM16SampleHandler(Self.makePCM16SampleHandler(for: session))
+    }
+
+    /// Audio samples arrive on Core Audio's render queue, not the main actor.
+    /// Construct this callback from a nonisolated context for the same reason as
+    /// the AVAudioEngine tap block in AudioRecordingService.
+    nonisolated private static func makePCM16SampleHandler(
+        for session: any StreamingSpeechTranscriptionSession
+    ) -> PCM16SampleHandler {
+        { data in
             session.appendPCM16(data)
         }
     }

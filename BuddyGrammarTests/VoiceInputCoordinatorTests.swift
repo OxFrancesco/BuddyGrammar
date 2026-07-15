@@ -1,6 +1,47 @@
+@preconcurrency import AVFoundation
 @testable import BuddyGrammar
 import Foundation
 import XCTest
+
+private final class TestAudioBufferProcessor: AudioBufferProcessing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var processedBufferCount = 0
+
+    nonisolated func process(_ inputBuffer: AVAudioPCMBuffer) {
+        lock.lock()
+        processedBufferCount += 1
+        lock.unlock()
+    }
+
+    nonisolated var count: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return processedBufferCount
+    }
+}
+
+final class AudioTapBlockFactoryTests: XCTestCase {
+    func testTapBlockRunsOnCoreAudioStyleBackgroundQueue() throws {
+        let format = try XCTUnwrap(
+            AVAudioFormat(
+                commonFormat: .pcmFormatFloat32,
+                sampleRate: 24_000,
+                channels: 1,
+                interleaved: false
+            )
+        )
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 64))
+        buffer.frameLength = 64
+        let processor = TestAudioBufferProcessor()
+        let tapBlock = AudioTapBlockFactory.make(processor: processor)
+
+        DispatchQueue(label: "test.core-audio-callback").sync {
+            tapBlock(buffer, AVAudioTime(sampleTime: 0, atRate: format.sampleRate))
+        }
+
+        XCTAssertEqual(processor.count, 1)
+    }
+}
 
 @MainActor
 final class MockVoiceAuthorizationService: VoiceAuthorizing {

@@ -3,6 +3,23 @@ import Foundation
 
 typealias PCM16SampleHandler = @Sendable (Data) -> Void
 
+protocol AudioBufferProcessing: AnyObject, Sendable {
+    nonisolated func process(_ inputBuffer: AVAudioPCMBuffer)
+}
+
+enum AudioTapBlockFactory {
+    /// AVAudioEngine invokes tap blocks on a real-time Core Audio queue. Build
+    /// the closure from an explicitly nonisolated context so Swift does not
+    /// insert a main-executor precondition around the callback.
+    nonisolated static func make(
+        processor: any AudioBufferProcessing
+    ) -> AVAudioNodeTapBlock {
+        { buffer, _ in
+            processor.process(buffer)
+        }
+    }
+}
+
 @MainActor
 protocol AudioRecording: AnyObject {
     var isRecording: Bool { get }
@@ -54,9 +71,12 @@ final class AudioRecordingService: AudioRecording, PCMStreamingAudioRecording {
             )
         }
 
-        inputNode.installTap(onBus: 0, bufferSize: 1_024, format: inputFormat) { buffer, _ in
-            pipeline.process(buffer)
-        }
+        inputNode.installTap(
+            onBus: 0,
+            bufferSize: 1_024,
+            format: inputFormat,
+            block: AudioTapBlockFactory.make(processor: pipeline)
+        )
 
         do {
             engine.prepare()
@@ -103,7 +123,7 @@ final class AudioRecordingService: AudioRecording, PCMStreamingAudioRecording {
     }
 }
 
-private final class AudioCapturePipeline: @unchecked Sendable {
+private final class AudioCapturePipeline: AudioBufferProcessing, @unchecked Sendable {
     private static let targetFormat = AVAudioFormat(
         commonFormat: .pcmFormatInt16,
         sampleRate: 16_000,
