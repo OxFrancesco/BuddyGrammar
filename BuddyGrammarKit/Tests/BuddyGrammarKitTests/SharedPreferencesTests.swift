@@ -212,4 +212,26 @@ final class SharedPreferencesTests: XCTestCase {
         XCTAssertNil(preferences.loadPendingTranscript(now: afterExpiry))
         XCTAssertNil(preferences.loadPendingTranscript(now: createdAt))
     }
+
+    func testSavedDictationPersistsAfterKeyboardHandoffIsCleared() throws {
+        let preferences = SharedPreferences(defaults: defaults)
+        let dictation = SavedDictation(
+            rawTranscript: "hello there",
+            text: "Hello there.",
+            languageCode: "en",
+            createdAt: Date(timeIntervalSince1970: 123)
+        )
+
+        try preferences.saveDictation(dictation)
+        try preferences.savePendingTranscript(
+            PendingTranscript(text: dictation.text, languageCode: dictation.languageCode)
+        )
+        preferences.clearPendingTranscript()
+
+        XCTAssertNil(preferences.loadPendingTranscript())
+        XCTAssertEqual(preferences.loadSavedDictation(), dictation)
+
+        preferences.clearSavedDictation()
+        XCTAssertNil(preferences.loadSavedDictation())
+    }
 }

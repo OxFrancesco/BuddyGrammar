@@ -4,6 +4,7 @@ public final class SharedPreferences: @unchecked Sendable {
     private enum Key {
         static let settings = "BuddyGrammar.iOS.settings"
         static let pendingTranscript = "BuddyGrammar.iOS.pendingTranscript"
+        static let savedDictation = "BuddyGrammar.iOS.savedDictation"
         static let keyboardDictationSession = "BuddyGrammar.iOS.keyboardDictationSession"
         static let installationIdentifier = "BuddyGrammar.iOS.installationIdentifier"
         static let companionHeartbeat = "BuddyGrammar.iOS.companionHeartbeat"
@@ -54,6 +55,18 @@ public final class SharedPreferences: @unchecked Sendable {
 
     public func clearPendingTranscript() {
         defaults.removeObject(forKey: Key.pendingTranscript)
+    }
+
+    public func loadSavedDictation() -> SavedDictation? {
+        load(SavedDictation.self, forKey: Key.savedDictation)
+    }
+
+    public func saveDictation(_ dictation: SavedDictation) throws {
+        try save(dictation, forKey: Key.savedDictation)
+    }
+
+    public func clearSavedDictation() {
+        defaults.removeObject(forKey: Key.savedDictation)
     }
 
     @discardableResult

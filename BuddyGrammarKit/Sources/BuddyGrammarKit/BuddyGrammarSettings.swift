@@ -128,3 +128,25 @@ public struct PendingTranscript: Codable, Equatable, Sendable {
         self.createdAt = createdAt
     }
 }
+
+/// The latest completed dictation kept locally by the app. Unlike
+/// `PendingTranscript`, this is not consumed by the keyboard or expired after
+/// the keyboard handoff window.
+public struct SavedDictation: Codable, Equatable, Sendable {
+    public let rawTranscript: String
+    public let text: String
+    public let languageCode: String?
+    public let createdAt: Date
+
+    public init(
+        rawTranscript: String,
+        text: String,
+        languageCode: String? = nil,
+        createdAt: Date = .now
+    ) {
+        self.rawTranscript = rawTranscript
+        self.text = text
+        self.languageCode = languageCode
+        self.createdAt = createdAt
+    }
+}

@@ -29,4 +29,17 @@ class PendingTranscriptTest {
         assertEquals(1, model.usageCount("mondo", "it-IT"))
         assertEquals(0, model.usageCount("mondo", "en-US"))
     }
+
+    @Test
+    fun `saved dictation keeps raw and polished text without expiring`() {
+        assertEquals(
+            SavedDictation("hello there", "Hello there.", 42L, "en"),
+            restoreSavedDictation(" hello there ", " Hello there. ", 42L, " en "),
+        )
+        assertEquals(
+            SavedDictation("Legacy", "Legacy", 42L, null),
+            restoreSavedDictation(null, "Legacy", 42L, null),
+        )
+        assertNull(restoreSavedDictation("raw", "  ", 42L, "en"))
+    }
 }

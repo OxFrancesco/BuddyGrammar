@@ -90,14 +90,17 @@ final class IOSAppModel {
 
         var loadedSettings = sharedPreferences?.loadSettings() ?? .default
         var loadedTranscript = sharedPreferences?.loadPendingTranscript()
+        var loadedDictation = sharedPreferences?.loadSavedDictation()
 
         #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
         if arguments.contains("--reset-onboarding") {
             loadedSettings = .default
             loadedTranscript = nil
+            loadedDictation = nil
             try? sharedPreferences?.saveSettings(loadedSettings)
             sharedPreferences?.clearPendingTranscript()
+            sharedPreferences?.clearSavedDictation()
         }
 
         if arguments.contains("--ui-testing") || arguments.contains("--uitesting") {
@@ -119,8 +122,8 @@ final class IOSAppModel {
 
         settings = loadedSettings
         pendingTranscript = loadedTranscript
-        transcriptDraft = loadedTranscript?.text ?? ""
-        detectedLanguageCode = loadedTranscript?.languageCode
+        transcriptDraft = loadedTranscript?.text ?? loadedDictation?.text ?? ""
+        detectedLanguageCode = loadedTranscript?.languageCode ?? loadedDictation?.languageCode
 
         if !isSharedContainerReady {
             alert = AppAlert(
@@ -155,7 +158,10 @@ final class IOSAppModel {
             settings = preferences.loadSettings()
             pendingTranscript = preferences.loadPendingTranscript()
             if transcriptDraft.isEmpty {
-                transcriptDraft = pendingTranscript?.text ?? ""
+                let savedDictation = preferences.loadSavedDictation()
+                transcriptDraft = pendingTranscript?.text ?? savedDictation?.text ?? ""
+                detectedLanguageCode = pendingTranscript?.languageCode
+                    ?? savedDictation?.languageCode
             }
         }
     }
@@ -274,7 +280,7 @@ final class IOSAppModel {
                 .split(separator: "-")
                 .first
                 .map(String.init)
-            let transcript = try await transcriptionClient.transcribe(
+            let transcript = try await transcribeWithRetry(
                 audioData: audioData,
                 clientID: clientID,
                 languageCode: languageHint
@@ -299,10 +305,12 @@ final class IOSAppModel {
             }
 
             transcriptDraft = finalText
-            try savePendingTranscript(
-                finalText,
+            try saveCompletedDictation(
+                rawTranscript: transcript.text,
+                text: finalText,
                 languageCode: transcript.languageCode
             )
+            copyToClipboard(finalText)
             if let keyboardSessionID {
                 try preferences?.updateKeyboardDictationSession(
                     id: keyboardSessionID,
@@ -315,11 +323,11 @@ final class IOSAppModel {
 
             if let correctionFailure {
                 showNotice(
-                    "Transcript saved without correction: \(correctionFailure.localizedDescription)",
+                    "Transcript saved and copied without correction: \(correctionFailure.localizedDescription)",
                     kind: .information
                 )
             } else {
-                showNotice("Ready in the BuddyGrammar keyboard", kind: .success)
+                showNotice("Saved locally, copied, and ready for the keyboard", kind: .success)
             }
         } catch {
             if let keyboardSessionID {
@@ -363,8 +371,16 @@ final class IOSAppModel {
                 text,
                 languageCode: detectedLanguageCode
             )
+            try preferences?.saveDictation(
+                SavedDictation(
+                    rawTranscript: text,
+                    text: text,
+                    languageCode: detectedLanguageCode
+                )
+            )
+            copyToClipboard(text)
             dictationPhase = .ready
-            showNotice("Ready in the BuddyGrammar keyboard", kind: .success)
+            showNotice("Saved locally, copied, and ready for the keyboard", kind: .success)
         } catch {
             showAlert(title: "Couldn’t save transcript", message: error.localizedDescription)
         }
@@ -372,6 +388,7 @@ final class IOSAppModel {
 
     func clearTranscript() {
         preferences?.clearPendingTranscript()
+        preferences?.clearSavedDictation()
         pendingTranscript = nil
         transcriptDraft = ""
         detectedLanguageCode = nil
@@ -538,6 +555,54 @@ final class IOSAppModel {
         pendingTranscript = transcript
     }
 
+    private func saveCompletedDictation(
+        rawTranscript: String,
+        text: String,
+        languageCode: String?
+    ) throws {
+        guard let preferences else {
+            throw SharedContainerError.unavailable
+        }
+        try preferences.saveDictation(
+            SavedDictation(
+                rawTranscript: rawTranscript,
+                text: text,
+                languageCode: languageCode
+            )
+        )
+        try savePendingTranscript(text, languageCode: languageCode)
+    }
+
+    private func transcribeWithRetry(
+        audioData: Data,
+        clientID: UUID,
+        languageCode: String?
+    ) async throws -> ElevenLabsTranscript {
+        for attempt in 1...2 {
+            do {
+                return try await transcriptionClient.transcribe(
+                    audioData: audioData,
+                    clientID: clientID,
+                    languageCode: languageCode
+                )
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                appDictationLog.error(
+                    "Transcription attempt \(attempt, privacy: .public) failed: \(error.localizedDescription, privacy: .public)"
+                )
+                if attempt == 1 {
+                    try await Task.sleep(for: .milliseconds(750))
+                }
+            }
+        }
+        throw TranscriptionRetryError.failedTwice
+    }
+
+    private func copyToClipboard(_ text: String) {
+        UIPasteboard.general.string = text
+    }
+
     private func persistSettings(successMessage: String?) {
         guard let preferences else {
             showAlert(
@@ -579,5 +644,13 @@ private enum SharedContainerError: LocalizedError {
 
     var errorDescription: String? {
         "BuddyGrammar could not open its shared App Group, so the keyboard cannot receive this transcript."
+    }
+}
+
+private enum TranscriptionRetryError: LocalizedError {
+    case failedTwice
+
+    var errorDescription: String? {
+        "We couldn’t transcribe this recording after two attempts. Please try again later."
     }
 }

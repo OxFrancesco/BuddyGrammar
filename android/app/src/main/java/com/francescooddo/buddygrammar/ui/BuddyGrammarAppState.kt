@@ -1,8 +1,11 @@
 package com.francescooddo.buddygrammar.ui
 
 import android.content.ComponentName
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.provider.Settings
+import android.util.Log
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -15,11 +18,14 @@ import com.francescooddo.buddygrammar.core.PendingTranscript
 import com.francescooddo.buddygrammar.core.PreferencesRepository
 import com.francescooddo.buddygrammar.ime.BuddyGrammarImeService
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.util.Locale
 
 enum class AppScreen {
@@ -37,8 +43,10 @@ class BuddyGrammarAppState(context: Context) {
     private val preferences = PreferencesRepository(appContext)
     private val api = BuddyGrammarApi()
     private val recorder = AudioRecorder(appContext)
+    private val clipboard = appContext.getSystemService(ClipboardManager::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val initialPendingTranscript = preferences.loadPendingTranscript()
+    private val initialSavedDictation = preferences.loadSavedDictation()
 
     var settings by mutableStateOf(preferences.loadSettings())
         private set
@@ -48,9 +56,13 @@ class BuddyGrammarAppState(context: Context) {
         private set
     var pendingTranscript by mutableStateOf(initialPendingTranscript)
         private set
-    var transcript by mutableStateOf(initialPendingTranscript?.text.orEmpty())
+    var transcript by mutableStateOf(
+        initialPendingTranscript?.text ?: initialSavedDictation?.text.orEmpty(),
+    )
         private set
-    var detectedLanguage by mutableStateOf(initialPendingTranscript?.languageCode)
+    var detectedLanguage by mutableStateOf(
+        initialPendingTranscript?.languageCode ?: initialSavedDictation?.languageCode,
+    )
         private set
     var isRecording by mutableStateOf(false)
         private set
@@ -102,8 +114,14 @@ class BuddyGrammarAppState(context: Context) {
         }
         transcript = value
         preferences.savePendingTranscript(value, languageCode = detectedLanguage)
+        preferences.saveDictation(
+            rawTranscript = value,
+            text = value,
+            languageCode = detectedLanguage,
+        )
         pendingTranscript = PendingTranscript(value, System.currentTimeMillis(), detectedLanguage)
-        showNotice("Saved for the keyboard microphone button.")
+        copyToClipboard(value)
+        showNotice("Saved locally, copied, and ready for the keyboard.")
     }
 
     fun clearTranscript() {
@@ -111,7 +129,15 @@ class BuddyGrammarAppState(context: Context) {
         pendingTranscript = null
         detectedLanguage = null
         preferences.clearPendingTranscript()
+        preferences.clearSavedDictation()
         showNotice("Saved dictation cleared.")
+    }
+
+    fun copyTranscript() {
+        val value = transcript.trim()
+        if (value.isEmpty()) return
+        copyToClipboard(value)
+        showNotice("Transcript copied to the clipboard.")
     }
 
     fun startRecording() {
@@ -141,11 +167,21 @@ class BuddyGrammarAppState(context: Context) {
         scope.launch {
             try {
                 val audio = withContext(Dispatchers.IO) { recording.readBytes() }
-                val result = api.transcribe(
-                    audio,
-                    preferences.installationId(),
-                    primaryDeviceLanguage(),
-                )
+                val result = retryTranscriptionOnce(
+                    onFailure = { error, attempt ->
+                        Log.w(
+                            DICTATION_LOG_TAG,
+                            "Transcription attempt $attempt failed",
+                            error,
+                        )
+                    },
+                ) {
+                    api.transcribe(
+                        audio,
+                        preferences.installationId(),
+                        primaryDeviceLanguage(),
+                    )
+                }
                 var correctionWarning: String? = null
                 val finalText = if (settings.autoCorrectDictation) {
                     showNotice("Polishing the transcript…")
@@ -153,7 +189,7 @@ class BuddyGrammarAppState(context: Context) {
                         api.correct(
                             text = result.text,
                             clientId = preferences.installationId(),
-                            modelId = settings.modelId,
+                            modelId = settings.activeModelId,
                             instruction = settings.correctionInstruction,
                         )
                     }.getOrElse {
@@ -169,14 +205,20 @@ class BuddyGrammarAppState(context: Context) {
                     finalText,
                     languageCode = result.languageCode,
                 )
+                preferences.saveDictation(
+                    rawTranscript = result.text,
+                    text = finalText,
+                    languageCode = result.languageCode,
+                )
                 pendingTranscript = PendingTranscript(
                     finalText,
                     System.currentTimeMillis(),
                     result.languageCode,
                 )
+                copyToClipboard(finalText)
                 showNotice(
-                    correctionWarning?.let { "Transcript saved without correction: $it" }
-                        ?: "Transcript saved and ready for the keyboard.",
+                    correctionWarning?.let { "Transcript saved and copied without correction: $it" }
+                        ?: "Transcript saved locally, copied, and ready for the keyboard.",
                 )
             } catch (error: Throwable) {
                 showError(error.message ?: "The recording could not be processed.")
@@ -198,8 +240,9 @@ class BuddyGrammarAppState(context: Context) {
         settings = preferences.loadSettings()
         pendingTranscript = preferences.loadPendingTranscript()
         if (transcript.isEmpty()) {
-            transcript = pendingTranscript?.text.orEmpty()
-            detectedLanguage = pendingTranscript?.languageCode
+            val savedDictation = preferences.loadSavedDictation()
+            transcript = pendingTranscript?.text ?: savedDictation?.text.orEmpty()
+            detectedLanguage = pendingTranscript?.languageCode ?: savedDictation?.languageCode
         }
         refreshKeyboardStatus()
     }
@@ -236,8 +279,39 @@ class BuddyGrammarAppState(context: Context) {
         return configured ?: Locale.getDefault().language
     }
 
+    private fun copyToClipboard(text: String) {
+        clipboard.setPrimaryClip(ClipData.newPlainText("BuddyGrammar transcript", text))
+    }
+
     fun close() {
         recorder.cancel()
         scope.cancel()
     }
+
+    private companion object {
+        const val DICTATION_LOG_TAG = "BuddyGrammarDictation"
+    }
+}
+
+internal suspend fun <T> retryTranscriptionOnce(
+    delayMillis: Long = 750L,
+    onFailure: (Throwable, Int) -> Unit = { _, _ -> },
+    operation: suspend () -> T,
+): T {
+    var lastError: Throwable? = null
+    repeat(2) { index ->
+        try {
+            return operation()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            lastError = error
+            onFailure(error, index + 1)
+            if (index == 0) delay(delayMillis)
+        }
+    }
+    throw IOException(
+        "We couldn’t transcribe this recording after two attempts. Please try again later.",
+        lastError,
+    )
 }

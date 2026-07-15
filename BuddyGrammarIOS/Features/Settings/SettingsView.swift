@@ -210,13 +210,13 @@ private struct PrivacyPolicyView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("Last updated July 13, 2026")
+                Text("Last updated July 15, 2026")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
                 policySection(
                     title: "What stays on your device",
-                    text: "Normal keyboard input is not sent anywhere. BuddyGrammar stores learned vocabulary and context frequency counts locally to personalize suggestions and predictions. Provider API keys are never included in the app or keyboard. A dictated transcript is kept in the app’s shared container until you insert or clear it, and is discarded when next read after 24 hours. BuddyGrammar has no advertising or analytics SDKs."
+                    text: "Normal keyboard input is not sent anywhere. BuddyGrammar stores learned vocabulary and context frequency counts locally to personalize suggestions and predictions. Provider API keys are never included in the app or keyboard. The latest raw transcript and final text are stored locally until you clear them. A separate keyboard handoff copy expires after 24 hours or is removed after insertion. BuddyGrammar has no advertising or analytics SDKs."
                 )
 
                 policySection(
@@ -226,12 +226,12 @@ private struct PrivacyPolicyView: View {
 
                 policySection(
                     title: "Speech to text",
-                    text: "When you stop a recording in the BuddyGrammar app, its audio is sent through the BuddyGrammar service to ElevenLabs. ElevenLabs returns a transcript. If automatic correction is enabled, that transcript is then sent to OpenRouter. The temporary recording file is deleted from this device after the request completes. Apple does not permit microphone recording inside a custom keyboard."
+                    text: "When you stop a recording in the BuddyGrammar app, its audio is sent through the BuddyGrammar service to ElevenLabs. If the first transcription request fails, BuddyGrammar retries it once. ElevenLabs returns a transcript. If automatic correction is enabled, that transcript is then sent to OpenRouter. The final text is copied to your clipboard. The temporary recording file is deleted from this device after the request completes. Apple does not permit microphone recording inside a custom keyboard."
                 )
 
                 policySection(
                     title: "Accounts, retention, and deletion",
-                    text: "The BuddyGrammar service forwards correction text and audio only to provide the requested feature and does not intentionally log or store that content. Provider retention depends on the configured OpenRouter and ElevenLabs account settings and the model provider selected by OpenRouter. ElevenLabs may retain submitted audio and transcripts unless zero-retention mode is enabled for the service account. You can revoke cloud consent and clear the pending transcript in Settings."
+                    text: "The BuddyGrammar service forwards correction text and audio only to provide the requested feature and does not intentionally log or store that content. Provider retention depends on the configured OpenRouter and ElevenLabs account settings and the model provider selected by OpenRouter. ElevenLabs may retain submitted audio and transcripts unless zero-retention mode is enabled for the service account. You can revoke cloud consent and clear the locally saved dictation in the app."
                 )
 
                 VStack(alignment: .leading, spacing: 12) {

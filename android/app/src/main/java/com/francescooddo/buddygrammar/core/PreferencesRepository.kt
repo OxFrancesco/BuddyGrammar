@@ -9,25 +9,47 @@ class PreferencesRepository(context: Context) {
         Context.MODE_PRIVATE,
     )
 
-    fun loadSettings(): BuddySettings = BuddySettings(
-        modelId = preferences.getString(KEY_MODEL_ID, AppConfig.DEFAULT_MODEL)
-            ?: AppConfig.DEFAULT_MODEL,
-        correctionInstruction = preferences.getString(
+    fun loadSettings(): BuddySettings {
+        val storedModel = preferences.getString(KEY_MODEL_ID, AppConfig.DEFAULT_MODEL)
+            ?: AppConfig.DEFAULT_MODEL
+        val usesAutomaticModelUpdates = if (preferences.contains(KEY_AUTOMATIC_MODEL_UPDATES)) {
+            preferences.getBoolean(KEY_AUTOMATIC_MODEL_UPDATES, true)
+        } else {
+            storedModel in AppConfig.MANAGED_MODEL_IDS
+        }
+        val storedInstruction = preferences.getString(
             KEY_INSTRUCTION,
             AppConfig.DEFAULT_CORRECTION_INSTRUCTION.trimIndent(),
-        ) ?: AppConfig.DEFAULT_CORRECTION_INSTRUCTION.trimIndent(),
-        autoCorrectDictation = preferences.getBoolean(KEY_AUTO_CORRECT, true),
-        automaticallyCorrectWords = preferences.getBoolean(KEY_AUTOMATIC_WORD_CORRECTION, true),
-        hasAcceptedCloudProcessing = preferences.getBoolean(KEY_CLOUD_CONSENT, false),
-        hasCompletedOnboarding = preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false),
-    )
+        ) ?: AppConfig.DEFAULT_CORRECTION_INSTRUCTION.trimIndent()
+        val instruction = if (
+            storedInstruction.trim() == AppConfig.LEGACY_CORRECTION_INSTRUCTION.trimIndent().trim()
+        ) {
+            AppConfig.DEFAULT_CORRECTION_INSTRUCTION.trimIndent()
+        } else {
+            storedInstruction
+        }
+        return BuddySettings(
+            modelId = if (usesAutomaticModelUpdates) AppConfig.DEFAULT_MODEL else storedModel,
+            usesAutomaticModelUpdates = usesAutomaticModelUpdates,
+            correctionInstruction = instruction,
+            autoCorrectDictation = preferences.getBoolean(KEY_AUTO_CORRECT, true),
+            automaticallyCorrectWords = preferences.getBoolean(KEY_AUTOMATIC_WORD_CORRECTION, true),
+            correctionUndoDurationSeconds = preferences.getInt(KEY_CORRECTION_UNDO_DURATION, 3)
+                .coerceIn(1, 10),
+            hasAcceptedCloudProcessing = preferences.getBoolean(KEY_CLOUD_CONSENT, false),
+            hasCompletedOnboarding = preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false),
+        )
+    }
 
     fun saveSettings(settings: BuddySettings) {
+        val normalized = settings.normalized()
         preferences.edit()
-            .putString(KEY_MODEL_ID, settings.modelId)
-            .putString(KEY_INSTRUCTION, settings.correctionInstruction)
+            .putString(KEY_MODEL_ID, normalized.modelId)
+            .putBoolean(KEY_AUTOMATIC_MODEL_UPDATES, normalized.usesAutomaticModelUpdates)
+            .putString(KEY_INSTRUCTION, normalized.correctionInstruction)
             .putBoolean(KEY_AUTO_CORRECT, settings.autoCorrectDictation)
             .putBoolean(KEY_AUTOMATIC_WORD_CORRECTION, settings.automaticallyCorrectWords)
+            .putInt(KEY_CORRECTION_UNDO_DURATION, normalized.correctionUndoDurationSeconds)
             .putBoolean(KEY_CLOUD_CONSENT, settings.hasAcceptedCloudProcessing)
             .putBoolean(KEY_ONBOARDING_COMPLETE, settings.hasCompletedOnboarding)
             .apply()
@@ -80,17 +102,58 @@ class PreferencesRepository(context: Context) {
             .apply()
     }
 
+    fun saveDictation(
+        rawTranscript: String,
+        text: String,
+        nowMillis: Long = System.currentTimeMillis(),
+        languageCode: String? = null,
+    ) {
+        val editor = preferences.edit()
+            .putString(KEY_SAVED_RAW_TRANSCRIPT, rawTranscript)
+            .putString(KEY_SAVED_TEXT, text)
+            .putLong(KEY_SAVED_DATE, nowMillis)
+        val normalizedLanguage = languageCode?.trim()?.takeIf(String::isNotEmpty)
+        if (normalizedLanguage == null) {
+            editor.remove(KEY_SAVED_LANGUAGE)
+        } else {
+            editor.putString(KEY_SAVED_LANGUAGE, normalizedLanguage)
+        }
+        editor.apply()
+    }
+
+    fun loadSavedDictation(): SavedDictation? = restoreSavedDictation(
+        rawTranscript = preferences.getString(KEY_SAVED_RAW_TRANSCRIPT, null),
+        text = preferences.getString(KEY_SAVED_TEXT, null),
+        createdAtMillis = preferences.getLong(KEY_SAVED_DATE, 0L),
+        languageCode = preferences.getString(KEY_SAVED_LANGUAGE, null),
+    )
+
+    fun clearSavedDictation() {
+        preferences.edit()
+            .remove(KEY_SAVED_RAW_TRANSCRIPT)
+            .remove(KEY_SAVED_TEXT)
+            .remove(KEY_SAVED_DATE)
+            .remove(KEY_SAVED_LANGUAGE)
+            .apply()
+    }
+
     private companion object {
         const val PREFERENCES_NAME = "buddygrammar_shared"
         const val KEY_MODEL_ID = "settings.modelId"
+        const val KEY_AUTOMATIC_MODEL_UPDATES = "settings.automaticModelUpdates"
         const val KEY_INSTRUCTION = "settings.instruction"
         const val KEY_AUTO_CORRECT = "settings.autoCorrectDictation"
         const val KEY_AUTOMATIC_WORD_CORRECTION = "settings.automaticallyCorrectWords"
+        const val KEY_CORRECTION_UNDO_DURATION = "settings.correctionUndoDurationSeconds"
         const val KEY_CLOUD_CONSENT = "settings.cloudConsent"
         const val KEY_ONBOARDING_COMPLETE = "settings.onboardingComplete"
         const val KEY_INSTALLATION_ID = "installation.identifier"
         const val KEY_TRANSCRIPT_TEXT = "transcript.text"
         const val KEY_TRANSCRIPT_DATE = "transcript.createdAt"
         const val KEY_TRANSCRIPT_LANGUAGE = "transcript.languageCode"
+        const val KEY_SAVED_RAW_TRANSCRIPT = "dictation.rawTranscript"
+        const val KEY_SAVED_TEXT = "dictation.text"
+        const val KEY_SAVED_DATE = "dictation.createdAt"
+        const val KEY_SAVED_LANGUAGE = "dictation.languageCode"
     }
 }

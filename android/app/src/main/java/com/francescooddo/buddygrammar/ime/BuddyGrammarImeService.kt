@@ -28,6 +28,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.francescooddo.buddygrammar.MainActivity
 import com.francescooddo.buddygrammar.core.BuddyGrammarApi
+import com.francescooddo.buddygrammar.core.CorrectionUndoState
 import com.francescooddo.buddygrammar.core.HandwritingTextFormatter
 import com.francescooddo.buddygrammar.core.LanguageSupport
 import com.francescooddo.buddygrammar.core.ObservedTextSuffix
@@ -95,12 +96,17 @@ class BuddyGrammarImeService :
         private set
     var isCorrecting by mutableStateOf(false)
         private set
+    var canUndoCorrection by mutableStateOf(false)
+        private set
     var returnAction by mutableStateOf(EditorInfo.IME_ACTION_NONE)
         private set
     var hasMicPermission by mutableStateOf(false)
         private set
 
     private var correctionJob: Job? = null
+    private var correctionUndoJob: Job? = null
+    private var pendingCorrectionUndo: CorrectionUndoState? = null
+    private var pendingCorrectionLearning: PendingCorrectionLearning? = null
     private var statusClearJob: Job? = null
     private var allowsDictionarySuggestions = false
     private var allowsPersonalizedLearning = false
@@ -150,6 +156,7 @@ class BuddyGrammarImeService :
         keyboardState.configureForNewInput(startOnNumbers)
         returnAction = resolveReturnAction(info)
         hasMicPermission = hasMicrophonePermission()
+        clearCorrectionUndo()
         cancelCorrection()
         showBaselineStatus()
         refreshTypingState()
@@ -162,6 +169,7 @@ class BuddyGrammarImeService :
 
     override fun onFinishInputView(finishingInput: Boolean) {
         personalModel.persist()
+        clearCorrectionUndo()
         cancelCorrection()
         observedTextSuffix.clear()
         voice.destroy()
@@ -180,12 +188,16 @@ class BuddyGrammarImeService :
         super.onUpdateSelection(
             oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd,
         )
+        if (canUndoCorrection && !correctionUndoStillMatches()) {
+            clearCorrectionUndo()
+        }
         refreshTypingState()
     }
 
     override fun onDestroy() {
         voice.destroy()
         handwriting.destroy()
+        clearCorrectionUndo()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
@@ -360,6 +372,7 @@ class BuddyGrammarImeService :
     // region Cloud correction (unchanged flow)
 
     fun correctCurrentText() {
+        clearCorrectionUndo()
         cancelCorrection()
         if (secureField) {
             setStatus("Cloud actions are unavailable in secure fields.", error = true)
@@ -383,14 +396,27 @@ class BuddyGrammarImeService :
                 val corrected = api.correct(
                     text = snapshot.candidate.requestText,
                     clientId = preferences.installationId(),
-                    modelId = settings.modelId,
+                    modelId = settings.activeModelId,
                     instruction = settings.correctionInstruction,
                 )
                 val replacement = snapshot.candidate.replacement(corrected)
                 val didApply = applyCorrection(snapshot, replacement)
                 if (didApply) {
-                    learnCommittedText(replacement, snapshot.anchorBefore)
                     observeCommittedText(replacement)
+                    beginCorrectionUndo(
+                        state = CorrectionUndoState(
+                            originalText = snapshot.candidate.capturedText,
+                            replacementText = replacement,
+                            anchorBefore = snapshot.anchorBefore,
+                            anchorAfter = snapshot.anchorAfter,
+                        ),
+                        durationSeconds = settings.correctionUndoDurationSeconds,
+                        learning = PendingCorrectionLearning(
+                            text = replacement,
+                            precedingContext = snapshot.anchorBefore,
+                            languageTag = currentLanguageTag,
+                        ),
+                    )
                 }
                 setStatus(
                     if (didApply) {
@@ -487,6 +513,36 @@ class BuddyGrammarImeService :
         }
     }
 
+    fun undoLastCorrection() {
+        val undo = pendingCorrectionUndo ?: return
+        clearCorrectionUndo(acceptLearning = false)
+        val connection = currentInputConnection
+        if (connection == null || !correctionUndoStillMatches(undo)) {
+            setStatus("The text changed, so the correction could not be undone.", error = true)
+            return
+        }
+
+        connection.beginBatchEdit()
+        val didUndo = try {
+            if (!connection.deleteSurroundingText(undo.replacementText.length, 0)) {
+                false
+            } else if (connection.commitText(undo.originalText, 1)) {
+                true
+            } else {
+                connection.commitText(undo.replacementText, 1)
+                false
+            }
+        } finally {
+            connection.endBatchEdit()
+        }
+        observedTextSuffix.clear()
+        setStatus(
+            if (didUndo) "Correction undone." else "The editor rejected Undo.",
+            error = !didUndo,
+        )
+        refreshTypingState()
+    }
+
     fun insertPendingTranscript() {
         localEdit(preserveObservedSuffix = true)
         if (secureField) {
@@ -514,6 +570,7 @@ class BuddyGrammarImeService :
     // endregion
 
     private fun localEdit(preserveObservedSuffix: Boolean = false) {
+        clearCorrectionUndo()
         cancelCorrection()
         if (!preserveObservedSuffix) observedTextSuffix.clear()
         showBaselineStatus()
@@ -635,6 +692,52 @@ class BuddyGrammarImeService :
         isCorrecting = false
     }
 
+    private fun beginCorrectionUndo(
+        state: CorrectionUndoState,
+        durationSeconds: Int,
+        learning: PendingCorrectionLearning,
+    ) {
+        clearCorrectionUndo()
+        pendingCorrectionUndo = state
+        pendingCorrectionLearning = learning
+        canUndoCorrection = true
+        correctionUndoJob = scope.launch {
+            delay(durationSeconds.coerceIn(1, 10) * 1_000L)
+            clearCorrectionUndo()
+        }
+    }
+
+    private fun clearCorrectionUndo(acceptLearning: Boolean = true) {
+        correctionUndoJob?.cancel()
+        correctionUndoJob = null
+        if (acceptLearning) {
+            pendingCorrectionLearning?.let { learning ->
+                personalModel.learnCommittedText(
+                    learning.text,
+                    learning.precedingContext,
+                    learning.languageTag,
+                )
+            }
+        }
+        pendingCorrectionUndo = null
+        pendingCorrectionLearning = null
+        canUndoCorrection = false
+    }
+
+    private fun correctionUndoStillMatches(
+        undo: CorrectionUndoState? = pendingCorrectionUndo,
+    ): Boolean {
+        val state = undo ?: return false
+        val connection = currentInputConnection ?: return false
+        val before = connection.getTextBeforeCursor(
+            state.anchorBefore.length + state.replacementText.length,
+            0,
+        )?.toString().orEmpty()
+        val after = connection.getTextAfterCursor(state.anchorAfter.length, 0)
+            ?.toString().orEmpty()
+        return state.matches(before, after)
+    }
+
     private fun refreshTypingState() {
         if (secureField) {
             suggestions = emptyList()
@@ -717,6 +820,12 @@ class BuddyGrammarImeService :
         val textAfterCursor: String,
         val anchorBefore: String,
         val anchorAfter: String,
+    )
+
+    private data class PendingCorrectionLearning(
+        val text: String,
+        val precedingContext: String,
+        val languageTag: String,
     )
 
     private enum class CorrectionTarget { Selection, CurrentSentence }

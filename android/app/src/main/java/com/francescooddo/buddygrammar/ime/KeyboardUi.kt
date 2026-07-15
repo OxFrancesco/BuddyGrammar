@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.rounded.Backspace
 import androidx.compose.material.icons.automirrored.rounded.KeyboardReturn
 import androidx.compose.material.icons.automirrored.rounded.KeyboardTab
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
@@ -146,7 +147,33 @@ private fun SuggestionStrip(service: BuddyGrammarImeService) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         val status = service.status
-        if (status != null) {
+        if (service.canUndoCorrection) {
+            Surface(
+                onClick = service::undoLastCorrection,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(34.dp)
+                    .semantics { contentDescription = "Undo star correction" },
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Rounded.Undo,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text(
+                        "Undo",
+                        modifier = Modifier.padding(start = 6.dp),
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        } else if (status != null) {
             Text(
                 text = status.message,
                 modifier = Modifier

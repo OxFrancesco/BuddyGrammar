@@ -52,6 +52,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -69,19 +70,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.francescooddo.buddygrammar.R
-import com.francescooddo.buddygrammar.core.BuddySettings
+import com.francescooddo.buddygrammar.core.AppConfig
+import kotlin.math.roundToInt
 
 private val BuddyPurple = Color(0xFF6D4AFF)
 private val BuddyIndigo = Color(0xFF4C39D9)
@@ -481,7 +481,6 @@ private fun FeatureCard(
 
 @Composable
 private fun DictationScreen(state: BuddyGrammarAppState, onRecord: () -> Unit) {
-    val clipboard = LocalClipboardManager.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -544,7 +543,7 @@ private fun DictationScreen(state: BuddyGrammarAppState, onRecord: () -> Unit) {
                 modifier = Modifier.weight(1f),
             ) { Text("Save for keyboard") }
             FilledTonalButton(
-                onClick = { clipboard.setText(AnnotatedString(state.transcript)) },
+                onClick = state::copyTranscript,
                 enabled = state.transcript.isNotBlank() && !state.isProcessing && !state.isRecording,
             ) { Icon(Icons.Rounded.ContentCopy, "Copy transcript") }
             FilledTonalButton(
@@ -585,12 +584,23 @@ private fun SettingsScreen(state: BuddyGrammarAppState, onOpenKeyboardSettings: 
             body = "Fix clear keyboard typos on-device when you type punctuation, space, or return.",
             checked = draft.automaticallyCorrectWords,
         ) { draft = draft.copy(automaticallyCorrectWords = it) }
+        SettingSwitch(
+            title = "Update correction model automatically",
+            body = "Use BuddyGrammar’s current recommended OpenRouter model.",
+            checked = draft.usesAutomaticModelUpdates,
+        ) {
+            draft = draft.copy(
+                usesAutomaticModelUpdates = it,
+                modelId = if (it) AppConfig.DEFAULT_MODEL else draft.modelId,
+            )
+        }
         OutlinedTextField(
             value = draft.modelId,
             onValueChange = { draft = draft.copy(modelId = it) },
             modifier = Modifier.fillMaxWidth(),
             label = { Text("OpenRouter model") },
             singleLine = true,
+            enabled = !draft.usesAutomaticModelUpdates,
         )
         OutlinedTextField(
             value = draft.correctionInstruction,
@@ -598,9 +608,27 @@ private fun SettingsScreen(state: BuddyGrammarAppState, onOpenKeyboardSettings: 
             modifier = Modifier.fillMaxWidth().height(160.dp),
             label = { Text("Correction instruction") },
         )
+        Text(
+            "Star undo window: ${draft.correctionUndoDurationSeconds} seconds",
+            fontWeight = FontWeight.Bold,
+        )
+        Slider(
+            value = draft.correctionUndoDurationSeconds.toFloat(),
+            onValueChange = {
+                draft = draft.copy(correctionUndoDurationSeconds = it.roundToInt())
+            },
+            valueRange = 1f..10f,
+            steps = 8,
+        )
+        Text(
+            "After a ★ correction, Undo stays available for this duration.",
+            fontSize = 13.sp,
+            color = BuddyInk.copy(alpha = 0.6f),
+        )
         Button(
-            onClick = { state.saveSettings(draft.sanitized()) },
-            enabled = draft.modelId.isNotBlank() && draft.correctionInstruction.isNotBlank(),
+            onClick = { state.saveSettings(draft.normalized()) },
+            enabled = (draft.usesAutomaticModelUpdates || draft.modelId.isNotBlank()) &&
+                draft.correctionInstruction.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Save settings") }
         HorizontalDivider()
@@ -621,11 +649,6 @@ private fun SettingsScreen(state: BuddyGrammarAppState, onOpenKeyboardSettings: 
         )
     }
 }
-
-private fun BuddySettings.sanitized(): BuddySettings = copy(
-    modelId = modelId.trim(),
-    correctionInstruction = correctionInstruction.trim(),
-)
 
 @Composable
 private fun SettingSwitch(
@@ -694,7 +717,7 @@ private fun PrivacyScreen(state: BuddyGrammarAppState) {
             PrivacyPoint("Only on request", "Text leaves the device only when you tap ★. Audio leaves only after you finish a recording.")
             PrivacyPoint("Protected credentials", "OpenRouter and ElevenLabs keys live on the BuddyGrammar worker and are not bundled with the app or keyboard.")
             PrivacyPoint("On-device personalization", "The keyboard stores language-scoped vocabulary and context frequency counts locally to improve suggestions. These counts are never sent for prediction.")
-            PrivacyPoint("Minimal local data", "Settings, a random installation ID, and the latest transcript are stored locally. Transcripts expire from keyboard access after 24 hours.")
+            PrivacyPoint("Minimal local data", "Settings, a random installation ID, and the latest raw transcript and final text are stored locally until you clear them. The keyboard handoff copy expires after 24 hours or is removed after insertion.")
             PrivacyPoint("Secure fields", "The keyboard blocks cloud correction and transcript insertion in password and other secure inputs.")
         }
     }

@@ -114,10 +114,14 @@ struct HomeView: View {
 
     @ViewBuilder
     private var pendingTranscriptRow: some View {
-        if let transcript = model.pendingTranscript {
+        if !model.transcriptDraft.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Saved for the keyboard")
+                    Text(
+                        model.pendingTranscript == nil
+                            ? "Saved locally"
+                            : "Saved locally and for the keyboard"
+                    )
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -127,7 +131,7 @@ struct HomeView: View {
                     .font(.caption.weight(.semibold))
                     .accessibilityIdentifier("home.clearPending")
                 }
-                Text(transcript.text)
+                Text(model.transcriptDraft)
                     .font(.subheadline)
                     .lineLimit(3)
                     .accessibilityIdentifier("home.pendingTranscript")

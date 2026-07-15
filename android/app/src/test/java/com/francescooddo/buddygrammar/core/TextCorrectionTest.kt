@@ -84,4 +84,23 @@ class TextCorrectionTest {
         }
         assertEquals("Fine.", CorrectionOutputGuard.sanitize("  Fine. \n", "bad"))
     }
+
+    @Test
+    fun `undo applies only while corrected text and anchors are unchanged`() {
+        val undo = CorrectionUndoState(
+            originalText = " this need fixing. ",
+            replacementText = " This needs fixing. ",
+            anchorBefore = "Previous.",
+            anchorAfter = "Next",
+        )
+
+        assertEquals(
+            true,
+            undo.matches("Previous. This needs fixing. ", "Next"),
+        )
+        assertEquals(
+            false,
+            undo.matches("Previous. This needs fixing! ", "Next"),
+        )
+    }
 }

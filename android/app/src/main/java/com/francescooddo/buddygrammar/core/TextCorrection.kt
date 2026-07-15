@@ -31,6 +31,17 @@ data class CursorCorrectionCandidate(
     val textAfterCursor: String,
 )
 
+data class CorrectionUndoState(
+    val originalText: String,
+    val replacementText: String,
+    val anchorBefore: String,
+    val anchorAfter: String,
+) {
+    fun matches(contextBeforeCursor: String, contextAfterCursor: String): Boolean =
+        contextBeforeCursor == anchorBefore + replacementText &&
+            contextAfterCursor == anchorAfter
+}
+
 object TextContextExtractor {
     private val terminators = setOf('.', '!', '?', '\n', '…')
 
