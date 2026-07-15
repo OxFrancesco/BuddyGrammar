@@ -10,8 +10,15 @@ extension WhisperKit: @retroactive @unchecked Sendable {}
 protocol SpeechTranscriptionEngine: AnyObject {
     func isAvailable(for localeIdentifier: String) async -> Bool
     func requiresSpeechRecognitionAuthorization(for localeIdentifier: String) async -> Bool
-    func makeStreamingSession(localeIdentifier: String) async -> (any StreamingSpeechTranscriptionSession)?
-    func transcribe(audioURL: URL, localeIdentifier: String) async throws -> String
+    func makeStreamingSession(
+        localeIdentifier: String,
+        vocabulary: [String]
+    ) async -> (any StreamingSpeechTranscriptionSession)?
+    func transcribe(
+        audioURL: URL,
+        localeIdentifier: String,
+        vocabulary: [String]
+    ) async throws -> String
 }
 
 protocol StreamingSpeechTranscriptionSession: AnyObject, Sendable {
@@ -25,7 +32,10 @@ extension SpeechTranscriptionEngine {
         true
     }
 
-    func makeStreamingSession(localeIdentifier: String) async -> (any StreamingSpeechTranscriptionSession)? {
+    func makeStreamingSession(
+        localeIdentifier: String,
+        vocabulary: [String]
+    ) async -> (any StreamingSpeechTranscriptionSession)? {
         nil
     }
 }
@@ -38,6 +48,7 @@ protocol FallbackSpeechTranscriptionEngine: SpeechTranscriptionEngine {
 
 enum VoiceFallbackModelID: String, CaseIterable, Codable, Identifiable, Sendable {
     case whisperBase
+    case whisperSmall
 
     var id: Self { self }
 
@@ -45,19 +56,32 @@ enum VoiceFallbackModelID: String, CaseIterable, Codable, Identifiable, Sendable
         switch self {
         case .whisperBase:
             "Whisper Base"
+        case .whisperSmall:
+            "Whisper Small"
         }
     }
 
     var badge: String {
-        "~146 MB"
+        switch self {
+        case .whisperBase: "~146 MB"
+        case .whisperSmall: "~466 MB"
+        }
     }
 
     var summary: String {
-        "Small multilingual fallback model for Macs without Apple on-device speech support."
+        switch self {
+        case .whisperBase:
+            "Fast, compact multilingual fallback with lower recognition accuracy."
+        case .whisperSmall:
+            "Higher-accuracy multilingual fallback for accents and noisy recordings."
+        }
     }
 
     var whisperKitModelName: String {
-        "base"
+        switch self {
+        case .whisperBase: "base"
+        case .whisperSmall: "small"
+        }
     }
 }
 
@@ -90,6 +114,7 @@ struct VoiceModelStatus: Hashable, Sendable {
 
 enum VoiceTranscriptionRoute: Equatable, Sendable {
     case apple(requiresSpeechRecognitionAuthorization: Bool)
+    case elevenLabs
     case whisper
 }
 
@@ -117,22 +142,33 @@ final class AppleOnDeviceSpeechEngine: SpeechTranscriptionEngine {
         return true
     }
 
-    func makeStreamingSession(localeIdentifier: String) async -> (any StreamingSpeechTranscriptionSession)? {
+    func makeStreamingSession(
+        localeIdentifier: String,
+        vocabulary: [String]
+    ) async -> (any StreamingSpeechTranscriptionSession)? {
         guard #available(macOS 26.0, *) else { return nil }
 
         let modernEngine = AppleSpeechAnalyzerEngine()
         guard await modernEngine.isAvailable(for: localeIdentifier) else { return nil }
-        return await modernEngine.makeStreamingSession(localeIdentifier: localeIdentifier)
+        return await modernEngine.makeStreamingSession(
+            localeIdentifier: localeIdentifier,
+            vocabulary: vocabulary
+        )
     }
 
-    func transcribe(audioURL: URL, localeIdentifier: String) async throws -> String {
+    func transcribe(
+        audioURL: URL,
+        localeIdentifier: String,
+        vocabulary: [String]
+    ) async throws -> String {
         if #available(macOS 26.0, *) {
             let modernEngine = AppleSpeechAnalyzerEngine()
             if await modernEngine.isAvailable(for: localeIdentifier) {
                 do {
                     return try await modernEngine.transcribe(
                         audioURL: audioURL,
-                        localeIdentifier: localeIdentifier
+                        localeIdentifier: localeIdentifier,
+                        vocabulary: vocabulary
                     )
                 } catch is CancellationError {
                     throw CancellationError()
@@ -141,7 +177,8 @@ final class AppleOnDeviceSpeechEngine: SpeechTranscriptionEngine {
                        await legacyEngine.isAvailable(for: localeIdentifier) {
                         return try await legacyEngine.transcribe(
                             audioURL: audioURL,
-                            localeIdentifier: localeIdentifier
+                            localeIdentifier: localeIdentifier,
+                            vocabulary: vocabulary
                         )
                     }
                     throw error
@@ -151,7 +188,8 @@ final class AppleOnDeviceSpeechEngine: SpeechTranscriptionEngine {
 
         return try await legacyEngine.transcribe(
             audioURL: audioURL,
-            localeIdentifier: localeIdentifier
+            localeIdentifier: localeIdentifier,
+            vocabulary: vocabulary
         )
     }
 }
@@ -174,7 +212,11 @@ private final class LegacySFSpeechRecognitionEngine: SpeechTranscriptionEngine {
         return recognizer.supportsOnDeviceRecognition
     }
 
-    func transcribe(audioURL: URL, localeIdentifier: String) async throws -> String {
+    func transcribe(
+        audioURL: URL,
+        localeIdentifier: String,
+        vocabulary: [String]
+    ) async throws -> String {
         try Task.checkCancellation()
         let locale = bestLocale(for: localeIdentifier)
         guard let recognizer = SFSpeechRecognizer(locale: locale) else {
@@ -189,6 +231,7 @@ private final class LegacySFSpeechRecognitionEngine: SpeechTranscriptionEngine {
         let request = SFSpeechURLRecognitionRequest(url: audioURL)
         request.requiresOnDeviceRecognition = true
         request.shouldReportPartialResults = false
+        request.contextualStrings = Array(vocabulary.prefix(100))
         request.addsPunctuation = true
 
         cancelActiveRecognition(throwing: CancellationError())
@@ -349,13 +392,23 @@ private final class AppleSpeechAnalyzerEngine: SpeechTranscriptionEngine {
         false
     }
 
-    func makeStreamingSession(localeIdentifier: String) async -> (any StreamingSpeechTranscriptionSession)? {
-        let session = SpeechAnalyzerStreamingSession(localeIdentifier: localeIdentifier)
+    func makeStreamingSession(
+        localeIdentifier: String,
+        vocabulary: [String]
+    ) async -> (any StreamingSpeechTranscriptionSession)? {
+        let session = SpeechAnalyzerStreamingSession(
+            localeIdentifier: localeIdentifier,
+            vocabulary: vocabulary
+        )
         session.start()
         return session
     }
 
-    func transcribe(audioURL: URL, localeIdentifier: String) async throws -> String {
+    func transcribe(
+        audioURL: URL,
+        localeIdentifier: String,
+        vocabulary: [String]
+    ) async throws -> String {
         guard SpeechTranscriber.isAvailable else {
             throw SpeechAnalyzerFailure.unavailable
         }
@@ -369,6 +422,9 @@ private final class AppleSpeechAnalyzerEngine: SpeechTranscriptionEngine {
             modules: [transcriber],
             options: .init(priority: .userInitiated, modelRetention: .lingering)
         )
+        if let context = SpeechAnalyzerSupport.vocabularyContext(from: vocabulary) {
+            try await analyzer.setContext(context)
+        }
         let audioFile = try AVAudioFile(forReading: audioURL)
         let audioDuration = Double(audioFile.length) / max(audioFile.processingFormat.sampleRate, 1)
         let resultsTask = SpeechAnalyzerSupport.collectResults(from: transcriber)
@@ -403,12 +459,13 @@ private final class SpeechAnalyzerStreamingSession: StreamingSpeechTranscription
     private static let maximumPendingAudioBytes = 32 * 1024 * 1024
 
     private let localeIdentifier: String
+    private let vocabulary: [String]
     private let queue = DispatchQueue(label: "com.francescooddo.BuddyGrammar.speech-analyzer-input")
     private let sourceFormat = AVAudioFormat(
         commonFormat: .pcmFormatInt16,
-        sampleRate: 16_000,
+        sampleRate: 24_000,
         channels: 1,
-        interleaved: false
+        interleaved: true
     )!
 
     private var pendingSamples: [Data] = []
@@ -424,8 +481,9 @@ private final class SpeechAnalyzerStreamingSession: StreamingSpeechTranscription
     private var resultsTask: Task<String, Error>?
     private var setupTask: Task<Void, Error>?
 
-    init(localeIdentifier: String) {
+    init(localeIdentifier: String, vocabulary: [String]) {
         self.localeIdentifier = localeIdentifier
+        self.vocabulary = vocabulary
     }
 
     func start() {
@@ -450,6 +508,9 @@ private final class SpeechAnalyzerStreamingSession: StreamingSpeechTranscription
                 modules: [transcriber],
                 options: .init(priority: .userInitiated, modelRetention: .lingering)
             )
+            if let context = SpeechAnalyzerSupport.vocabularyContext(from: vocabulary) {
+                try await analyzer.setContext(context)
+            }
             try await analyzer.prepareToAnalyze(in: format)
 
             let (inputSequence, builder) = AsyncStream<AnalyzerInput>.makeStream()
@@ -720,6 +781,14 @@ private final class ConverterInputProvider: @unchecked Sendable {
 
 @available(macOS 26.0, *)
 private enum SpeechAnalyzerSupport {
+    static func vocabularyContext(from vocabulary: [String]) -> AnalysisContext? {
+        let terms = Array(vocabulary.prefix(1_000))
+        guard !terms.isEmpty else { return nil }
+        let context = AnalysisContext()
+        context.contextualStrings[.general] = terms
+        return context
+    }
+
     static func resolveLocale(for localeIdentifier: String) async -> Locale? {
         let requested = Locale(identifier: localeIdentifier)
         if let equivalent = await SpeechTranscriber.supportedLocale(equivalentTo: requested) {
@@ -844,7 +913,11 @@ private enum SpeechAnalyzerFailure: LocalizedError {
 @MainActor
 final class WhisperKitSpeechEngine: FallbackSpeechTranscriptionEngine {
     private enum StorageKey {
-        static let cachedModelFolderPath = "BuddyGrammar.voice.whisperModelFolderPath"
+        static let legacyCachedModelFolderPath = "BuddyGrammar.voice.whisperModelFolderPath"
+
+        static func cachedModelFolderPath(for modelID: VoiceFallbackModelID) -> String {
+            "BuddyGrammar.voice.whisperModelFolderPath.\(modelID.rawValue)"
+        }
     }
 
     private let modelID: VoiceFallbackModelID
@@ -856,11 +929,15 @@ final class WhisperKitSpeechEngine: FallbackSpeechTranscriptionEngine {
         self.modelID = modelID
         self.defaults = defaults
 
-        if let persistedPath = defaults.string(forKey: StorageKey.cachedModelFolderPath),
+        let storageKey = StorageKey.cachedModelFolderPath(for: modelID)
+        let persistedPath = defaults.string(forKey: storageKey)
+            ?? (modelID == .whisperBase ? defaults.string(forKey: StorageKey.legacyCachedModelFolderPath) : nil)
+        if let persistedPath,
            FileManager.default.fileExists(atPath: persistedPath) {
             self.cachedModelFolderPath = persistedPath
+            defaults.set(persistedPath, forKey: storageKey)
         } else {
-            defaults.removeObject(forKey: StorageKey.cachedModelFolderPath)
+            defaults.removeObject(forKey: storageKey)
         }
     }
 
@@ -889,7 +966,11 @@ final class WhisperKitSpeechEngine: FallbackSpeechTranscriptionEngine {
         whisperKit = try await loadWhisperKit(allowDownload: true)
     }
 
-    func transcribe(audioURL: URL, localeIdentifier: String) async throws -> String {
+    func transcribe(
+        audioURL: URL,
+        localeIdentifier: String,
+        vocabulary: [String]
+    ) async throws -> String {
         if whisperKit == nil, cachedModelFolderPath != nil {
             do {
                 whisperKit = try await loadWhisperKit(allowDownload: false)
@@ -952,7 +1033,7 @@ final class WhisperKitSpeechEngine: FallbackSpeechTranscriptionEngine {
 
         if let modelFolderPath = whisperKit.modelFolder?.path {
             cachedModelFolderPath = modelFolderPath
-            defaults.set(modelFolderPath, forKey: StorageKey.cachedModelFolderPath)
+            defaults.set(modelFolderPath, forKey: StorageKey.cachedModelFolderPath(for: modelID))
         }
 
         return whisperKit
@@ -960,29 +1041,32 @@ final class WhisperKitSpeechEngine: FallbackSpeechTranscriptionEngine {
 
     private func clearCachedModelFolder() {
         cachedModelFolderPath = nil
-        defaults.removeObject(forKey: StorageKey.cachedModelFolderPath)
+        defaults.removeObject(forKey: StorageKey.cachedModelFolderPath(for: modelID))
     }
 }
 
 @MainActor
 @Observable
 final class VoiceModelStore {
-    let fallbackModelID: VoiceFallbackModelID
+    private(set) var fallbackModelID: VoiceFallbackModelID
 
     private let appleEngine: any SpeechTranscriptionEngine
-    private let fallbackEngine: any FallbackSpeechTranscriptionEngine
+    private let elevenLabsEngine: ElevenLabsSpeechEngine
+    private var fallbackEngine: any FallbackSpeechTranscriptionEngine
 
     var status: VoiceModelStatus
     var lastErrorMessage: String?
 
     init(
-        fallbackModelID: VoiceFallbackModelID = .whisperBase,
+        fallbackModelID: VoiceFallbackModelID = .whisperSmall,
         appleEngine: any SpeechTranscriptionEngine = AppleOnDeviceSpeechEngine(),
-        fallbackEngine: any FallbackSpeechTranscriptionEngine = WhisperKitSpeechEngine()
+        elevenLabsEngine: ElevenLabsSpeechEngine = ElevenLabsSpeechEngine(),
+        fallbackEngine: (any FallbackSpeechTranscriptionEngine)? = nil
     ) {
         self.fallbackModelID = fallbackModelID
         self.appleEngine = appleEngine
-        self.fallbackEngine = fallbackEngine
+        self.elevenLabsEngine = elevenLabsEngine
+        self.fallbackEngine = fallbackEngine ?? WhisperKitSpeechEngine(modelID: fallbackModelID)
         self.status = .notDownloaded
 
         Task { [weak self] in
@@ -997,18 +1081,61 @@ final class VoiceModelStore {
         await appleEngine.isAvailable(for: localeIdentifier)
     }
 
-    func resolveRoute(for localeIdentifier: String) async throws -> VoiceTranscriptionRoute {
-        if await appleEngine.isAvailable(for: localeIdentifier) {
+    func updateElevenLabsAPIKey(_ apiKey: String?) {
+        elevenLabsEngine.updateAPIKey(apiKey)
+    }
+
+    var elevenLabsIsConfigured: Bool {
+        get async {
+            await elevenLabsEngine.isAvailable(for: "en-US")
+        }
+    }
+
+    func selectFallbackModel(_ modelID: VoiceFallbackModelID) {
+        guard modelID != fallbackModelID else { return }
+        fallbackModelID = modelID
+        fallbackEngine = WhisperKitSpeechEngine(modelID: modelID)
+        status = .notDownloaded
+        lastErrorMessage = nil
+
+        Task { [weak self] in
+            guard let self, await self.fallbackEngine.isPrepared() else { return }
+            self.status = .init(state: .loaded, errorMessage: nil)
+        }
+    }
+
+    func resolveRoute(
+        for localeIdentifier: String,
+        provider: VoiceTranscriptionProvider = .automatic
+    ) async throws -> VoiceTranscriptionRoute {
+        if provider == .automatic || provider == .apple,
+           await appleEngine.isAvailable(for: localeIdentifier) {
             let requiresAuthorization = await appleEngine
                 .requiresSpeechRecognitionAuthorization(for: localeIdentifier)
             return .apple(requiresSpeechRecognitionAuthorization: requiresAuthorization)
         }
 
-        if await fallbackEngine.isPrepared() {
+        if provider == .automatic || provider == .elevenLabs,
+           await elevenLabsEngine.isAvailable(for: localeIdentifier) {
+            return .elevenLabs
+        }
+
+        if provider == .automatic || provider == .whisper,
+           await fallbackEngine.isPrepared() {
             return .whisper
         }
 
-        let message = Self.missingFallbackMessage
+        let message: String
+        switch provider {
+        case .apple:
+            message = "Apple on-device speech is unavailable for the selected language on this Mac."
+        case .elevenLabs:
+            message = "Add your ElevenLabs API key in Voice Settings before selecting ElevenLabs transcription."
+        case .whisper:
+            message = Self.missingFallbackMessage
+        case .automatic:
+            message = "No dictation provider is ready. Add an ElevenLabs key or download the Whisper fallback model."
+        }
         lastErrorMessage = message
         if status.state == .notDownloaded {
             status = .init(state: .notDownloaded, errorMessage: message)
@@ -1017,9 +1144,13 @@ final class VoiceModelStore {
     }
 
     func makeStreamingSession(
-        for localeIdentifier: String
+        for localeIdentifier: String,
+        vocabulary: [String]
     ) async -> (any StreamingSpeechTranscriptionSession)? {
-        await appleEngine.makeStreamingSession(localeIdentifier: localeIdentifier)
+        await appleEngine.makeStreamingSession(
+            localeIdentifier: localeIdentifier,
+            vocabulary: vocabulary
+        )
     }
 
     func fallbackModelIsPrepared() async -> Bool {
@@ -1054,12 +1185,65 @@ final class VoiceModelStore {
         audioURL: URL,
         localeIdentifier: String,
         route: VoiceTranscriptionRoute? = nil,
-        streamingSession: (any StreamingSpeechTranscriptionSession)? = nil
+        streamingSession: (any StreamingSpeechTranscriptionSession)? = nil,
+        vocabulary: [String] = []
+    ) async throws -> String {
+        let resolvedRoute: VoiceTranscriptionRoute
+        if let route {
+            resolvedRoute = route
+        } else {
+            resolvedRoute = try await resolveRoute(for: localeIdentifier)
+        }
+
+        switch resolvedRoute {
+        case .apple:
+            return try await transcribeWithAppleThenFallback(
+                audioURL: audioURL,
+                localeIdentifier: localeIdentifier,
+                streamingSession: streamingSession,
+                vocabulary: vocabulary
+            )
+        case .elevenLabs:
+            do {
+                let transcript = try await elevenLabsEngine.transcribe(
+                    audioURL: audioURL,
+                    localeIdentifier: localeIdentifier,
+                    vocabulary: vocabulary
+                )
+                lastErrorMessage = nil
+                return transcript
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                if await fallbackEngine.isPrepared() {
+                    return try await transcribeWithWhisper(
+                        audioURL: audioURL,
+                        localeIdentifier: localeIdentifier,
+                        vocabulary: vocabulary
+                    )
+                }
+                let message = "ElevenLabs transcription failed. \(error.localizedDescription)"
+                lastErrorMessage = message
+                throw RewriteFailure.transcriptionUnavailable(message)
+            }
+        case .whisper:
+            return try await transcribeWithWhisper(
+                audioURL: audioURL,
+                localeIdentifier: localeIdentifier,
+                vocabulary: vocabulary
+            )
+        }
+    }
+
+    private func transcribeWithAppleThenFallback(
+        audioURL: URL,
+        localeIdentifier: String,
+        streamingSession: (any StreamingSpeechTranscriptionSession)?,
+        vocabulary: [String]
     ) async throws -> String {
         var appleFailure: Error?
-        let shouldTryApple = route != .whisper
 
-        if shouldTryApple, let streamingSession {
+        if let streamingSession {
             do {
                 let transcript = try await streamingSession.finish()
                 lastErrorMessage = nil
@@ -1072,11 +1256,12 @@ final class VoiceModelStore {
             }
         }
 
-        if shouldTryApple, await appleEngine.isAvailable(for: localeIdentifier) {
+        if await appleEngine.isAvailable(for: localeIdentifier) {
             do {
                 let transcript = try await appleEngine.transcribe(
                     audioURL: audioURL,
-                    localeIdentifier: localeIdentifier
+                    localeIdentifier: localeIdentifier,
+                    vocabulary: vocabulary
                 )
                 lastErrorMessage = nil
                 return transcript
@@ -1087,27 +1272,50 @@ final class VoiceModelStore {
             }
         }
 
-        let fallbackPrepared = await fallbackEngine.isPrepared()
-        if !fallbackPrepared {
-            if let appleFailure {
-                let message = "Apple on-device transcription failed. \(appleFailure.localizedDescription)"
-                lastErrorMessage = message
-                throw RewriteFailure.transcriptionUnavailable(message)
+        if await elevenLabsEngine.isAvailable(for: localeIdentifier) {
+            do {
+                let transcript = try await elevenLabsEngine.transcribe(
+                    audioURL: audioURL,
+                    localeIdentifier: localeIdentifier,
+                    vocabulary: vocabulary
+                )
+                lastErrorMessage = nil
+                return transcript
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // A downloaded local fallback still gets the final attempt.
             }
-
-            let message = Self.missingFallbackMessage
-            lastErrorMessage = message
-            if status.state == .notDownloaded {
-                status = .init(state: .notDownloaded, errorMessage: message)
-            }
-            throw RewriteFailure.transcriptionUnavailable(message)
         }
 
+        if await fallbackEngine.isPrepared() {
+            return try await transcribeWithWhisper(
+                audioURL: audioURL,
+                localeIdentifier: localeIdentifier,
+                vocabulary: vocabulary
+            )
+        }
+
+        let detail = appleFailure?.localizedDescription ?? "No compatible speech model was available."
+        let message = "Apple on-device transcription failed. \(detail)"
+        lastErrorMessage = message
+        throw RewriteFailure.transcriptionUnavailable(message)
+    }
+
+    private func transcribeWithWhisper(
+        audioURL: URL,
+        localeIdentifier: String,
+        vocabulary: [String]
+    ) async throws -> String {
         status = .init(state: .loaded, errorMessage: nil)
         lastErrorMessage = nil
 
         do {
-            return try await fallbackEngine.transcribe(audioURL: audioURL, localeIdentifier: localeIdentifier)
+            return try await fallbackEngine.transcribe(
+                audioURL: audioURL,
+                localeIdentifier: localeIdentifier,
+                vocabulary: vocabulary
+            )
         } catch let failure as RewriteFailure {
             let message = failure.errorDescription ?? "BuddyWrite could not transcribe the recorded audio."
             await recordFallbackFailure(message)

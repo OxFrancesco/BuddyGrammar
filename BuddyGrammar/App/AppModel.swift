@@ -30,6 +30,7 @@ final class AppModel {
     var selectedProfileID: UUID?
     var selectedNoteID: UUID?
     var apiKeyDraft = ""
+    var elevenLabsAPIKeyDraft = ""
     var settingsErrorMessage: String?
     var appleSpeechAvailableForSelectedLocale: Bool?
     var openRouterModels: [OpenRouterModelSummary] = []
@@ -55,7 +56,13 @@ final class AppModel {
         let menuBarStatus = MenuBarStatusModel()
         let localModelStore = LocalModelStore()
         let voiceAuthorizationService = VoiceAuthorizationService()
-        let voiceModelStore = VoiceModelStore()
+        let elevenLabsSpeechEngine = ElevenLabsSpeechEngine(
+            apiKey: keychainService.loadElevenLabsAPIKey()
+        )
+        let voiceModelStore = VoiceModelStore(
+            fallbackModelID: settingsStore.appSettings.voiceFallbackModelID,
+            elevenLabsEngine: elevenLabsSpeechEngine
+        )
         let audioRecordingService = AudioRecordingService()
         let selectionService = SelectionService(
             accessibilityService: accessibilityService,
@@ -109,6 +116,7 @@ final class AppModel {
         self.selectedProfileID = settingsStore.profiles.first?.id
         self.selectedNoteID = notesStore.notes.first?.id
         self.apiKeyDraft = keychainService.loadAPIKey() ?? ""
+        self.elevenLabsAPIKeyDraft = keychainService.loadElevenLabsAPIKey() ?? ""
         self.appleSpeechAvailableForSelectedLocale = nil
 
         hotkeyService.onHotKey = { [weak self] profileID in
@@ -145,6 +153,11 @@ final class AppModel {
     var hasAPIKey: Bool {
         _ = environmentStateRevision
         return keychainService.hasAPIKey()
+    }
+
+    var hasElevenLabsAPIKey: Bool {
+        _ = environmentStateRevision
+        return keychainService.hasElevenLabsAPIKey()
     }
 
     var accessibilityGranted: Bool {
@@ -291,6 +304,23 @@ final class AppModel {
         refreshEnvironmentState()
     }
 
+    func saveElevenLabsAPIKey() {
+        do {
+            let trimmed = elevenLabsAPIKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                keychainService.deleteElevenLabsAPIKey()
+                voiceModelStore.updateElevenLabsAPIKey(nil)
+            } else {
+                try keychainService.saveElevenLabsAPIKey(trimmed)
+                voiceModelStore.updateElevenLabsAPIKey(trimmed)
+            }
+            settingsErrorMessage = nil
+        } catch {
+            settingsErrorMessage = error.localizedDescription
+        }
+        refreshEnvironmentState()
+    }
+
     func loadOpenRouterModels(forceRefresh: Bool = false) async {
         guard !openRouterModelsAreLoading else { return }
         if !forceRefresh, !openRouterModels.isEmpty { return }
@@ -412,8 +442,21 @@ final class AppModel {
     }
 
     func setVoiceLocaleIdentifier(_ localeIdentifier: String) {
-        settingsStore.appSettings.voiceLocaleIdentifier = localeIdentifier
+        settingsStore.appSettings.voiceLocaleIdentifier = VoiceLocaleDefaults.normalizedIdentifier(localeIdentifier)
         refreshVoiceSpeechAvailability()
+    }
+
+    func setVoiceTranscriptionProvider(_ provider: VoiceTranscriptionProvider) {
+        settingsStore.appSettings.voiceTranscriptionProvider = provider
+    }
+
+    func setVoiceVocabulary(_ vocabulary: String) {
+        settingsStore.appSettings.voiceVocabulary = vocabulary
+    }
+
+    func setVoiceFallbackModelID(_ modelID: VoiceFallbackModelID) {
+        settingsStore.appSettings.voiceFallbackModelID = modelID
+        voiceModelStore.selectFallbackModel(modelID)
     }
 
     func setVoiceHotkey(_ hotkey: HotkeyDescriptor?) {
@@ -431,7 +474,11 @@ final class AppModel {
                 return
             }
 
-            let needsSpeechPrompt = await voiceModelStore.appleOnDeviceAvailable(for: voiceLocaleIdentifier)
+            let usesApple = voiceTranscriptionProvider == .automatic || voiceTranscriptionProvider == .apple
+            let appleOnDeviceAvailable = usesApple
+                ? await voiceModelStore.appleOnDeviceAvailable(for: voiceLocaleIdentifier)
+                : false
+            let needsSpeechPrompt = usesApple && appleOnDeviceAvailable
             if needsSpeechPrompt, modelRequiresSpeechPrompt {
                 _ = await voiceAuthorizationService.requestSpeechRecognitionAccess()
             }
@@ -476,7 +523,8 @@ final class AppModel {
     }
 
     var speechRecognitionRequiredForDictation: Bool {
-        appleSpeechAvailableForSelectedLocale != false
+        (voiceTranscriptionProvider == .automatic || voiceTranscriptionProvider == .apple)
+            && appleSpeechAvailableForSelectedLocale != false
     }
 
     func deleteSelectedPersonality() {
@@ -562,6 +610,7 @@ final class AppModel {
     #endif
 
     private func apply(settings: AppSettings) {
+        voiceModelStore.selectFallbackModel(settings.voiceFallbackModelID)
         do {
             try launchAtLoginService.setEnabled(settings.launchAtLogin)
             settingsErrorMessage = nil
@@ -748,11 +797,25 @@ final class AppModel {
     }
 
     var voiceLocaleIdentifier: String {
-        settingsStore.appSettings.voiceLocaleIdentifier ?? Locale.autoupdatingCurrent.identifier
+        VoiceLocaleDefaults.normalizedIdentifier(
+            settingsStore.appSettings.voiceLocaleIdentifier ?? VoiceLocaleDefaults.identifier
+        )
     }
 
     var voiceHotkey: HotkeyDescriptor? {
         settingsStore.appSettings.voiceHotkey
+    }
+
+    var voiceTranscriptionProvider: VoiceTranscriptionProvider {
+        settingsStore.appSettings.voiceTranscriptionProvider
+    }
+
+    var voiceVocabulary: String {
+        settingsStore.appSettings.voiceVocabulary
+    }
+
+    var voiceFallbackModelID: VoiceFallbackModelID {
+        settingsStore.appSettings.voiceFallbackModelID
     }
 
     var voiceFallbackStatus: VoiceModelStatus {

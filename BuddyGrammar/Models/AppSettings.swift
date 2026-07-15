@@ -16,6 +16,57 @@ enum OutputMode: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum VoiceTranscriptionProvider: String, Codable, CaseIterable, Identifiable, Sendable {
+    case automatic
+    case apple
+    case elevenLabs
+    case whisper
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .automatic: "Automatic"
+        case .apple: "Apple"
+        case .elevenLabs: "ElevenLabs"
+        case .whisper: "Whisper"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .automatic:
+            "Prefer Apple on-device speech, then ElevenLabs, then the downloaded Whisper model."
+        case .apple:
+            "Private, on-device transcription with Apple SpeechAnalyzer."
+        case .elevenLabs:
+            "Highest-accuracy cloud transcription with ElevenLabs Scribe v2."
+        case .whisper:
+            "Fully local transcription using the selected downloaded Whisper model."
+        }
+    }
+}
+
+enum VoiceLocaleDefaults {
+    static var identifier: String {
+        normalizedIdentifier(Locale.preferredLanguages.first ?? Locale.autoupdatingCurrent.identifier)
+    }
+
+    static func normalizedIdentifier(_ identifier: String) -> String {
+        let locale = Locale(identifier: identifier)
+        guard locale.language.languageCode?.identifier.lowercased() == "en" else {
+            return identifier
+        }
+
+        let supportedEnglishRegions: Set<String> = ["AU", "CA", "GB", "IE", "IN", "NZ", "US", "ZA"]
+        let region = locale.region?.identifier.uppercased()
+        guard let region, supportedEnglishRegions.contains(region) else {
+            return "en-US"
+        }
+        return "en-\(region)"
+    }
+}
+
 enum RewriteProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case openRouter
     case local
@@ -211,6 +262,9 @@ struct AppSettings: Codable, Hashable, Sendable {
         case preloadLocalModelOnLaunch
         case voiceProfileID
         case voiceLocaleIdentifier
+        case voiceTranscriptionProvider
+        case voiceVocabulary
+        case voiceFallbackModelID
         case voiceHotkey
         case launchAtLogin
         case hasCompletedOnboarding
@@ -222,6 +276,9 @@ struct AppSettings: Codable, Hashable, Sendable {
     var preloadLocalModelOnLaunch: Bool
     var voiceProfileID: UUID?
     var voiceLocaleIdentifier: String?
+    var voiceTranscriptionProvider: VoiceTranscriptionProvider
+    var voiceVocabulary: String
+    var voiceFallbackModelID: VoiceFallbackModelID
     var voiceHotkey: HotkeyDescriptor?
     var launchAtLogin: Bool
     var hasCompletedOnboarding: Bool
@@ -235,7 +292,10 @@ struct AppSettings: Codable, Hashable, Sendable {
         voiceLocaleIdentifier: String?,
         voiceHotkey: HotkeyDescriptor?,
         launchAtLogin: Bool,
-        hasCompletedOnboarding: Bool
+        hasCompletedOnboarding: Bool,
+        voiceTranscriptionProvider: VoiceTranscriptionProvider = .automatic,
+        voiceVocabulary: String = "",
+        voiceFallbackModelID: VoiceFallbackModelID = .whisperSmall
     ) {
         self.outputMode = outputMode
         self.rewriteProvider = rewriteProvider
@@ -243,6 +303,9 @@ struct AppSettings: Codable, Hashable, Sendable {
         self.preloadLocalModelOnLaunch = preloadLocalModelOnLaunch
         self.voiceProfileID = voiceProfileID
         self.voiceLocaleIdentifier = voiceLocaleIdentifier
+        self.voiceTranscriptionProvider = voiceTranscriptionProvider
+        self.voiceVocabulary = voiceVocabulary
+        self.voiceFallbackModelID = voiceFallbackModelID
         self.voiceHotkey = voiceHotkey
         self.launchAtLogin = launchAtLogin
         self.hasCompletedOnboarding = hasCompletedOnboarding
@@ -259,8 +322,18 @@ struct AppSettings: Codable, Hashable, Sendable {
             ?? .qwen3_4b_instruct_2507_4bit
         preloadLocalModelOnLaunch = try container.decodeIfPresent(Bool.self, forKey: .preloadLocalModelOnLaunch) ?? true
         voiceProfileID = try container.decodeIfPresent(UUID.self, forKey: .voiceProfileID) ?? PromptProfile.grammarProfileID
-        voiceLocaleIdentifier = try container.decodeIfPresent(String.self, forKey: .voiceLocaleIdentifier)
-            ?? Locale.autoupdatingCurrent.identifier
+        let decodedVoiceLocale = try container.decodeIfPresent(String.self, forKey: .voiceLocaleIdentifier)
+            ?? VoiceLocaleDefaults.identifier
+        voiceLocaleIdentifier = VoiceLocaleDefaults.normalizedIdentifier(decodedVoiceLocale)
+        voiceTranscriptionProvider = try container.decodeIfPresent(
+            VoiceTranscriptionProvider.self,
+            forKey: .voiceTranscriptionProvider
+        ) ?? .automatic
+        voiceVocabulary = try container.decodeIfPresent(String.self, forKey: .voiceVocabulary) ?? ""
+        voiceFallbackModelID = try container.decodeIfPresent(
+            VoiceFallbackModelID.self,
+            forKey: .voiceFallbackModelID
+        ) ?? .whisperSmall
         voiceHotkey = try container.decodeIfPresent(HotkeyDescriptor.self, forKey: .voiceHotkey)
         launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
         hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? false
@@ -272,9 +345,12 @@ struct AppSettings: Codable, Hashable, Sendable {
         selectedLocalModel: .qwen3_4b_instruct_2507_4bit,
         preloadLocalModelOnLaunch: true,
         voiceProfileID: PromptProfile.grammarProfileID,
-        voiceLocaleIdentifier: Locale.autoupdatingCurrent.identifier,
+        voiceLocaleIdentifier: VoiceLocaleDefaults.identifier,
         voiceHotkey: nil,
         launchAtLogin: false,
-        hasCompletedOnboarding: false
+        hasCompletedOnboarding: false,
+        voiceTranscriptionProvider: .automatic,
+        voiceVocabulary: "",
+        voiceFallbackModelID: .whisperSmall
     )
 }

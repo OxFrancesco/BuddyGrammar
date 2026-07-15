@@ -23,11 +23,18 @@ final class MockSpeechEngine: SpeechTranscriptionEngine {
         requiresAuthorization
     }
 
-    func makeStreamingSession(localeIdentifier: String) async -> (any StreamingSpeechTranscriptionSession)? {
+    func makeStreamingSession(
+        localeIdentifier: String,
+        vocabulary: [String]
+    ) async -> (any StreamingSpeechTranscriptionSession)? {
         streamingSession
     }
 
-    func transcribe(audioURL: URL, localeIdentifier: String) async throws -> String {
+    func transcribe(
+        audioURL: URL,
+        localeIdentifier: String,
+        vocabulary: [String]
+    ) async throws -> String {
         transcribeCallCount += 1
         if let transcriptionError {
             throw transcriptionError
@@ -63,7 +70,11 @@ final class MockFallbackSpeechEngine: FallbackSpeechTranscriptionEngine {
         prepared
     }
 
-    func transcribe(audioURL: URL, localeIdentifier: String) async throws -> String {
+    func transcribe(
+        audioURL: URL,
+        localeIdentifier: String,
+        vocabulary: [String]
+    ) async throws -> String {
         transcribeCallCount += 1
         if let transcriptionError {
             if invalidateWhenTranscriptionFails {
@@ -157,7 +168,7 @@ final class VoiceModelStoreTests: XCTestCase {
             guard case .transcriptionUnavailable(let message) = failure else {
                 return XCTFail("Unexpected failure: \(failure)")
             }
-            XCTAssertTrue(message.contains("Download the Whisper fallback model"))
+            XCTAssertTrue(message.localizedCaseInsensitiveContains("download the Whisper fallback model"))
         } catch {
             XCTFail("Unexpected error: \(error)")
         }

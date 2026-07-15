@@ -15,7 +15,10 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.appSettings.selectedLocalModel, .qwen3_4b_instruct_2507_4bit)
         XCTAssertTrue(store.appSettings.preloadLocalModelOnLaunch)
         XCTAssertEqual(store.appSettings.voiceProfileID, PromptProfile.grammarProfileID)
-        XCTAssertEqual(store.appSettings.voiceLocaleIdentifier, Locale.autoupdatingCurrent.identifier)
+        XCTAssertEqual(store.appSettings.voiceLocaleIdentifier, VoiceLocaleDefaults.identifier)
+        XCTAssertEqual(store.appSettings.voiceTranscriptionProvider, .automatic)
+        XCTAssertEqual(store.appSettings.voiceVocabulary, "")
+        XCTAssertEqual(store.appSettings.voiceFallbackModelID, .whisperSmall)
         XCTAssertNil(store.appSettings.voiceHotkey)
     }
 
@@ -207,7 +210,7 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.appSettings.selectedLocalModel, .qwen3_4b_instruct_2507_4bit)
         XCTAssertTrue(store.appSettings.preloadLocalModelOnLaunch)
         XCTAssertEqual(store.appSettings.voiceProfileID, PromptProfile.grammarProfileID)
-        XCTAssertEqual(store.appSettings.voiceLocaleIdentifier, Locale.autoupdatingCurrent.identifier)
+        XCTAssertEqual(store.appSettings.voiceLocaleIdentifier, VoiceLocaleDefaults.identifier)
         XCTAssertNil(store.appSettings.voiceHotkey)
     }
 
@@ -242,8 +245,24 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.appSettings.selectedLocalModel, .gemma4_e4b_it_mxfp8)
         XCTAssertFalse(store.appSettings.preloadLocalModelOnLaunch)
         XCTAssertEqual(store.appSettings.voiceProfileID, PromptProfile.grammarProfileID)
-        XCTAssertEqual(store.appSettings.voiceLocaleIdentifier, "en_US")
+        XCTAssertEqual(store.appSettings.voiceLocaleIdentifier, "en-US")
         XCTAssertEqual(store.appSettings.voiceHotkey, HotkeyDescriptor(keyCode: 49, modifiers: [.command]))
+        XCTAssertEqual(store.appSettings.voiceTranscriptionProvider, .automatic)
+        XCTAssertEqual(store.appSettings.voiceFallbackModelID, .whisperSmall)
+    }
+
+    func testUnsupportedEnglishRegionMigratesToUSLocale() throws {
+        let data = Data(
+            """
+            {
+              "voiceLocaleIdentifier": "en_IT"
+            }
+            """.utf8
+        )
+
+        let settings = try JSONDecoder().decode(AppSettings.self, from: data)
+
+        XCTAssertEqual(settings.voiceLocaleIdentifier, "en-US")
     }
 
     func testSettingsDecodeLocalProviderFallsBackToProviderModelWhenSelectedModelIsMissing() throws {

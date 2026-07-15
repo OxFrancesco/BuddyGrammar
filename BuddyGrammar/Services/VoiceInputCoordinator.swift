@@ -37,6 +37,12 @@ protocol AccessibilityChecking: AnyObject {
 
 struct DictationTargetApplication: Equatable, Sendable {
     let processIdentifier: pid_t
+    let applicationName: String?
+
+    init(processIdentifier: pid_t, applicationName: String? = nil) {
+        self.processIdentifier = processIdentifier
+        self.applicationName = applicationName
+    }
 }
 
 @MainActor
@@ -53,7 +59,10 @@ final class WorkspaceDictationTargetActivator: DictationTargetActivating {
               !application.isTerminated
         else { return nil }
 
-        return DictationTargetApplication(processIdentifier: application.processIdentifier)
+        return DictationTargetApplication(
+            processIdentifier: application.processIdentifier,
+            applicationName: application.localizedName
+        )
     }
 
     func activate(_ target: DictationTargetApplication) -> Bool {
@@ -151,8 +160,13 @@ final class VoiceInputCoordinator {
             var pendingStreamingSession: (any StreamingSpeechTranscriptionSession)?
 
             do {
-                var route = try await voiceModelStore.resolveRoute(for: localeIdentifier)
-                voiceInputLogger.info("Dictation route resolved. locale=\(localeIdentifier, privacy: .public)")
+                var route = try await voiceModelStore.resolveRoute(
+                    for: localeIdentifier,
+                    provider: configuration.transcriptionProvider
+                )
+                voiceInputLogger.info(
+                    "Dictation route resolved. locale=\(localeIdentifier, privacy: .public) provider=\(configuration.transcriptionProvider.rawValue, privacy: .public)"
+                )
 
                 let microphoneGranted = await voiceAuthorizationService.requestMicrophoneAccess()
                 guard microphoneGranted else {
@@ -161,7 +175,11 @@ final class VoiceInputCoordinator {
 
                 if case .apple(let requiresAuthorization) = route, requiresAuthorization {
                     let speechGranted = await voiceAuthorizationService.requestSpeechRecognitionAccess()
-                    if !speechGranted, await voiceModelStore.fallbackModelIsPrepared() {
+                    if !speechGranted, await voiceModelStore.elevenLabsIsConfigured,
+                       configuration.transcriptionProvider != .whisper {
+                        route = .elevenLabs
+                        voiceInputLogger.info("Using ElevenLabs because Speech Recognition permission was denied.")
+                    } else if !speechGranted, await voiceModelStore.fallbackModelIsPrepared() {
                         route = .whisper
                         voiceInputLogger.info("Using the prepared Whisper model because Speech Recognition permission was denied.")
                     } else if !speechGranted {
@@ -172,7 +190,8 @@ final class VoiceInputCoordinator {
 
                 if case .apple = route {
                     pendingStreamingSession = await voiceModelStore.makeStreamingSession(
-                        for: localeIdentifier
+                        for: localeIdentifier,
+                        vocabulary: configuration.vocabulary
                     )
                 }
                 configurePCMStreaming(with: pendingStreamingSession)
@@ -233,17 +252,23 @@ final class VoiceInputCoordinator {
             do {
                 logRecordedAudio(at: audioURL)
                 stage = "transcribing"
-                statusMessage = "Transcribing your speech locally..."
+                statusMessage = route == .elevenLabs
+                    ? "Transcribing your speech with ElevenLabs..."
+                    : "Transcribing your speech locally..."
                 menuBarStatus.show(.transcribing)
                 let transcript = try await voiceModelStore.transcribe(
                     audioURL: audioURL,
                     localeIdentifier: configuration.localeIdentifier,
                     route: route,
-                    streamingSession: currentStreamingSession
+                    streamingSession: currentStreamingSession,
+                    vocabulary: configuration.vocabulary
                 )
                 voiceInputLogger.info("Dictation transcription succeeded. transcriptCharacters=\(transcript.count, privacy: .public)")
 
-                let profile = configuration.profile
+                let profile = configuration.profile.forDictation(
+                    vocabulary: configuration.vocabulary,
+                    applicationName: configuration.targetApplication?.applicationName
+                )
                 stage = "rewriting"
                 statusMessage = "Rewriting your dictated text with \(profile.name)..."
                 menuBarStatus.show(.sending(profileName: profile.name))
@@ -326,8 +351,11 @@ final class VoiceInputCoordinator {
 
     private func makeSessionConfiguration() -> VoiceSessionConfiguration {
         VoiceSessionConfiguration(
-            localeIdentifier: settingsProvider.appSettings.voiceLocaleIdentifier
-                ?? Locale.autoupdatingCurrent.identifier,
+            localeIdentifier: VoiceLocaleDefaults.normalizedIdentifier(
+                settingsProvider.appSettings.voiceLocaleIdentifier ?? VoiceLocaleDefaults.identifier
+            ),
+            transcriptionProvider: settingsProvider.appSettings.voiceTranscriptionProvider,
+            vocabulary: VoiceVocabulary.terms(from: settingsProvider.appSettings.voiceVocabulary),
             profile: resolveVoiceProfile(),
             outputMode: settingsProvider.appSettings.outputMode,
             targetApplication: targetActivator.frontmostExternalApplication()
@@ -398,6 +426,8 @@ final class VoiceInputCoordinator {
 
 private struct VoiceSessionConfiguration {
     let localeIdentifier: String
+    let transcriptionProvider: VoiceTranscriptionProvider
+    let vocabulary: [String]
     let profile: PromptProfile
     let outputMode: OutputMode
     let targetApplication: DictationTargetApplication?

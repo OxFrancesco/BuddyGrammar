@@ -46,11 +46,13 @@
 		5FB9EE1C8AAD0B97CB65D604 /* HotkeyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 908D2AE224565B3F3CC3BFE1 /* HotkeyService.swift */; };
 		5FFBE0702C8814DC28E0B20C /* RewriteProviderController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23AE1B90882E13C9E9D4B8A3 /* RewriteProviderController.swift */; };
 		611CF422C61FE0FBAF278C9E /* LaunchAtLoginService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A305BF4FE3856ADA021A9EBF /* LaunchAtLoginService.swift */; };
+		63F2A849AEB3ADEA7EB9F6CA /* ElevenLabsSpeechEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10CAF292C2E0A85782F6959 /* ElevenLabsSpeechEngine.swift */; };
 		65A9B0B129F7AF3E059474D1 /* BuddyGrammarKit in Frameworks */ = {isa = PBXBuildFile; productRef = D73ED00B5F8BC037B441E0AC /* BuddyGrammarKit */; };
 		6840B5297B8CC48ADFADA06D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9F0C4FCB6E20B4C640E4044B /* PrivacyInfo.xcprivacy */; };
 		7009C3CE6B08E3350F43AF5A /* VoiceInputCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EAA0F070498E3A8B15AC1BD /* VoiceInputCoordinator.swift */; };
 		73E4DCAD79C8ADB2EDA6C197 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FE7D0958D7D5C83B13F9AA4 /* OnboardingView.swift */; };
 		7772B7356D1D6C69AFD8EA2C /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F4BAA325CEFF349E32F3E10 /* HomeView.swift */; };
+		7A81F69E0785B3C84B3C5511 /* VoiceAccuracyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 660BE97DD99FA3353C157A48 /* VoiceAccuracyTests.swift */; };
 		7C7E0FB9BD289CAD0FDAD1AF /* HotkeyDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9D6DCC3348591F36FDF1B6E /* HotkeyDescriptor.swift */; };
 		85D542A48E1AC0435866178D /* KeyboardSuggestionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23625B304488D5FC660FE776 /* KeyboardSuggestionTests.swift */; };
 		892C44226D3037453FB02F47 /* BuddyGrammarKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 107B1EC7D5A87990BBC88391 /* BuddyGrammarKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -73,6 +75,7 @@
 		CD45A8ADF8FF7686459BE9DA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 375ED585ECC5B01AD88D6133 /* SettingsView.swift */; };
 		CE5DABAA7C59C2B282C05A4D /* QuickDictationBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9310F4ACD3D32E1174BF76A /* QuickDictationBar.swift */; };
 		CEDB1DE8AD85213CA49FC868 /* HotkeyValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF316B8B882E8CB4E96F0FB1 /* HotkeyValidationTests.swift */; };
+		CF9A3D71C0F6A629457CB0D5 /* VoiceVocabulary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC8736176F059BE36BF93811 /* VoiceVocabulary.swift */; };
 		D26B7CF6F78D5F2AC1429DC9 /* NextKeyboardButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 058D399A2D79C86D6571099D /* NextKeyboardButton.swift */; };
 		D7BB2F9D089560CC33096C4E /* AccessibilityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110A9F0B5791E5FE0B6EA441 /* AccessibilityService.swift */; };
 		DCBD121DF71D13410923FB9D /* VoiceModelStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EFC487E79222678DEBCE2D /* VoiceModelStoreTests.swift */; };
@@ -166,6 +169,7 @@
 		5FE7D0958D7D5C83B13F9AA4 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		62C259D995569FB5D4FAD38F /* AudioRecordingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecordingService.swift; sourceTree = "<group>"; };
 		654BDEEFC43D5CBAFAF5173E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		660BE97DD99FA3353C157A48 /* VoiceAccuracyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceAccuracyTests.swift; sourceTree = "<group>"; };
 		6B84FD445147818F2FF33FB1 /* MenuBarStatusModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusModelTests.swift; sourceTree = "<group>"; };
 		6E074A18A6634D312DCDA6CE /* TestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
 		6F4BAA325CEFF349E32F3E10 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -194,6 +198,7 @@
 		A305BF4FE3856ADA021A9EBF /* LaunchAtLoginService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginService.swift; sourceTree = "<group>"; };
 		A5F857916C262F6BADF68E57 /* MenuBarStatusLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusLabel.swift; sourceTree = "<group>"; };
 		A92A5F2A0D9D500BB94A799B /* BuddyGrammarIOSTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyGrammarIOSTests.swift; sourceTree = "<group>"; };
+		AC8736176F059BE36BF93811 /* VoiceVocabulary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceVocabulary.swift; sourceTree = "<group>"; };
 		AE8C8D9BC822843A946FA161 /* BuddyGrammarIOSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BuddyGrammarIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B3FEDFF340325A43F2BC7FC6 /* BuddyGrammar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BuddyGrammar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B9F8D7B0C705CBCF54997E43 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -204,6 +209,7 @@
 		CCBEA522FD27E02CB88EBC28 /* OpenRouterClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterClient.swift; sourceTree = "<group>"; };
 		CF316B8B882E8CB4E96F0FB1 /* HotkeyValidationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyValidationTests.swift; sourceTree = "<group>"; };
 		D0A13786A5D5DEEC64D5EC0D /* BuddyGrammarIOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BuddyGrammarIOS.entitlements; sourceTree = "<group>"; };
+		D10CAF292C2E0A85782F6959 /* ElevenLabsSpeechEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElevenLabsSpeechEngine.swift; sourceTree = "<group>"; };
 		D1536056E4C54D54AC0351C8 /* DebugPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugPanelView.swift; sourceTree = "<group>"; };
 		D2AE246B4AD23D81E3F562AE /* BuddyGrammarKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BuddyGrammarKeyboard.entitlements; sourceTree = "<group>"; };
 		D301C496276BFF6D33072CD4 /* LatexKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LatexKeyboardView.swift; sourceTree = "<group>"; };
@@ -288,6 +294,7 @@
 				760B2FC95A9B8C41EA7EBC4F /* RewriteOutputGuardTests.swift */,
 				98B9E4EC78C0C9DFA06298B4 /* SettingsStoreTests.swift */,
 				6E074A18A6634D312DCDA6CE /* TestSupport.swift */,
+				660BE97DD99FA3353C157A48 /* VoiceAccuracyTests.swift */,
 				34F4782181AFDD77CEA437F0 /* VoiceInputCoordinatorTests.swift */,
 				08EFC487E79222678DEBCE2D /* VoiceModelStoreTests.swift */,
 			);
@@ -430,6 +437,7 @@
 				9A1E262B58351ACF9FA45315 /* NoteItem.swift */,
 				24BA96E7C16D49B0538BBC5E /* PromptProfile.swift */,
 				3E9D411F40A1135B9000949C /* RewriteModels.swift */,
+				AC8736176F059BE36BF93811 /* VoiceVocabulary.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -441,6 +449,7 @@
 				35DEAED4FF77067FD4CF0D45 /* AppUpdateService.swift */,
 				62C259D995569FB5D4FAD38F /* AudioRecordingService.swift */,
 				FFEA136271E55DAC4050C406 /* ClipboardService.swift */,
+				D10CAF292C2E0A85782F6959 /* ElevenLabsSpeechEngine.swift */,
 				E719D6E75F8753806BDAD870 /* EventSimulationService.swift */,
 				908D2AE224565B3F3CC3BFE1 /* HotkeyService.swift */,
 				A2C3D7C55DF68CEF737684E5 /* KeychainService.swift */,
@@ -820,6 +829,7 @@
 				1652C2B9DD90482C1E6E58E5 /* RewriteOutputGuardTests.swift in Sources */,
 				F911FD8A63BA95578E152E05 /* SettingsStoreTests.swift in Sources */,
 				5F908ED77C7C74941F817CE5 /* TestSupport.swift in Sources */,
+				7A81F69E0785B3C84B3C5511 /* VoiceAccuracyTests.swift in Sources */,
 				4421E530E9C191CDD5538058 /* VoiceInputCoordinatorTests.swift in Sources */,
 				DCBD121DF71D13410923FB9D /* VoiceModelStoreTests.swift in Sources */,
 			);
@@ -838,6 +848,7 @@
 				4899645D8A827F264EEBB648 /* BuddyGrammarApp.swift in Sources */,
 				C57558F1909DBA8252C90311 /* ClipboardService.swift in Sources */,
 				C90CF34F6DBA3BEB7B2438F5 /* DebugPanelView.swift in Sources */,
+				63F2A849AEB3ADEA7EB9F6CA /* ElevenLabsSpeechEngine.swift in Sources */,
 				A558BD0E79E39A87BDFEE94D /* EventSimulationService.swift in Sources */,
 				7C7E0FB9BD289CAD0FDAD1AF /* HotkeyDescriptor.swift in Sources */,
 				BDFB82EF1ADBB4095AD163B8 /* HotkeyRecorderView.swift in Sources */,
@@ -866,6 +877,7 @@
 				445F933160E43C7DB6741BC0 /* VoiceAuthorizationService.swift in Sources */,
 				7009C3CE6B08E3350F43AF5A /* VoiceInputCoordinator.swift in Sources */,
 				45CC16CECE052BF9D5A90736 /* VoiceModelStore.swift in Sources */,
+				CF9A3D71C0F6A629457CB0D5 /* VoiceVocabulary.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

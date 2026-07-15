@@ -124,17 +124,24 @@ final class AudioRecordingService: AudioRecording, PCMStreamingAudioRecording {
 }
 
 private final class AudioCapturePipeline: AudioBufferProcessing, @unchecked Sendable {
-    private static let targetFormat = AVAudioFormat(
+    private static let recordingFormat = AVAudioFormat(
         commonFormat: .pcmFormatInt16,
         sampleRate: 16_000,
         channels: 1,
         interleaved: false
     )!
+    private static let streamingFormat = AVAudioFormat(
+        commonFormat: .pcmFormatInt16,
+        sampleRate: 24_000,
+        channels: 1,
+        interleaved: true
+    )!
 
     private let lock = NSLock()
     private let sampleHandler: PCM16SampleHandler?
     private var audioFile: AVAudioFile?
-    private var converter: AVAudioConverter?
+    private var recordingConverter: AVAudioConverter?
+    private var streamingConverter: AVAudioConverter?
     private var frameCount: AVAudioFramePosition = 0
     private var processingError: Error?
     private var isFinished = false
@@ -144,18 +151,22 @@ private final class AudioCapturePipeline: AudioBufferProcessing, @unchecked Send
         inputFormat: AVAudioFormat,
         sampleHandler: PCM16SampleHandler?
     ) throws {
-        guard let converter = AVAudioConverter(from: inputFormat, to: Self.targetFormat) else {
+        guard let recordingConverter = AVAudioConverter(from: inputFormat, to: Self.recordingFormat),
+              let streamingConverter = AVAudioConverter(from: inputFormat, to: Self.streamingFormat)
+        else {
             throw AudioCaptureError.converterUnavailable
         }
-        converter.primeMethod = .none
+        recordingConverter.primeMethod = .none
+        streamingConverter.primeMethod = .none
 
-        self.converter = converter
+        self.recordingConverter = recordingConverter
+        self.streamingConverter = streamingConverter
         self.sampleHandler = sampleHandler
         self.audioFile = try AVAudioFile(
             forWriting: outputURL,
-            settings: Self.targetFormat.settings,
-            commonFormat: Self.targetFormat.commonFormat,
-            interleaved: Self.targetFormat.isInterleaved
+            settings: Self.recordingFormat.settings,
+            commonFormat: Self.recordingFormat.commonFormat,
+            interleaved: Self.recordingFormat.isInterleaved
         )
     }
 
@@ -163,8 +174,20 @@ private final class AudioCapturePipeline: AudioBufferProcessing, @unchecked Send
         lock.lock()
         if !isFinished, processingError == nil {
             do {
-                if let outputBuffer = try convert(inputBuffer), outputBuffer.frameLength > 0 {
-                    try consume(outputBuffer)
+                if let recordingBuffer = try convert(
+                    inputBuffer,
+                    converter: recordingConverter,
+                    targetFormat: Self.recordingFormat
+                ), recordingBuffer.frameLength > 0 {
+                    try consumeRecording(recordingBuffer)
+                }
+                if sampleHandler != nil,
+                   let streamingBuffer = try convert(
+                       inputBuffer,
+                       converter: streamingConverter,
+                       targetFormat: Self.streamingFormat
+                   ), streamingBuffer.frameLength > 0 {
+                    consumeStreaming(streamingBuffer)
                 }
             } catch {
                 processingError = error
@@ -181,13 +204,15 @@ private final class AudioCapturePipeline: AudioBufferProcessing, @unchecked Send
         isFinished = true
         if processingError == nil {
             do {
-                try flushConverter()
+                try flushRecordingConverter()
+                try flushStreamingConverter()
             } catch {
                 processingError = error
             }
         }
         audioFile = nil
-        converter = nil
+        recordingConverter = nil
+        streamingConverter = nil
         return processingError == nil && frameCount > 0
     }
 
@@ -195,19 +220,24 @@ private final class AudioCapturePipeline: AudioBufferProcessing, @unchecked Send
         lock.lock()
         isFinished = true
         audioFile = nil
-        converter = nil
+        recordingConverter = nil
+        streamingConverter = nil
         lock.unlock()
     }
 
-    private func convert(_ inputBuffer: AVAudioPCMBuffer) throws -> AVAudioPCMBuffer? {
+    private func convert(
+        _ inputBuffer: AVAudioPCMBuffer,
+        converter: AVAudioConverter?,
+        targetFormat: AVAudioFormat
+    ) throws -> AVAudioPCMBuffer? {
         guard let converter else { return nil }
 
-        let ratio = Self.targetFormat.sampleRate / inputBuffer.format.sampleRate
+        let ratio = targetFormat.sampleRate / inputBuffer.format.sampleRate
         let capacity = AVAudioFrameCount(
             max(1, (Double(inputBuffer.frameLength) * ratio).rounded(.up) + 8)
         )
         guard let outputBuffer = AVAudioPCMBuffer(
-            pcmFormat: Self.targetFormat,
+            pcmFormat: targetFormat,
             frameCapacity: capacity
         ) else {
             throw AudioCaptureError.bufferAllocationFailed
@@ -231,12 +261,29 @@ private final class AudioCapturePipeline: AudioBufferProcessing, @unchecked Send
         return outputBuffer
     }
 
-    private func flushConverter() throws {
-        guard let converter else { return }
+    private func flushRecordingConverter() throws {
+        guard let recordingConverter else { return }
+        try flush(converter: recordingConverter, targetFormat: Self.recordingFormat) { [self] buffer in
+            try consumeRecording(buffer)
+        }
+    }
+
+    private func flushStreamingConverter() throws {
+        guard sampleHandler != nil, let streamingConverter else { return }
+        try flush(converter: streamingConverter, targetFormat: Self.streamingFormat) { [self] buffer in
+            consumeStreaming(buffer)
+        }
+    }
+
+    private func flush(
+        converter: AVAudioConverter,
+        targetFormat: AVAudioFormat,
+        consume: (AVAudioPCMBuffer) throws -> Void
+    ) throws {
 
         for _ in 0..<8 {
             guard let outputBuffer = AVAudioPCMBuffer(
-                pcmFormat: Self.targetFormat,
+                pcmFormat: targetFormat,
                 frameCapacity: 1_024
             ) else {
                 throw AudioCaptureError.bufferAllocationFailed
@@ -266,9 +313,12 @@ private final class AudioCapturePipeline: AudioBufferProcessing, @unchecked Send
         }
     }
 
-    private func consume(_ buffer: AVAudioPCMBuffer) throws {
+    private func consumeRecording(_ buffer: AVAudioPCMBuffer) throws {
         try audioFile?.write(from: buffer)
         frameCount += AVAudioFramePosition(buffer.frameLength)
+    }
+
+    private func consumeStreaming(_ buffer: AVAudioPCMBuffer) {
         if let data = Self.data(from: buffer), !data.isEmpty {
             // Keep delivery inside the lock so stopRecording cannot finish the
             // analyzer before the last callback has queued its samples.

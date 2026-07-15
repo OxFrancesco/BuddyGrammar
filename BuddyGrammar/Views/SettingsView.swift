@@ -423,9 +423,25 @@ struct SettingsView: View {
                             Image(systemName: "mic.fill")
                                 .font(.system(size: 14, weight: .bold))
                                 .foregroundStyle(NeoTheme.primary)
-                            Text("Local Dictation")
+                            Text("Dictation")
                                 .font(.system(size: 14, weight: .bold, design: .rounded))
                         }
+
+                        neoDivider
+
+                        neoFormRow(label: "Transcription") {
+                            Picker("", selection: voiceTranscriptionProviderBinding) {
+                                ForEach(VoiceTranscriptionProvider.allCases) { provider in
+                                    Text(provider.title).tag(provider)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 220)
+                        }
+
+                        Text(model.voiceTranscriptionProvider.summary)
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(NeoTheme.mutedForeground)
 
                         neoDivider
 
@@ -465,6 +481,9 @@ struct SettingsView: View {
                         HStack(spacing: 8) {
                             NeoPill(symbol: "waveform", label: "Apple STT")
                             appleSpeechAvailabilityPill
+                            if model.hasElevenLabsAPIKey {
+                                NeoPill(symbol: "cloud.fill", label: "Scribe v2 ready")
+                            }
                         }
                     }
                 }
@@ -474,7 +493,84 @@ struct SettingsView: View {
 
                 neoCard {
                     VStack(alignment: .leading, spacing: 14) {
-                        let speechRequired = appleSpeechAvailable != false
+                        HStack(spacing: 10) {
+                            Image(systemName: "cloud.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(NeoTheme.primary)
+                            Text("ElevenLabs Scribe v2")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                        }
+
+                        Text("Cloud transcription optimized for accents, mixed languages, and difficult audio. Recordings are sent to ElevenLabs when this provider is used.")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(NeoTheme.mutedForeground)
+
+                        SecureField("ElevenLabs API key", text: $model.elevenLabsAPIKeyDraft)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .padding(10)
+                            .background(NeoTheme.muted)
+                            .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                                    .stroke(NeoTheme.border, lineWidth: 1)
+                            )
+
+                        HStack(spacing: 10) {
+                            Button("Save Key") {
+                                model.saveElevenLabsAPIKey()
+                            }
+                            .buttonStyle(NeoBrutalistButton())
+
+                            Button("Clear") {
+                                model.elevenLabsAPIKeyDraft = ""
+                                model.saveElevenLabsAPIKey()
+                            }
+                            .buttonStyle(NeoBrutalistButton(isPrimary: false))
+                            .disabled(model.elevenLabsAPIKeyDraft.isEmpty && !model.hasElevenLabsAPIKey)
+
+                            if model.hasElevenLabsAPIKey {
+                                Label("Saved in Keychain", systemImage: "checkmark.circle.fill")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .foregroundStyle(NeoTheme.green)
+                            }
+                        }
+                    }
+                }
+
+                neoCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "text.book.closed.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(NeoTheme.primary)
+                            Text("Recognition Vocabulary")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                        }
+
+                        Text("Add names, product terms, acronyms, and technical phrases—one per line. These bias both Apple SpeechAnalyzer and ElevenLabs.")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(NeoTheme.mutedForeground)
+
+                        TextEditor(text: voiceVocabularyBinding)
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .scrollContentBackground(.hidden)
+                            .padding(8)
+                            .frame(minHeight: 100)
+                            .background(NeoTheme.muted)
+                            .clipShape(RoundedRectangle(cornerRadius: NeoTheme.cornerRadius))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: NeoTheme.cornerRadius)
+                                    .stroke(NeoTheme.border, lineWidth: 1)
+                            )
+                    }
+                }
+
+                neoCard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        let speechRequired = (model.voiceTranscriptionProvider == .apple
+                            || model.voiceTranscriptionProvider == .automatic)
+                            && appleSpeechAvailable != false
 
                         HStack(spacing: 10) {
                             Image(systemName: "shippingbox")
@@ -482,6 +578,16 @@ struct SettingsView: View {
                                 .foregroundStyle(NeoTheme.primary)
                             Text("Whisper Fallback")
                                 .font(.system(size: 14, weight: .bold, design: .rounded))
+                        }
+
+                        neoFormRow(label: "Model") {
+                            Picker("", selection: voiceFallbackModelBinding) {
+                                ForEach(VoiceFallbackModelID.allCases) { modelID in
+                                    Text(modelID.title).tag(modelID)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 220)
                         }
 
                         Text(model.voiceModelStore.fallbackModelID.summary)
@@ -545,7 +651,7 @@ struct SettingsView: View {
                             } else {
                                 infoRow(
                                     title: "Speech Recognition",
-                                    message: "Not required for this language on this Mac. BuddyWrite will use the local Whisper fallback instead."
+                                    message: "Not required by the selected transcription route."
                                 )
                             }
                         }
@@ -929,6 +1035,27 @@ struct SettingsView: View {
             set: { newValue in
                 model.setVoiceLocaleIdentifier(newValue)
             }
+        )
+    }
+
+    private var voiceTranscriptionProviderBinding: Binding<VoiceTranscriptionProvider> {
+        Binding(
+            get: { model.voiceTranscriptionProvider },
+            set: { model.setVoiceTranscriptionProvider($0) }
+        )
+    }
+
+    private var voiceVocabularyBinding: Binding<String> {
+        Binding(
+            get: { model.voiceVocabulary },
+            set: { model.setVoiceVocabulary($0) }
+        )
+    }
+
+    private var voiceFallbackModelBinding: Binding<VoiceFallbackModelID> {
+        Binding(
+            get: { model.voiceFallbackModelID },
+            set: { model.setVoiceFallbackModelID($0) }
         )
     }
 
