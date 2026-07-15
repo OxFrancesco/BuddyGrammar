@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import OSLog
@@ -34,6 +35,36 @@ protocol AccessibilityChecking: AnyObject {
     func isTrusted(prompt: Bool) -> Bool
 }
 
+struct DictationTargetApplication: Equatable, Sendable {
+    let processIdentifier: pid_t
+}
+
+@MainActor
+protocol DictationTargetActivating: AnyObject {
+    func frontmostExternalApplication() -> DictationTargetApplication?
+    func activate(_ target: DictationTargetApplication) -> Bool
+}
+
+@MainActor
+final class WorkspaceDictationTargetActivator: DictationTargetActivating {
+    func frontmostExternalApplication() -> DictationTargetApplication? {
+        guard let application = NSWorkspace.shared.frontmostApplication,
+              application.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+              !application.isTerminated
+        else { return nil }
+
+        return DictationTargetApplication(processIdentifier: application.processIdentifier)
+    }
+
+    func activate(_ target: DictationTargetApplication) -> Bool {
+        guard let application = NSRunningApplication(
+            processIdentifier: target.processIdentifier
+        ), !application.isTerminated else { return false }
+
+        return application.activate(options: [])
+    }
+}
+
 extension SettingsStore: VoiceSettingsProviding {}
 extension RewriteProviderController: TextRewriting {}
 extension ClipboardService: ClipboardWriting {}
@@ -56,6 +87,7 @@ final class VoiceInputCoordinator {
     private let audioRecordingService: AudioRecording
     private let voiceModelStore: VoiceModelStore
     private let menuBarStatus: MenuBarStatusModel
+    private let targetActivator: DictationTargetActivating
 
     private var isStarting = false
     private var activeConfiguration: VoiceSessionConfiguration?
@@ -70,7 +102,8 @@ final class VoiceInputCoordinator {
         voiceAuthorizationService: VoiceAuthorizing,
         audioRecordingService: AudioRecording,
         voiceModelStore: VoiceModelStore,
-        menuBarStatus: MenuBarStatusModel
+        menuBarStatus: MenuBarStatusModel,
+        targetActivator: DictationTargetActivating = WorkspaceDictationTargetActivator()
     ) {
         self.settingsProvider = settingsProvider
         self.rewriteProvider = rewriteProvider
@@ -80,6 +113,7 @@ final class VoiceInputCoordinator {
         self.audioRecordingService = audioRecordingService
         self.voiceModelStore = voiceModelStore
         self.menuBarStatus = menuBarStatus
+        self.targetActivator = targetActivator
     }
 
     func toggleDictation(accessibilityService: AccessibilityChecking) {
@@ -234,19 +268,29 @@ final class VoiceInputCoordinator {
 
                 switch configuration.outputMode {
                 case .replaceSelection:
-                    stage = "checking accessibility permission"
-                    guard accessibilityService.isTrusted(prompt: true) else {
-                        throw RewriteFailure.accessibilityPermissionDenied
-                    }
-                    stage = "pasting"
-                    try await pasteReplacement(output)
-                    statusMessage = usedRawTranscript
-                        ? "Inserted the raw dictation because rewriting was unavailable."
-                        : "Inserted \(profile.name.lowercased()) output."
-                    menuBarStatus.show(
-                        .success(message: usedRawTranscript ? "Raw dictation inserted" : "Dictation inserted")
+                    stage = "delivering the result"
+                    let target = targetActivator.frontmostExternalApplication()
+                        ?? configuration.targetApplication
+                    let inserted = await deliverReplacement(
+                        output,
+                        target: target,
+                        accessibilityService: accessibilityService
                     )
-                    voiceInputLogger.info("Dictation paste succeeded.")
+                    if inserted {
+                        statusMessage = usedRawTranscript
+                            ? "Inserted the raw dictation and kept it on the clipboard."
+                            : "Inserted \(profile.name.lowercased()) output and kept it on the clipboard."
+                        menuBarStatus.show(
+                            .success(message: usedRawTranscript ? "Raw dictation inserted" : "Dictation inserted")
+                        )
+                        voiceInputLogger.info("Dictation paste event sent to the target application.")
+                    } else {
+                        statusMessage = usedRawTranscript
+                            ? "Copied the raw dictation to the clipboard. Paste it manually."
+                            : "Copied dictated \(profile.name.lowercased()) output to the clipboard. Paste it manually."
+                        menuBarStatus.show(.success(message: "Dictation copied"))
+                        voiceInputLogger.warning("Dictation could not be pasted automatically; the result remains on the clipboard.")
+                    }
                 case .copyToClipboard:
                     stage = "copying to clipboard"
                     clipboardService.writeString(output)
@@ -285,7 +329,8 @@ final class VoiceInputCoordinator {
             localeIdentifier: settingsProvider.appSettings.voiceLocaleIdentifier
                 ?? Locale.autoupdatingCurrent.identifier,
             profile: resolveVoiceProfile(),
-            outputMode: settingsProvider.appSettings.outputMode
+            outputMode: settingsProvider.appSettings.outputMode,
+            targetApplication: targetActivator.frontmostExternalApplication()
         )
     }
 
@@ -312,17 +357,27 @@ final class VoiceInputCoordinator {
         }
     }
 
-    private func pasteReplacement(_ string: String) async throws {
-        let snapshot = clipboardService.snapshot()
+    private func deliverReplacement(
+        _ string: String,
+        target: DictationTargetApplication?,
+        accessibilityService: AccessibilityChecking
+    ) async -> Bool {
+        // Dictation output must remain recoverable even if the destination app
+        // rejects synthetic paste or focus restoration fails.
         clipboardService.writeString(string)
 
+        guard accessibilityService.isTrusted(prompt: true),
+              let target,
+              targetActivator.activate(target)
+        else { return false }
+
         do {
+            try await Task.sleep(for: .milliseconds(120))
             try eventSimulationService.simulatePaste()
             try await Task.sleep(for: .milliseconds(180))
-            clipboardService.restore(snapshot)
+            return true
         } catch {
-            clipboardService.restore(snapshot)
-            throw RewriteFailure.pasteFailed
+            return false
         }
     }
 
@@ -345,6 +400,7 @@ private struct VoiceSessionConfiguration {
     let localeIdentifier: String
     let profile: PromptProfile
     let outputMode: OutputMode
+    let targetApplication: DictationTargetApplication?
 }
 
 private extension RewriteFailure {

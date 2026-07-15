@@ -160,6 +160,22 @@ final class MockAccessibilityService: AccessibilityChecking {
 }
 
 @MainActor
+final class MockDictationTargetActivator: DictationTargetActivating {
+    var frontmostTarget = DictationTargetApplication(processIdentifier: 42)
+    var activationResult = true
+    var activatedTargets: [DictationTargetApplication] = []
+
+    func frontmostExternalApplication() -> DictationTargetApplication? {
+        frontmostTarget
+    }
+
+    func activate(_ target: DictationTargetApplication) -> Bool {
+        activatedTargets.append(target)
+        return activationResult
+    }
+}
+
+@MainActor
 final class VoiceInputCoordinatorTests: XCTestCase {
     private func makeCoordinator(
         outputMode: OutputMode = .copyToClipboard,
@@ -179,7 +195,8 @@ final class VoiceInputCoordinatorTests: XCTestCase {
         clipboard: MockClipboardWriter,
         pasteSimulator: MockPasteSimulator,
         accessibility: MockAccessibilityService,
-        settingsProvider: MockVoiceSettingsProvider
+        settingsProvider: MockVoiceSettingsProvider,
+        targetActivator: MockDictationTargetActivator
     ) {
         let settings = AppSettings(
             outputMode: outputMode,
@@ -203,6 +220,7 @@ final class VoiceInputCoordinatorTests: XCTestCase {
         let recorder = MockAudioRecordingService()
         let accessibility = MockAccessibilityService()
         accessibility.trusted = accessibilityTrusted
+        let targetActivator = MockDictationTargetActivator()
         let menuBarStatus = MenuBarStatusModel()
         let apple = MockSpeechEngine(available: appleAvailable, transcript: transcript)
         apple.requiresAuthorization = appleRequiresSpeechAuthorization
@@ -216,7 +234,8 @@ final class VoiceInputCoordinatorTests: XCTestCase {
             voiceAuthorizationService: authorization,
             audioRecordingService: recorder,
             voiceModelStore: voiceStore,
-            menuBarStatus: menuBarStatus
+            menuBarStatus: menuBarStatus,
+            targetActivator: targetActivator
         )
 
         return (
@@ -227,7 +246,8 @@ final class VoiceInputCoordinatorTests: XCTestCase {
             clipboard,
             pasteSimulator,
             accessibility,
-            settingsProvider
+            settingsProvider,
+            targetActivator
         )
     }
 
@@ -270,12 +290,46 @@ final class VoiceInputCoordinatorTests: XCTestCase {
         harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
         try await Task.sleep(for: .milliseconds(50))
         harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
-        try await Task.sleep(for: .milliseconds(300))
+        try await Task.sleep(for: .milliseconds(500))
 
         XCTAssertEqual(harness.rewriteProvider.lastRequest?.selectedText, "hello from voice")
         XCTAssertEqual(harness.clipboard.writtenStrings.last, "Hello from voice.")
         XCTAssertEqual(harness.pasteSimulator.pasteCallCount, 1)
-        XCTAssertEqual(harness.clipboard.restoreCallCount, 1)
+        XCTAssertEqual(harness.clipboard.restoreCallCount, 0)
+        XCTAssertEqual(
+            harness.targetActivator.activatedTargets,
+            [DictationTargetApplication(processIdentifier: 42)]
+        )
+    }
+
+    func testReplaceSelectionKeepsOutputOnClipboardWhenTargetCannotActivate() async throws {
+        let harness = makeCoordinator(outputMode: .replaceSelection)
+        harness.targetActivator.activationResult = false
+
+        harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
+        try await Task.sleep(for: .milliseconds(50))
+        harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
+        try await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertEqual(harness.clipboard.writtenStrings.last, "Hello from voice.")
+        XCTAssertEqual(harness.pasteSimulator.pasteCallCount, 0)
+        XCTAssertTrue(harness.coordinator.statusMessage.contains("clipboard"))
+    }
+
+    func testReplaceSelectionKeepsOutputOnClipboardWithoutAccessibilityAccess() async throws {
+        let harness = makeCoordinator(
+            outputMode: .replaceSelection,
+            accessibilityTrusted: false
+        )
+
+        harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
+        try await Task.sleep(for: .milliseconds(50))
+        harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
+        try await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertEqual(harness.clipboard.writtenStrings.last, "Hello from voice.")
+        XCTAssertEqual(harness.pasteSimulator.pasteCallCount, 0)
+        XCTAssertTrue(harness.coordinator.statusMessage.contains("clipboard"))
     }
 
     func testTranscriptRewriteCopyToClipboardFlow() async throws {
