@@ -64,12 +64,22 @@ final class MockVoiceSettingsProvider: VoiceSettingsProviding {
 @MainActor
 final class MockRewriteProvider: TextRewriting {
     var nextRewrittenText = "rewritten"
+    var nextError: Error?
     var lastRequest: RewriteRequest?
 
     func rewrite(_ request: RewriteRequest) async throws -> RewriteResult {
         lastRequest = request
+        if let nextError {
+            throw nextError
+        }
         return RewriteResult(originalText: request.selectedText, rewrittenText: nextRewrittenText)
     }
+}
+
+private enum MockRewriteError: LocalizedError {
+    case unavailable
+
+    var errorDescription: String? { "mock rewrite unavailable" }
 }
 
 final class MockClipboardWriter: ClipboardWriting {
@@ -116,6 +126,7 @@ final class VoiceInputCoordinatorTests: XCTestCase {
         speechGranted: Bool = true,
         accessibilityTrusted: Bool = true,
         appleAvailable: Bool = true,
+        appleRequiresSpeechAuthorization: Bool = true,
         fallbackPrepared: Bool = false,
         transcript: String = "hello from voice",
         rewrittenText: String = "Hello from voice."
@@ -126,7 +137,8 @@ final class VoiceInputCoordinatorTests: XCTestCase {
         rewriteProvider: MockRewriteProvider,
         clipboard: MockClipboardWriter,
         pasteSimulator: MockPasteSimulator,
-        accessibility: MockAccessibilityService
+        accessibility: MockAccessibilityService,
+        settingsProvider: MockVoiceSettingsProvider
     ) {
         let settings = AppSettings(
             outputMode: outputMode,
@@ -152,6 +164,7 @@ final class VoiceInputCoordinatorTests: XCTestCase {
         accessibility.trusted = accessibilityTrusted
         let menuBarStatus = MenuBarStatusModel()
         let apple = MockSpeechEngine(available: appleAvailable, transcript: transcript)
+        apple.requiresAuthorization = appleRequiresSpeechAuthorization
         let fallback = MockFallbackSpeechEngine(prepared: fallbackPrepared, transcript: transcript)
         let voiceStore = VoiceModelStore(appleEngine: apple, fallbackEngine: fallback)
         let coordinator = VoiceInputCoordinator(
@@ -165,7 +178,16 @@ final class VoiceInputCoordinatorTests: XCTestCase {
             menuBarStatus: menuBarStatus
         )
 
-        return (coordinator, authorization, recorder, rewriteProvider, clipboard, pasteSimulator, accessibility)
+        return (
+            coordinator,
+            authorization,
+            recorder,
+            rewriteProvider,
+            clipboard,
+            pasteSimulator,
+            accessibility,
+            settingsProvider
+        )
     }
 
     func testStartAndStopRecordingTransitions() async throws {
@@ -242,5 +264,78 @@ final class VoiceInputCoordinatorTests: XCTestCase {
         XCTAssertTrue(harness.coordinator.isRecording)
         XCTAssertEqual(harness.authorization.microphoneRequestCount, 1)
         XCTAssertEqual(harness.authorization.speechRequestCount, 0)
+    }
+
+    func testSpeechAnalyzerRouteDoesNotRequestLegacySpeechPermission() async throws {
+        let harness = makeCoordinator(appleRequiresSpeechAuthorization: false)
+
+        harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
+        try await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertTrue(harness.coordinator.isRecording)
+        XCTAssertEqual(harness.authorization.microphoneRequestCount, 1)
+        XCTAssertEqual(harness.authorization.speechRequestCount, 0)
+    }
+
+    func testSpeechPermissionDenialUsesPreparedWhisperFallback() async throws {
+        let harness = makeCoordinator(speechGranted: false, fallbackPrepared: true)
+
+        harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
+        try await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertTrue(harness.coordinator.isRecording)
+        XCTAssertEqual(harness.authorization.speechRequestCount, 1)
+        XCTAssertNil(harness.coordinator.lastErrorMessage)
+    }
+
+    func testMissingTranscriptionRouteFailsBeforeRequestingMicrophone() async throws {
+        let harness = makeCoordinator(appleAvailable: false, fallbackPrepared: false)
+
+        harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
+        try await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertFalse(harness.coordinator.isRecording)
+        XCTAssertEqual(harness.authorization.microphoneRequestCount, 0)
+        XCTAssertEqual(harness.recorder.startCallCount, 0)
+        XCTAssertTrue(harness.coordinator.lastErrorMessage?.contains("Whisper fallback model") == true)
+    }
+
+    func testRapidDoubleStartOnlyStartsOneRecording() async throws {
+        let harness = makeCoordinator()
+
+        harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
+        harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
+        try await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertTrue(harness.coordinator.isRecording)
+        XCTAssertEqual(harness.authorization.microphoneRequestCount, 1)
+        XCTAssertEqual(harness.recorder.startCallCount, 1)
+    }
+
+    func testRewriteFailureCopiesRawLocalTranscript() async throws {
+        let harness = makeCoordinator(transcript: "raw local transcript")
+        harness.rewriteProvider.nextError = MockRewriteError.unavailable
+
+        harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
+        try await Task.sleep(for: .milliseconds(50))
+        harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
+        try await Task.sleep(for: .milliseconds(250))
+
+        XCTAssertEqual(harness.clipboard.writtenStrings.last, "raw local transcript")
+        XCTAssertNil(harness.coordinator.lastErrorMessage)
+        XCTAssertTrue(harness.coordinator.statusMessage.contains("raw dictation"))
+    }
+
+    func testRecordingUsesSettingsCapturedAtStart() async throws {
+        let harness = makeCoordinator(outputMode: .copyToClipboard)
+
+        harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
+        try await Task.sleep(for: .milliseconds(50))
+        harness.settingsProvider.appSettings.outputMode = .replaceSelection
+        harness.coordinator.toggleDictation(accessibilityService: harness.accessibility)
+        try await Task.sleep(for: .milliseconds(250))
+
+        XCTAssertEqual(harness.clipboard.writtenStrings.last, "Hello from voice.")
+        XCTAssertEqual(harness.pasteSimulator.pasteCallCount, 0)
     }
 }

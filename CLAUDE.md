@@ -9,5 +9,6 @@ folder to gather information, feedback, patterns, and templates before writing c
 
 - `resources/openrouter-examples` — Official OpenRouter integration examples and request patterns
 - `resources/mlx-swift-lm` — Official MLX Swift language-model generation APIs used by BuddyGrammar
+- `resources/megaphone` — Megaphone macOS dictation reference — Apple SpeechAnalyzer streaming, model assets, vocabulary context, and low-latency transcription
 
 <!-- codeview:end -->
