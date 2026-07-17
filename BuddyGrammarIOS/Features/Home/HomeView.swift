@@ -16,7 +16,6 @@ struct HomeView: View {
                     header
                     statusRow
                     dictateAction
-                    quickDictationRow
                     pendingTranscriptRow
                     keyboardLabRow
                 }
@@ -97,21 +96,6 @@ struct HomeView: View {
         .accessibilityIdentifier("home.startDictation")
     }
 
-    private var quickDictationRow: some View {
-        Toggle(isOn: quickDictationBinding) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Skip app switching")
-                    .font(.subheadline.weight(.medium))
-                Text("Keeps the mic ready in a tucked-away window")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(16)
-        .background(.regularMaterial, in: .rect(cornerRadius: 16))
-        .accessibilityIdentifier("home.quickDictation")
-    }
-
     @ViewBuilder
     private var pendingTranscriptRow: some View {
         if !model.transcriptDraft.isEmpty {
@@ -161,10 +145,4 @@ struct HomeView: View {
         .accessibilityIdentifier("home.openKeyboardLab")
     }
 
-    private var quickDictationBinding: Binding<Bool> {
-        Binding(
-            get: { model.settings.enablesQuickDictation },
-            set: { model.setQuickDictation(enabled: $0) }
-        )
-    }
 }

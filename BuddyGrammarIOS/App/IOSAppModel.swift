@@ -55,24 +55,21 @@ final class IOSAppModel {
     var settings: BuddyGrammarSettings
     var pendingTranscript: PendingTranscript?
     var transcriptDraft = ""
-    var dictationPhase: DictationPhase = .idle {
-        didSet { syncCompanionStatus() }
-    }
+    var dictationPhase: DictationPhase = .idle
     var selectedTab: AppTab = .home
     var detectedLanguageCode: String?
     var alert: AppAlert?
     var notice: AppNotice?
     private(set) var keyboardDictationSessionID: UUID?
     let isSharedContainerReady: Bool
-    let companion: DictationCompanionController
 
     private let preferences: SharedPreferences?
     private let adaptiveStore: AdaptiveLearningStore?
     private let audioRecorder: IOSAudioRecorder
     private let transcriptionClient: ElevenLabsTranscriptionClient
     private let correctionClient: OpenRouterCorrectionClient
+    private let dynamicIslandController: DynamicIslandDictationController
     private var keyboardStopMonitorTask: Task<Void, Never>?
-    private var companionStartTask: Task<Void, Never>?
     private var backgroundTaskIdentifier: UIBackgroundTaskIdentifier = .invalid
 
     init(
@@ -86,10 +83,12 @@ final class IOSAppModel {
         isSharedContainerReady = sharedPreferences != nil
         self.preferences = sharedPreferences
         self.adaptiveStore = adaptiveStore ?? AdaptiveLearningStore()
-        companion = DictationCompanionController(preferences: sharedPreferences)
         self.audioRecorder = audioRecorder
         self.transcriptionClient = transcriptionClient
         self.correctionClient = correctionClient
+        self.dynamicIslandController = DynamicIslandDictationController(
+            preferences: sharedPreferences
+        )
 
         var loadedSettings = sharedPreferences?.loadSettings() ?? .default
         var loadedTranscript = sharedPreferences?.loadPendingTranscript()
@@ -109,6 +108,8 @@ final class IOSAppModel {
         if arguments.contains("--ui-testing") || arguments.contains("--uitesting") {
             loadedSettings.hasCompletedOnboarding = true
             loadedSettings.hasAcceptedCloudProcessing = true
+            loadedSettings.enablesQuickDictation = false
+            loadedSettings.quickDictationExpiresAt = nil
             loadedTranscript = PendingTranscript(
                 text: "This sample is ready to insert from the BuddyGrammar keyboard."
             )
@@ -135,15 +136,28 @@ final class IOSAppModel {
             )
         }
 
-        companion.onStartRequested = { [weak self] in
-            self?.handleCompanionStartSignal()
+        dynamicIslandController.onStartRequested = { [weak self] sessionID in
+            Task { @MainActor [weak self] in
+                guard let self,
+                      !dictationPhase.isRecording,
+                      !dictationPhase.isProcessing else { return }
+                await startDictation(keyboardSessionID: sessionID)
+            }
         }
-        companion.onStopRequested = { [weak self] in
-            self?.handleCompanionStopSignal()
+        dynamicIslandController.onStopRequested = { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, dictationPhase.isRecording else { return }
+                await finishDictation()
+            }
         }
-        if settings.enablesQuickDictation, settings.hasCompletedOnboarding {
-            companion.setEnabled(true)
+        dynamicIslandController.onExpired = { [weak self] in
+            guard let self else { return }
+            settings.enablesQuickDictation = false
+            settings.quickDictationExpiresAt = nil
+            persistSettings(successMessage: nil)
+            showNotice("Dynamic Island dictation readiness ended", kind: .information)
         }
+
     }
 
     var isCloudReady: Bool {
@@ -167,6 +181,48 @@ final class IOSAppModel {
                     ?? savedDictation?.languageCode
             }
         }
+        Task { [weak self] in
+            guard let self else { return }
+            await dynamicIslandController.restoreIfNeeded(settings: settings)
+        }
+    }
+
+    func setQuickDictation(
+        enabled: Bool,
+        duration: QuickDictationDuration
+    ) async {
+        if enabled {
+            guard settings.hasAcceptedCloudProcessing else {
+                showAlert(
+                    title: "Cloud processing is off",
+                    message: "Allow cloud processing before enabling keyboard voice dictation."
+                )
+                return
+            }
+            do {
+                let expiresAt = try await dynamicIslandController.activate(
+                    duration: duration
+                )
+                settings.enablesQuickDictation = true
+                settings.quickDictationDuration = duration
+                settings.quickDictationExpiresAt = expiresAt
+                persistSettings(successMessage: "Dynamic Island dictation is ready")
+            } catch {
+                settings.enablesQuickDictation = false
+                settings.quickDictationExpiresAt = nil
+                persistSettings(successMessage: nil)
+                showAlert(
+                    title: "Couldn’t enable Dynamic Island dictation",
+                    message: error.localizedDescription
+                )
+            }
+        } else {
+            settings.enablesQuickDictation = false
+            settings.quickDictationDuration = duration
+            settings.quickDictationExpiresAt = nil
+            persistSettings(successMessage: "Dynamic Island dictation turned off")
+            await dynamicIslandController.deactivate()
+        }
     }
 
     func completeOnboarding(acceptsCloudProcessing: Bool) {
@@ -184,7 +240,8 @@ final class IOSAppModel {
         correctionUndoDuration: TimeInterval,
         adaptiveTypingEnabled: Bool,
         personalizedPracticeEnabled: Bool,
-        acceptsCloudProcessing: Bool
+        acceptsCloudProcessing: Bool,
+        quickDictationDuration: QuickDictationDuration
     ) {
         let trimmedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedInstruction = correctionInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -211,6 +268,7 @@ final class IOSAppModel {
         settings.adaptiveTypingEnabled = adaptiveTypingEnabled
         settings.personalizedPracticeEnabled = personalizedPracticeEnabled
         settings.hasAcceptedCloudProcessing = acceptsCloudProcessing
+        settings.quickDictationDuration = quickDictationDuration
         persistSettings(successMessage: "Preferences saved")
     }
 
@@ -223,9 +281,14 @@ final class IOSAppModel {
             return
         }
 
+        if dynamicIslandController.isReady {
+            await dynamicIslandController.prepareForRecording()
+        }
+
         do {
             let startedAt = try await audioRecorder.start()
             dictationPhase = .recording(startedAt: startedAt)
+            await dynamicIslandController.prepareForRecording(startedAt: startedAt)
             detectedLanguageCode = nil
             self.keyboardDictationSessionID = keyboardSessionID
             if let keyboardSessionID {
@@ -252,6 +315,7 @@ final class IOSAppModel {
             }
             self.keyboardDictationSessionID = nil
             showAlert(title: "Couldn’t start recording", message: error.localizedDescription)
+            await dynamicIslandController.resumeAfterRecording(settings: settings)
         }
     }
 
@@ -267,6 +331,7 @@ final class IOSAppModel {
                 phase: .transcribing
             )
         }
+        await dynamicIslandController.showProcessing()
         defer {
             endBackgroundProcessing()
             self.keyboardDictationSessionID = nil
@@ -347,6 +412,7 @@ final class IOSAppModel {
             dictationPhase = transcriptDraft.isEmpty ? .idle : .ready
             showAlert(title: "Dictation failed", message: error.localizedDescription)
         }
+        await dynamicIslandController.resumeAfterRecording(settings: settings)
     }
 
     func cancelRecording() {
@@ -364,6 +430,10 @@ final class IOSAppModel {
         self.keyboardDictationSessionID = nil
         dictationPhase = transcriptDraft.isEmpty ? .idle : .ready
         showNotice("Recording discarded", kind: .information)
+        Task { [weak self] in
+            guard let self else { return }
+            await dynamicIslandController.resumeAfterRecording(settings: settings)
+        }
     }
 
     func saveDraftForKeyboard() {
@@ -431,102 +501,15 @@ final class IOSAppModel {
     }
 
     func handleDeepLink(_ url: URL) {
-        guard url.scheme == "buddygrammar" else { return }
-        let destination = url.host ?? url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        if destination == "dictation" {
-            selectedTab = .dictation
-            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            let sessionID = components?.queryItems?
-                .first(where: { $0.name == "session" })?
-                .value
-                .flatMap(UUID.init(uuidString:))
-            if let sessionID,
-               preferences?.loadKeyboardDictationSession()?.id == sessionID,
-               !dictationPhase.isRecording,
-               !dictationPhase.isProcessing {
-                Task { [weak self] in
-                    await self?.startDictation(keyboardSessionID: sessionID)
-                }
-            }
-        }
-    }
-
-    func setQuickDictation(enabled: Bool) {
-        guard enabled != settings.enablesQuickDictation else { return }
-        if enabled, !DictationCompanionController.isSupported {
-            showAlert(
-                title: "Picture in Picture unavailable",
-                message: "This device does not support Picture in Picture, so quick dictation cannot stay ready in the background."
-            )
+        guard let sessionID = KeyboardDictationHandoff.sessionID(from: url),
+              preferences?.loadKeyboardDictationSession()?.id == sessionID,
+              !dictationPhase.isRecording,
+              !dictationPhase.isProcessing else {
             return
         }
-        settings.enablesQuickDictation = enabled
-        persistSettings(successMessage: nil)
-        companion.setEnabled(enabled)
-        if enabled {
-            showNotice(
-                "Quick dictation is on. Leave the app and the companion window keeps the mic ready.",
-                kind: .success
-            )
-        } else {
-            showNotice("Quick dictation turned off", kind: .information)
-        }
-    }
-
-    private func handleCompanionStartSignal() {
-        appDictationLog.notice("Companion start signal received")
-        guard settings.enablesQuickDictation else {
-            appDictationLog.warning("Ignoring start signal: quick dictation disabled")
-            return
-        }
-        guard !dictationPhase.isRecording, !dictationPhase.isProcessing else {
-            appDictationLog.warning("Ignoring start signal: dictation already active")
-            return
-        }
-
-        companionStartTask?.cancel()
-        companionStartTask = Task { [weak self] in
-            // The Darwin signal can outrun the keyboard's session write in
-            // the shared container, so poll briefly for it to appear.
-            for attempt in 0..<20 {
-                guard let self, !Task.isCancelled else { return }
-                if let session = preferences?.loadKeyboardDictationSession(),
-                   session.phase == .launching {
-                    guard settings.hasAcceptedCloudProcessing else {
-                        appDictationLog.error("Start signal rejected: no cloud consent")
-                        _ = try? preferences?.updateKeyboardDictationSession(
-                            id: session.id,
-                            phase: .failed,
-                            errorMessage: "Allow cloud processing in the BuddyGrammar app first."
-                        )
-                        return
-                    }
-                    appDictationLog.notice("Starting companion dictation for session \(session.id, privacy: .public) after \(attempt, privacy: .public) retries")
-                    await startDictation(keyboardSessionID: session.id)
-                    return
-                }
-                try? await Task.sleep(for: .milliseconds(100))
-            }
-            appDictationLog.error("Start signal timed out: no launching session found in shared container")
-        }
-    }
-
-    private func handleCompanionStopSignal() {
-        appDictationLog.notice("Companion stop signal received")
-        guard dictationPhase.isRecording, keyboardDictationSessionID != nil else { return }
+        selectedTab = .dictation
         Task { [weak self] in
-            await self?.finishDictation()
-        }
-    }
-
-    private func syncCompanionStatus() {
-        switch dictationPhase {
-        case .recording(let startedAt):
-            companion.update(status: .recording(startedAt: startedAt))
-        case .transcribing, .correcting:
-            companion.update(status: .processing)
-        case .idle, .ready:
-            companion.update(status: .idle)
+            await self?.startDictation(keyboardSessionID: sessionID)
         }
     }
 

@@ -187,7 +187,28 @@ extension KeyboardViewController: KeyboardModelDelegate {
         textDocumentProxy.deleteBackward()
     }
 
-    func openHostApplication(_ url: URL) -> Bool {
+    func openHostApplication(
+        _ url: URL,
+        completion: @escaping @MainActor @Sendable (Bool) -> Void
+    ) {
+        guard let extensionContext else {
+            completion(openHostApplicationThroughResponderChain(url))
+            return
+        }
+        extensionContext.open(url) { [weak self] didOpen in
+            Task { @MainActor in
+                guard !didOpen else {
+                    completion(true)
+                    return
+                }
+                completion(
+                    self?.openHostApplicationThroughResponderChain(url) ?? false
+                )
+            }
+        }
+    }
+
+    private func openHostApplicationThroughResponderChain(_ url: URL) -> Bool {
         let selector = NSSelectorFromString("openURL:")
         var responder: UIResponder? = self
         while let current = responder {

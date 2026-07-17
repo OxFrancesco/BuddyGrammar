@@ -32,8 +32,8 @@ enum KeyboardStatus: Equatable {
     case corrected
     case correctionUndone
     case transcriptInserted
-    case openingDictation
     case startingDictation
+    case openingDictation
     case dictationRecording
     case dictationProcessing
     case fullAccessRequired
@@ -55,10 +55,10 @@ enum KeyboardStatus: Equatable {
             "Correction undone."
         case .transcriptInserted:
             "Dictation inserted."
-        case .openingDictation:
-            "Opening voice dictation…"
         case .startingDictation:
-            "Starting dictation… Speak when the mic turns on."
+            "Starting from Dynamic Island…"
+        case .openingDictation:
+            "Opening BuddyGrammar… Swipe back when the microphone starts."
         case .dictationRecording:
             "Listening… Tap the red stop button when finished."
         case .dictationProcessing:
@@ -84,7 +84,8 @@ enum KeyboardStatus: Equatable {
              .noText, .noPendingTranscript, .staleContext, .error:
             true
         case .ready, .correcting, .corrected, .correctionUndone,
-             .transcriptInserted, .openingDictation, .startingDictation,
+             .transcriptInserted, .openingDictation,
+             .startingDictation,
              .dictationRecording, .dictationProcessing:
             false
         }
@@ -154,7 +155,10 @@ protocol KeyboardModelDelegate: AnyObject {
     ) -> AppliedCorrection?
     func canUndoCorrection(_ correction: AppliedCorrection) -> Bool
     func undoCorrection(_ correction: AppliedCorrection) -> Bool
-    func openHostApplication(_ url: URL) -> Bool
+    func openHostApplication(
+        _ url: URL,
+        completion: @escaping @MainActor @Sendable (Bool) -> Void
+    )
 }
 
 @MainActor
@@ -254,7 +258,6 @@ final class KeyboardModel {
     @ObservationIgnored private var statusDismissTask: Task<Void, Never>?
     @ObservationIgnored private var undoDismissTask: Task<Void, Never>?
     @ObservationIgnored private var dictationMonitorTask: Task<Void, Never>?
-    @ObservationIgnored private var companionFallbackTask: Task<Void, Never>?
     @ObservationIgnored private var baselineStatus: KeyboardStatus = .fullAccessRequired
     @ObservationIgnored private var pendingCorrectionUndo: AppliedCorrection?
     @ObservationIgnored private var deferredCorrectionLearning: DeferredCorrectionLearning?
@@ -1041,8 +1044,6 @@ final class KeyboardModel {
         textIntelligence.persist()
         dictationMonitorTask?.cancel()
         dictationMonitorTask = nil
-        companionFallbackTask?.cancel()
-        companionFallbackTask = nil
         setQuietly(baselineStatus)
     }
 
@@ -1209,64 +1210,61 @@ final class KeyboardModel {
         do {
             let session = try preferences.beginKeyboardDictationSession()
             if preferences.isCompanionAlive() {
-                // The companion (main app kept alive by Picture in Picture)
-                // can start the microphone without leaving this app.
-                keyboardDictationLog.notice("Companion alive; posting start signal for session \(session.id, privacy: .public)")
-                DictationCompanionNotifier.post(.startRequested)
+                keyboardDictationLog.notice("Signaling Dynamic Island dictation session \(session.id, privacy: .public)")
                 updateDictationPhase(.launching, status: .startingDictation)
-                scheduleCompanionFallback(sessionID: session.id)
-                return
+                DictationCompanionNotifier.post(.startRequested)
+                scheduleDictationHandoffFallback(sessionID: session.id)
+            } else {
+                keyboardDictationLog.notice("Opening BuddyGrammar for dictation session \(session.id, privacy: .public)")
+                updateDictationPhase(.launching, status: .openingDictation)
+                openDictationDeepLink(sessionID: session.id)
             }
-            keyboardDictationLog.notice("Companion not alive; deep linking for session \(session.id, privacy: .public)")
-            guard openDictationDeepLink(sessionID: session.id) else {
-                preferences.clearKeyboardDictationSession(id: session.id)
-                present(.error("Open BuddyGrammar to dictate."))
-                return
-            }
-            updateDictationPhase(.launching, status: .openingDictation)
         } catch {
             keyboardDictationLog.error("Failed to begin dictation session: \(error, privacy: .public)")
             present(.error("BuddyGrammar could not start voice dictation."))
         }
     }
 
-    private func openDictationDeepLink(sessionID: UUID) -> Bool {
-        var components = URLComponents()
-        components.scheme = "buddygrammar"
-        components.host = "dictation"
-        components.queryItems = [
-            URLQueryItem(name: "source", value: "keyboard"),
-            URLQueryItem(name: "session", value: sessionID.uuidString),
-        ]
-        guard let url = components.url else { return false }
-        return delegate?.openHostApplication(url) == true
-    }
-
-    private func scheduleCompanionFallback(sessionID: UUID) {
-        companionFallbackTask?.cancel()
-        companionFallbackTask = Task { [weak self] in
+    private func scheduleDictationHandoffFallback(sessionID: UUID) {
+        Task { [weak self] in
             try? await Task.sleep(for: .seconds(3))
-            guard !Task.isCancelled, let self else { return }
-            guard let session = preferences?.loadKeyboardDictationSession(),
+            guard !Task.isCancelled,
+                  let self,
+                  let session = preferences?.loadKeyboardDictationSession(),
                   session.id == sessionID,
                   session.phase == .launching else { return }
-            // The companion never picked up the request; fall back to
-            // opening the app the classic way.
-            keyboardDictationLog.warning("Companion did not pick up session \(sessionID, privacy: .public); falling back to deep link")
-            if openDictationDeepLink(sessionID: sessionID) {
-                present(.openingDictation)
-            } else {
-                preferences?.clearKeyboardDictationSession(id: sessionID)
-                dictationPhase = .idle
-                present(.error("Open BuddyGrammar to dictate."))
-            }
+            keyboardDictationLog.warning("Dynamic Island did not answer; opening BuddyGrammar")
+            updateDictationPhase(.launching, status: .openingDictation)
+            openDictationDeepLink(sessionID: sessionID)
         }
+    }
+
+    private func openDictationDeepLink(sessionID: UUID) {
+        guard let url = KeyboardDictationHandoff.url(for: sessionID),
+              let delegate else {
+            failDictationHandoff(sessionID: sessionID)
+            return
+        }
+        delegate.openHostApplication(url) { [weak self] didOpen in
+            guard let self, !didOpen,
+                  let session = preferences?.loadKeyboardDictationSession(),
+                  session.id == sessionID,
+                  session.phase == .launching else {
+                return
+            }
+            keyboardDictationLog.error("iOS rejected the BuddyGrammar dictation handoff")
+            failDictationHandoff(sessionID: sessionID)
+        }
+    }
+
+    private func failDictationHandoff(sessionID: UUID) {
+        preferences?.clearKeyboardDictationSession(id: sessionID)
+        dictationPhase = .idle
+        present(.error("Open BuddyGrammar once, then try the microphone again."))
     }
 
     private func cancelKeyboardDictation() {
         keyboardDictationLog.notice("User canceled launching dictation")
-        companionFallbackTask?.cancel()
-        companionFallbackTask = nil
         if let session = preferences?.loadKeyboardDictationSession() {
             preferences?.clearKeyboardDictationSession(id: session.id)
         }
@@ -1309,11 +1307,6 @@ final class KeyboardModel {
                 dictationPhase = .idle
             }
             return
-        }
-
-        if session.phase != .launching {
-            companionFallbackTask?.cancel()
-            companionFallbackTask = nil
         }
 
         switch session.phase {

@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var adaptiveTypingEnabled: Bool
     @State private var personalizedPracticeEnabled: Bool
     @State private var acceptsCloudProcessing: Bool
+    @State private var quickDictationDuration: QuickDictationDuration
     @State private var showsLearningResetOptions = false
 
     init(model: IOSAppModel) {
@@ -39,6 +40,9 @@ struct SettingsView: View {
         )
         _acceptsCloudProcessing = State(
             initialValue: model.settings.hasAcceptedCloudProcessing
+        )
+        _quickDictationDuration = State(
+            initialValue: model.settings.quickDictationDuration
         )
     }
 
@@ -114,19 +118,50 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle(isOn: quickDictationBinding) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Skip app switching")
-                        Text("Keep BuddyGrammar ready in a small Picture in Picture window so the keyboard mic starts instantly.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                Toggle(
+                    "Dynamic Island readiness",
+                    isOn: Binding(
+                        get: { model.settings.enablesQuickDictation },
+                        set: { isEnabled in
+                            Task {
+                                await model.setQuickDictation(
+                                    enabled: isEnabled,
+                                    duration: quickDictationDuration
+                                )
+                            }
+                        }
+                    )
+                )
+                .accessibilityIdentifier("settings.quickDictation")
+
+                Picker("Keep ready", selection: $quickDictationDuration) {
+                    Text("For 5 minutes").tag(QuickDictationDuration.fiveMinutes)
+                    Text("For 12 hours").tag(QuickDictationDuration.twelveHours)
+                    Text("Always").tag(QuickDictationDuration.always)
+                }
+                .accessibilityIdentifier("settings.quickDictationDuration")
+                .onChange(of: quickDictationDuration) { _, duration in
+                    guard model.settings.enablesQuickDictation else { return }
+                    Task {
+                        await model.setQuickDictation(enabled: true, duration: duration)
                     }
                 }
-                .accessibilityIdentifier("settings.quickDictation")
+
+                Label(
+                    model.settings.enablesQuickDictation
+                        ? "Ready in Dynamic Island"
+                        : "Opens BuddyGrammar when readiness is off",
+                    systemImage: model.settings.enablesQuickDictation
+                        ? "waveform.circle.fill"
+                        : "arrow.up.forward.app"
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("settings.quickDictationStatus")
             } header: {
-                Text("Quick dictation")
+                Text("Skip app switching")
             } footer: {
-                Text("After enabling, leave the app so the companion window appears, then drag it off the screen edge to tuck it away. The microphone turns on only when you start dictation from the keyboard. If iOS closes the window, the keyboard falls back to opening the app.")
+                Text("When enabled, BuddyGrammar keeps the microphone active so the keyboard can start instantly. Idle audio is discarded and never saved or uploaded. This uses more battery and iOS shows its microphone and Live Activity indicators. If iOS ends readiness, the keyboard safely opens BuddyGrammar instead.")
             }
 
             Section {
@@ -166,7 +201,8 @@ struct SettingsView: View {
                         correctionUndoDuration: correctionUndoDuration,
                         adaptiveTypingEnabled: adaptiveTypingEnabled,
                         personalizedPracticeEnabled: personalizedPracticeEnabled,
-                        acceptsCloudProcessing: acceptsCloudProcessing
+                        acceptsCloudProcessing: acceptsCloudProcessing,
+                        quickDictationDuration: quickDictationDuration
                     )
                 }
             }
@@ -218,13 +254,6 @@ struct SettingsView: View {
         }
     }
 
-    private var quickDictationBinding: Binding<Bool> {
-        Binding(
-            get: { model.settings.enablesQuickDictation },
-            set: { model.setQuickDictation(enabled: $0) }
-        )
-    }
-
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
     }
@@ -248,6 +277,7 @@ struct SettingsView: View {
         adaptiveTypingEnabled = settings.adaptiveTypingEnabled
         personalizedPracticeEnabled = settings.personalizedPracticeEnabled
         acceptsCloudProcessing = settings.hasAcceptedCloudProcessing
+        quickDictationDuration = settings.quickDictationDuration
     }
 }
 
@@ -255,7 +285,7 @@ private struct PrivacyPolicyView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("Last updated July 16, 2026")
+                Text("Last updated July 17, 2026")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -271,7 +301,7 @@ private struct PrivacyPolicyView: View {
 
                 policySection(
                     title: "Speech to text",
-                    text: "When you stop a recording in the BuddyGrammar app, its audio is sent through the BuddyGrammar service to ElevenLabs. If the first transcription request fails, BuddyGrammar retries it once. ElevenLabs returns a transcript. If automatic correction is enabled, that transcript is then sent to OpenRouter. The final text is copied to your clipboard. The temporary recording file is deleted from this device after the request completes. Apple does not permit microphone recording inside a custom keyboard."
+                    text: "Apple does not permit microphone recording inside a custom keyboard. If you enable Dynamic Island readiness, the BuddyGrammar app keeps an audio-input session active for the selected period so a keyboard mic tap can reach it without switching apps. Audio received while waiting is discarded in memory and is never written, transcribed, or uploaded. iOS shows microphone and Live Activity indicators, and readiness uses additional battery. After you tap the keyboard mic, BuddyGrammar records until you stop. That recording is sent through the BuddyGrammar service to ElevenLabs; a failed request is retried once. If automatic correction is enabled, the transcript is sent to OpenRouter. The final text is copied to your clipboard, and the temporary recording file is deleted after processing."
                 )
 
                 policySection(

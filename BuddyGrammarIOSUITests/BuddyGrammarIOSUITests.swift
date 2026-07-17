@@ -101,6 +101,30 @@ final class BuddyGrammarIOSUITests: XCTestCase {
     }
 
     @MainActor
+    func testKeyboardDictationOffersDynamicIslandWithoutPictureInPicture() {
+        let app = launchApp()
+
+        XCTAssertFalse(app.descendants(matching: .any)["home.quickDictation"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["companion.bar"].exists)
+
+        app.tabBars.buttons["Settings"].tap()
+
+        let quickDictation = app.descendants(matching: .any)["settings.quickDictation"]
+        for _ in 0..<4 where !quickDictation.exists {
+            app.swipeUp()
+        }
+
+        XCTAssertTrue(quickDictation.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["settings.quickDictationDuration"]
+                .waitForExistence(timeout: 5)
+        )
+        XCTAssertFalse(app.descendants(matching: .any)["companion.enterPip"].exists)
+        XCTAssertFalse(app.staticTexts["Picture in picture"].exists)
+        attachScreenshot(named: "Dynamic Island dictation settings", app: app)
+    }
+
+    @MainActor
     func testLiveKeyboardStarCorrectionWhenEnabled() throws {
         #if !KEYBOARD_E2E
         throw XCTSkip(

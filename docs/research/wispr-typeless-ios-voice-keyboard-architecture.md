@@ -1,7 +1,7 @@
 # How Wispr Flow and Typeless provide voice dictation from an iOS keyboard
 
 Research date: 2026-07-17
-Scope: current Apple documentation and App Review rules; Apple Developer Forums answers from Apple staff; current first-party Wispr Flow and Typeless help, privacy, release-note, and App Store pages; the two Typeless screenshots supplied with the research request; and BuddyGrammar's current source tree.
+Scope: current Apple documentation and App Review rules; Apple Developer Forums answers from Apple staff; current first-party Wispr Flow and Typeless help, privacy, release-note, and App Store pages; the three Typeless screenshots supplied with the research request, including the newer Dynamic Island “Skip app switching” settings sheet; and BuddyGrammar's current source tree.
 
 This is a competitor-focused companion to [`apple-keyboard-workarounds.md`](apple-keyboard-workarounds.md), not a replacement for it. That report covers supported BuddyGrammar alternatives and the local no-audio App Intent experiment in more depth.
 
@@ -12,11 +12,11 @@ Wispr Flow and Typeless do **not** have a special ability to record audio inside
 Both products make dictation *look* like a keyboard feature while a second process—the installed containing app—owns the microphone:
 
 - **Wispr Flow:** first-party support material explicitly says the keyboard launches the main Flow app to start recording. On current iOS, the user may briefly see Flow and then swipe back to the original app. Flow continues the recording, transcribes in the cloud, shares the result/state with its keyboard, and the keyboard inserts the text into the active field.
-- **Typeless:** first-party release notes explicitly identify **Picture in Picture** as the mode that skips the app-switching step. The user enables the mode in the containing app and tucks its PiP window off-screen. When the user later taps Speak in the keyboard, the still-running containing app activates its microphone. The narrow chevron on the right edge of both supplied screenshots is highly consistent with Typeless's documented tucked-away PiP UI. That visual identification is an inference from the screenshots; the use of PiP itself is directly documented by Typeless.
+- **Typeless:** first-party release notes explicitly identify **Picture in Picture** as the original mode that skips the app-switching step. The user enables the mode in the containing app and tucks its PiP window off-screen. The newly supplied settings screenshot shows that the current app now also offers **Dynamic island** as an alternative, with availability choices of **Always**, **For 12 hours**, and **For 5 minutes**. That screenshot proves the product option exists. It does **not** prove that a Live Activity keeps Typeless executing—Apple explicitly documents the opposite process-lifetime behavior.
 
 The keyboard remains important, but its role is UI, state/control signaling, limited text context, and final insertion through `UITextDocumentProxy`. The audio session belongs to the app.
 
-This architecture is almost the same as BuddyGrammar's current PiP/App Group/Darwin-notification bridge. The important difference is not a hidden Apple API; it is that Typeless publicly ships the PiP technique, while Wispr currently accepts a visible app handoff and augments it with system entry points such as Shortcuts, Control Center, Action Button, Live Activities, and a growing list of app-specific return paths.
+The proven PiP architecture is almost the same as BuddyGrammar's current PiP/App Group/Darwin-notification bridge. The newer Dynamic Island architecture cannot be fully reconstructed from public sources. A Live Activity can provide visible controls and state, and an App Intent can give a system surface a background launch path, but the Live Activity itself cannot be the ready-to-receive process. Typeless must pair it with some additional execution or wake mechanism that it has not publicly disclosed.
 
 ## Confidence labels
 
@@ -122,6 +122,18 @@ Typeless's [PiP guide](https://www.typeless.com/help/release-notes/ios/picture-i
 2. Drag the Typeless PiP presentation off the left or right edge so it remains tucked away.
 3. Open a text field, display the Typeless keyboard, and tap Speak; Typeless says the microphone turns on only while speaking.
 
+The guide's own [first-party embedded setup video](https://typeless-static.com/webpage/assets/release-notes/mobile/enable-picture-in-picture-mode.mp4) is the exact vendor source matching the newer screenshot. Although the written June 8 article focuses on PiP, the video shows the same **Skip app switching** sheet with two mutually exclusive modes:
+
+- **Dynamic island**, with **Always**, **For 12 hours**, and **For 5 minutes** availability choices;
+- **Picture in picture**, described in the UI as keeping the mic off while idle, using less battery, and tucking off-screen.
+
+The public Typeless sitemap and release notes do not currently expose a separate Dynamic Island technical article. The accurate reading is therefore:
+
+- **Proven:** Dynamic Island and PiP are current alternative modes in Typeless's own setup UI. PiP did not replace Dynamic Island; version 1.9 added PiP alongside it.
+- **Proven:** the selected duration belongs to the user-facing “Skip app switching” mode.
+- **Not proven:** the microphone is active for that entire duration. Typeless only makes the mic-idle claim explicitly for PiP.
+- **Not proven:** “Dynamic island” identifies the full execution mechanism. It strongly implies a Live Activity presentation, but the vendor does not disclose its background-audio, intent, wake, or IPC implementation.
+
 Typeless's [iOS release notes](https://www.typeless.com/help/release-notes/ios) also say recording can continue when the keyboard closes or the user changes apps, and the user later returns to the text field/keyboard to finish. This independently shows that the audio session outlives the keyboard UI and belongs to another process.
 
 The two supplied screenshots show:
@@ -133,7 +145,7 @@ The two supplied screenshots show:
 
 Typeless's [current privacy policy](https://www.typeless.com/privacy) says audio and contextual information are processed in real time on cloud servers and discarded after the transcription returns, with third-party providers configured for zero retention. The [App Store listing](https://apps.apple.com/us/app/typeless-ai-voice-keyboard/id6749257650) describes this more precisely as zero *cloud* retention and on-device history. An older release note's statement that everything stays local conflicts with the current detailed policy; it should not be read as evidence of on-device recognition.
 
-### Strongly inferred session flow
+### Strongly inferred PiP session flow
 
 1. The user explicitly prepares Typeless's containing app in PiP and tucks it off-screen.
 2. PiP keeps the containing app participating in an Apple-managed media/background mode.
@@ -143,10 +155,19 @@ Typeless's [current privacy policy](https://www.typeless.com/privacy) says audio
 
 This is the closest public competitor match to BuddyGrammar's current architecture.
 
+### Dynamic Island session: what can and cannot be inferred
+
+The newer option is not simply “PiP, but drawn in the Dynamic Island.” ActivityKit and PiP have different execution contracts. Apple hosts Live Activity presentation/state independently from the app, whereas a valid PiP session participates in AVKit's media-background architecture.
+
+The strongest defensible inference is that Typeless uses the Dynamic Island as the visible front end of a prepared, time-limited availability session, while an undisclosed companion mechanism keeps or makes the containing app eligible to service keyboard requests. Possibilities include genuine background audio, a system-performed App Intent, or another reviewed implementation. Public evidence does not select between them.
+
+The **12-hour** choice is visually suggestive because Apple's maximum Live Activity visibility is eight hours in the Dynamic Island plus up to four more hours on the Lock Screen. It is not proof of implementation: the setting also offers **Always**, which exceeds a single Live Activity's documented lifetime, and Typeless could recreate activities or treat the choice as a product setting rather than a single activity duration.
+
 ### Unknown
 
 - Whether Typeless requires Allow Full Access. No current first-party Typeless iOS setup page found in this research states it. Cloud processing proves some process has network access, but that process could be the containing app; public evidence does not identify which target performs networking.
 - Its PiP content-source type, audio-session categories, background-mode declarations, App Group identifier, IPC transport, or state machine.
+- How the Dynamic Island mode keeps or wakes the containing app, and what “Always” means across ActivityKit's per-activity lifetime limit.
 - Whether its normal non-PiP fallback uses a supported URL route or an implementation detail.
 - Whether Apple gave Typeless review guidance or an exception. App Store presence alone cannot answer this.
 
@@ -163,13 +184,75 @@ So the accurate conclusion is narrower than “PiP is safe because Typeless does
 - **Not proven:** Apple considers an arbitrary synthetic PiP keepalive a generally documented or reusable dictation architecture.
 - **Risk:** a new implementation remains exposed to App Review interpretation and future platform changes, particularly if the PiP content is not genuine video playback or a video call.
 
-## 6. Modern App Intents explain system entry points, not the keyboard mic
+## 6. Dynamic Island is presentation and interaction, not an app keepalive
 
-iOS 18 introduced [`AudioRecordingIntent`](https://developer.apple.com/documentation/appintents/audiorecordingintent). It tells the system an intent changes recording state, causes a recording indicator, and requires a Live Activity for the duration of recording. [`LiveActivityIntent`](https://developer.apple.com/documentation/appintents/liveactivityintent) can cause the system to launch an app process in the background without opening the app UI. These APIs are a good explanation for Wispr's documented Action Button, Control Center, widget, Siri, and Shortcut start/stop paths.
+### What ActivityKit actually keeps alive
 
-They do not prove a custom keyboard can route its own button into the containing app. BuddyGrammar's no-audio experiment documented in [`apple-keyboard-workarounds.md`](apple-keyboard-workarounds.md) found that a shared `Button(intent:)` invoked from the keyboard on iOS 26.5 executed in the **keyboard extension process**, where the microphone restriction still applies.
+Apple's [ActivityKit overview](https://developer.apple.com/documentation/ActivityKit/) describes a Live Activity as system-presented, glanceable state whose SwiftUI UI is supplied by a widget extension. The system can show it in the Dynamic Island and on the Lock Screen, and its buttons/toggles can perform essential actions without opening the app.
 
-The iOS 27 beta adds [`allowedExecutionTargets`](https://developer.apple.com/documentation/appintents/appintent/allowedexecutiontargets), allowing an intent to request the main app, App Intents extension, or widget-extension process. This is the first public process-routing primitive that could alter the experiment, but it is beta, untested for this keyboard use case, and does not override App Review guideline 4.4.1. It is a future prototype candidate, not an explanation for the currently shipping iOS 18–26 behavior.
+That visible lifetime is explicitly separate from the containing-app process:
+
+- Apple's [Live Activity implementation guide](https://developer.apple.com/documentation/ActivityKit/displaying-live-data-with-live-activities) says the system may stop the app, or the app may crash, while its Live Activity remains active. On the next launch, the app should rediscover and reconcile still-active activities.
+- The same guide says each Live Activity has its own sandbox and cannot directly access the network. Dynamic content must come from the app when it happens to run or from ActivityKit push notifications.
+- A Live Activity can remain active for up to eight hours and may remain visible on the Lock Screen for up to four additional hours. That long UI lifetime is not a background-execution grant.
+
+Therefore a Dynamic Island pill cannot wait in memory for a Darwin notification from a keyboard, own `AVAudioEngine`, or keep the containing app runnable by itself. It may accurately display “ready” state even when no app process is currently available to receive the next keyboard command.
+
+### Starting and updating while backgrounded
+
+Apple's [`Activity` documentation](https://developer.apple.com/documentation/activitykit/activity) draws these boundaries:
+
+- An ordinary app starts a Live Activity while foreground.
+- It can update or end one while it is *already running* in the background—for example, during Background Tasks. [`update(_:)`](https://developer.apple.com/documentation/activitykit/activity/update%28_%3A%29) does not itself grant runtime or wake a suspended process.
+- A `LiveActivityIntent` is the in-process exception for starting while backgrounded.
+
+Apple also supports [ActivityKit push notifications](https://developer.apple.com/documentation/ActivityKit/starting-and-updating-live-activities-with-activitykit-push-notifications) to remotely start, update, and end activities. A push-to-start notification can start an activity, wake the app, and grant limited background runtime to download needed assets. That is a real public wake path, but Apple documents it for Live Activity setup/assets—not as permission to begin arbitrary microphone capture or as an indefinite process lease. There is no public vendor evidence that Typeless routes each keyboard tap through its server and APNs.
+
+### App Intents can launch work, but invocation surface and execution target matter
+
+[`LiveActivityIntent`](https://developer.apple.com/documentation/appintents/liveactivityintent) is stronger than an ordinary ActivityKit call: when the system performs it, iOS launches the app process without opening the app UI, performs the intent, and starts the Live Activity. Apple gives a Control Center control as the example.
+
+iOS 18's [`AudioRecordingIntent`](https://developer.apple.com/documentation/appintents/audiorecordingintent) tells the system that an intent starts, stops, or modifies recording. The system displays an audio-recording indicator. On iOS, iPadOS, and watchOS, the app must start a Live Activity when recording begins and keep it active for the entire recording; otherwise iOS stops the recording.
+
+These two protocols explain a legitimate architecture for **system-owned entry points** such as Control Center, Action Button, Siri, Shortcuts, widgets, and buttons inside a Live Activity. They do not document the Live Activity itself as the audio lifetime assertion, nor do they say that `AudioRecordingIntent` removes the ordinary background-audio requirements. Apple's [`AVAudioSession.Category.record`](https://developer.apple.com/documentation/avfaudio/avaudiosession/category-swift.struct/record) documentation still says to declare `audio` in `UIBackgroundModes` to continue a recording after the app moves to the background.
+
+Wispr's own material matches that distinction:
+
+- Its [Shortcuts guide](https://docs.wisprflow.ai/articles/1986921789-how-to-set-up-flow-shortcuts-for-iphone) documents system triggers and a Dynamic Island/Lock Screen Live Activity with Stop and Notes controls.
+- Its [Live Activity help](https://docs.wisprflow.ai/articles/9454889914-how-to-disable-wispr-flow-notifications-on-ios) describes the Dynamic Island as the timer/status/control surface during an active recording.
+- Its [Action Button guide](https://docs.wisprflow.ai/articles/4500510662-set-up-the-action-button-for-flow-on-iphone) still says Apple requires Flow to switch apps briefly to activate the microphone, and its [keyboard setup guide](https://docs.wisprflow.ai/articles/7453988911-set-up-the-flow-keyboard-on-iphone) still documents the app-launch/swipe-back route.
+
+Thus Wispr's Live Activity does not replace its microphone handoff. Typeless's current UI makes a stronger “Skip app switching” claim, but does not publish the extra mechanism that makes that claim work.
+
+### A keyboard can signal a running app; it cannot thereby wake one
+
+With Full Access, Apple's [custom-keyboard documentation](https://developer.apple.com/documentation/uikit/configuring-open-access-for-a-custom-keyboard) allows the keyboard and containing app to use a shared container. Apple's [App Groups guide](https://developer.apple.com/documentation/xcode/configuring-app-groups) supports shared preferences/files and same-team IPC including Mach IPC, POSIX semaphores/shared memory, and Unix-domain sockets. [`CFNotificationCenter`](https://developer.apple.com/documentation/corefoundation/cfnotificationcenter) exposes the Darwin notification center as a payload-free notification mechanism.
+
+A robust bridge can therefore:
+
+1. Write a command/session generation to App Group state.
+2. Send a best-effort IPC signal such as a Darwin notification.
+3. Let an already-running containing app read the durable command and start or stop its real audio session.
+4. Write state and transcript results back for the keyboard to poll and insert.
+
+The crucial limit is delivery: Apple's Darwin notification documentation requires a recipient run loop to be running, and shared storage is passive. Neither one is a documented launch or resume request. If iOS suspended or terminated the app, the command waits until some separate system-supported event makes the app executable.
+
+BuddyGrammar's no-audio experiment in [`apple-keyboard-workarounds.md`](apple-keyboard-workarounds.md) also found that a shared `Button(intent:)` invoked from the keyboard on iOS 26.5 executed in the **keyboard extension process**, where the microphone restriction still applies. This rules out the simple theory that any App Intent call automatically routes to the containing app.
+
+The iOS 27 beta adds [`allowedExecutionTargets`](https://developer.apple.com/documentation/appintents/appintent/allowedexecutiontargets), allowing an intent to request the main app, App Intents extension, or widget-extension process. Combined with the new [`supportedModes`](https://developer.apple.com/documentation/appintents/appintent/supportedmodes), this is the first public process-routing direction that could materially change the experiment. It remains beta, is untested for keyboard-triggered audio, and does not override App Review guideline 4.4.1. It cannot explain Typeless's currently shipping iOS 16.1+ behavior.
+
+### Evidence matrix for the Dynamic Island hypothesis
+
+| Claim | Status | Reason |
+| --- | --- | --- |
+| Typeless offers Dynamic Island as a Skip app switching mode | **Proven** | Supplied screenshot and Typeless's own embedded setup video |
+| Typeless's Dynamic Island option is a Live Activity | **Strong inference** | The label and visible pill match ActivityKit, but the vendor does not name ActivityKit |
+| A Live Activity keeps Typeless executable | **Disproven as a general Apple contract** | Apple says the app may be stopped while its activity remains active |
+| Background audio can keep a genuine recording running after app backgrounding | **Proven** | AVAudioSession documentation plus `UIBackgroundModes = audio` |
+| App Intents can background-launch the app for system surfaces | **Proven, scoped** | `LiveActivityIntent`; actual target/invocation rules still apply |
+| A keyboard App Group write/Darwin notification can wake a suspended app | **Not documented / should be treated as false** | These are data/IPC mechanisms, not lifecycle grants |
+| Typeless's 5-minute/12-hour/always choice equals mic-on duration | **Not proven** | Its UI labels the skip-switching availability, not microphone state |
+| The public evidence fully explains Typeless Dynamic Island mode | **No** | The decisive lifetime/wake mechanism remains undisclosed |
 
 ## 7. Mapping to BuddyGrammar
 
@@ -183,7 +266,7 @@ BuddyGrammar already implements both competitor patterns:
 | Shared session/result | App Group preferences/session state | Likely for both; exact vendor format unknown |
 | Cold fallback | `buddygrammar://dictation` via responder-chain `openURL:` | Wispr explicitly documents launching its app, but not how |
 | Final insertion | Poll session then call keyboard insertion through `UITextDocumentProxy` | Apple-documented keyboard capability; both vendors advertise direct insertion |
-| Recording visibility | PiP status surface | Typeless PiP; Wispr Live Activity/Dynamic Island timer |
+| Recording visibility | PiP status surface | Typeless offers PiP or Dynamic Island; Wispr uses a Live Activity/Dynamic Island timer |
 
 Specific source landmarks:
 
@@ -200,11 +283,11 @@ The competitor research therefore validates that BuddyGrammar independently arri
 ## 8. Practical conclusions for BuddyGrammar
 
 1. Do not search for an in-keyboard microphone entitlement. It does not exist in public Apple documentation, and competitor sources affirm containing-app participation.
-2. Treat the supplied Typeless UI as **voice and typing states inside one keyboard extension**, with an off-screen PiP companion—not as two privileged keyboard targets.
+2. Treat the supplied Typeless keyboard UI as **voice and typing states inside one keyboard extension**, not as two privileged keyboard targets. Its PiP mode has an off-screen companion; its alternative Dynamic Island mode has an undisclosed execution companion and cannot be explained by Live Activity persistence alone.
 3. Full Access is useful for networking and shared state, but never describe it as granting microphone permission. The main app asks for microphone permission separately.
 4. Wispr's current route is the clearest non-PiP comparison: accept a visible containing-app launch and manual back gesture, then keep genuine recording active in the background. Its polished automatic return for known apps is not a generic public API.
-5. Typeless demonstrates commercial viability of the PiP technique today, but it does not eliminate App Review or forward-compatibility risk for BuddyGrammar.
-6. Keep App Intents/Live Activities as system entry points and retest iOS 27 main-process routing when the final SDK is available. Do not assume `Button(intent:)` from the keyboard solves iOS 18–26.
+5. Typeless demonstrates commercial viability of the PiP technique today. Its Dynamic Island alternative is useful product evidence but not an implementable recipe until its app-lifetime/wake mechanism is independently reproduced; neither mode eliminates App Review or forward-compatibility risk.
+6. Keep App Intents/Live Activities as system entry points and visible recording controls, not as generic keepalives. Retest iOS 27 main-process routing when the final SDK is available. Do not assume `Button(intent:)` from the keyboard solves iOS 18–26.
 7. If BuddyGrammar needs a durable App-Store-safe design today, the conclusions in [`apple-keyboard-workarounds.md`](apple-keyboard-workarounds.md) remain unchanged: Apple system dictation plus explicit polish is the cleanest same-field path; BuddyGrammar-owned recognition requires a real main-app recording session and honest UX around the handoff.
 
 ## Bottom line
@@ -220,4 +303,4 @@ custom keyboard extension ── shared state / IPC ── containing app
                                           background audio / PiP / Live Activity
 ```
 
-Wispr makes the process boundary visible when it must; Typeless hides it behind a prepared off-screen PiP window. Neither product overturns Apple's microphone restriction, and neither publishes a secret general-purpose handoff API.
+Wispr makes the process boundary visible when it must. Typeless can hide it behind a prepared off-screen PiP window and now also exposes a Dynamic Island availability mode, but Apple documentation proves the pill alone cannot be the hidden process. Neither product overturns Apple's microphone restriction, and neither publishes a secret general-purpose handoff API.

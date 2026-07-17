@@ -13,6 +13,8 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
         case hasAcceptedCloudProcessing
         case hasCompletedOnboarding
         case enablesQuickDictation
+        case quickDictationDuration
+        case quickDictationExpiresAt
     }
 
     public var openRouterModelID: String
@@ -26,6 +28,8 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
     public var hasAcceptedCloudProcessing: Bool
     public var hasCompletedOnboarding: Bool
     public var enablesQuickDictation: Bool
+    public var quickDictationDuration: QuickDictationDuration
+    public var quickDictationExpiresAt: Date?
 
     public init(
         openRouterModelID: String = BuddyGrammarConfiguration.defaultOpenRouterModelID,
@@ -38,7 +42,9 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
         personalizedPracticeEnabled: Bool = true,
         hasAcceptedCloudProcessing: Bool = false,
         hasCompletedOnboarding: Bool = false,
-        enablesQuickDictation: Bool = false
+        enablesQuickDictation: Bool = false,
+        quickDictationDuration: QuickDictationDuration = .fiveMinutes,
+        quickDictationExpiresAt: Date? = nil
     ) {
         let usesAutomaticModelUpdates = usesAutomaticModelUpdates
             ?? BuddyGrammarConfiguration.managedOpenRouterModelIDs.contains(openRouterModelID)
@@ -55,6 +61,8 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
         self.hasAcceptedCloudProcessing = hasAcceptedCloudProcessing
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.enablesQuickDictation = enablesQuickDictation
+        self.quickDictationDuration = quickDictationDuration
+        self.quickDictationExpiresAt = quickDictationExpiresAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -114,6 +122,14 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
             Bool.self,
             forKey: .enablesQuickDictation
         ) ?? false
+        quickDictationDuration = try container.decodeIfPresent(
+            QuickDictationDuration.self,
+            forKey: .quickDictationDuration
+        ) ?? .fiveMinutes
+        quickDictationExpiresAt = try container.decodeIfPresent(
+            Date.self,
+            forKey: .quickDictationExpiresAt
+        )
     }
 
     public static func clampedUndoDuration(_ duration: TimeInterval) -> TimeInterval {

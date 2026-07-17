@@ -33,16 +33,6 @@ struct AppRootView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .overlay(alignment: .bottom) {
-            if model.settings.hasCompletedOnboarding,
-               model.settings.enablesQuickDictation {
-                QuickDictationBar(companion: model.companion)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 58)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .animation(.snappy, value: model.settings.enablesQuickDictation)
         .animation(.snappy, value: model.notice)
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }

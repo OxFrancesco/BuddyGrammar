@@ -5,7 +5,7 @@ settings:
   base:
     SWIFT_VERSION: 6.0
     MACOSX_DEPLOYMENT_TARGET: 15.0
-    CURRENT_PROJECT_VERSION: 9
+    CURRENT_PROJECT_VERSION: 11
     MARKETING_VERSION: 0.1.0
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: G2442WAF29
@@ -82,6 +82,8 @@ targets:
       - package: BuddyGrammarKit
       - target: BuddyGrammarKeyboard
         embed: true
+      - target: BuddyGrammarLiveActivity
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.francescooddo.BuddyGrammar
@@ -97,6 +99,24 @@ targets:
       testTargets:
         - BuddyGrammarIOSTests
         - BuddyGrammarIOSUITests
+  BuddyGrammarLiveActivity:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: BuddyGrammarLiveActivity
+    dependencies:
+      - package: BuddyGrammarKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.francescooddo.BuddyGrammar.LiveActivity
+        INFOPLIST_FILE: BuddyGrammarLiveActivity/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_NAME: BuddyGrammarLiveActivity
+        PRODUCT_MODULE_NAME: BuddyGrammarLiveActivity
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
   BuddyGrammarKeyboard:
     type: app-extension
     platform: iOS

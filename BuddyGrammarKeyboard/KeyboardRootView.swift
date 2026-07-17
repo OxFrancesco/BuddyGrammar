@@ -252,7 +252,7 @@ private struct StatusIndicator: View {
         case .openingDictation:
             "arrow.up.forward.app"
         case .startingDictation:
-            "dot.radiowaves.left.and.right"
+            "waveform.circle"
         case .dictationRecording:
             "mic.fill"
         case .dictationProcessing:
