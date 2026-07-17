@@ -12,7 +12,10 @@ struct SettingsView: View {
     @State private var autoCorrectDictation: Bool
     @State private var automaticallyCorrectWords: Bool
     @State private var correctionUndoDuration: TimeInterval
+    @State private var adaptiveTypingEnabled: Bool
+    @State private var personalizedPracticeEnabled: Bool
     @State private var acceptsCloudProcessing: Bool
+    @State private var showsLearningResetOptions = false
 
     init(model: IOSAppModel) {
         self.model = model
@@ -27,6 +30,12 @@ struct SettingsView: View {
         )
         _correctionUndoDuration = State(
             initialValue: model.settings.correctionUndoDuration
+        )
+        _adaptiveTypingEnabled = State(
+            initialValue: model.settings.adaptiveTypingEnabled
+        )
+        _personalizedPracticeEnabled = State(
+            initialValue: model.settings.personalizedPracticeEnabled
         )
         _acceptsCloudProcessing = State(
             initialValue: model.settings.hasAcceptedCloudProcessing
@@ -81,6 +90,12 @@ struct SettingsView: View {
                 Toggle("Correct words while typing", isOn: $automaticallyCorrectWords)
                     .accessibilityIdentifier("settings.automaticallyCorrectWords")
 
+                Toggle("Adapt key hit areas", isOn: $adaptiveTypingEnabled)
+                    .accessibilityIdentifier("settings.adaptiveTyping")
+
+                Toggle("Personalize practice", isOn: $personalizedPracticeEnabled)
+                    .accessibilityIdentifier("settings.personalizedPractice")
+
                 Stepper(
                     value: $correctionUndoDuration,
                     in: 1...10,
@@ -95,7 +110,7 @@ struct SettingsView: View {
             } header: {
                 Text("Keyboard")
             } footer: {
-                Text("Word correction uses the on-device dictionary and keyboard-aware typo matching. After a ★ correction, Undo stays visible for this duration.")
+                Text("Adaptive hit areas and practice mastery stay on-device. Key labels and layout never move. After a ★ correction, Undo stays visible for this duration.")
             }
 
             Section {
@@ -131,6 +146,11 @@ struct SettingsView: View {
                     Label("Privacy Policy", systemImage: "hand.raised.fill")
                 }
                 .accessibilityIdentifier("settings.privacyPolicy")
+
+                Button("Reset on-device learning", systemImage: "trash", role: .destructive) {
+                    showsLearningResetOptions = true
+                }
+                .accessibilityIdentifier("settings.resetLearning")
             } header: {
                 Text("Privacy")
             }
@@ -144,6 +164,8 @@ struct SettingsView: View {
                         autoCorrectDictation: autoCorrectDictation,
                         automaticallyCorrectWords: automaticallyCorrectWords,
                         correctionUndoDuration: correctionUndoDuration,
+                        adaptiveTypingEnabled: adaptiveTypingEnabled,
+                        personalizedPracticeEnabled: personalizedPracticeEnabled,
                         acceptsCloudProcessing: acceptsCloudProcessing
                     )
                 }
@@ -172,6 +194,27 @@ struct SettingsView: View {
         .accessibilityIdentifier("settings.screen")
         .onChange(of: model.settings, initial: true) { _, settings in
             synchronizeDraft(with: settings)
+        }
+        .confirmationDialog(
+            "Choose what to reset",
+            isPresented: $showsLearningResetOptions,
+            titleVisibility: .visible
+        ) {
+            Button("Touch calibration", role: .destructive) {
+                model.resetAdaptiveLearning(.typing)
+            }
+            Button("Learned words", role: .destructive) {
+                model.resetAdaptiveLearning(.language)
+            }
+            Button("Practice history", role: .destructive) {
+                model.resetAdaptiveLearning(.practice)
+            }
+            Button("Reset everything", role: .destructive) {
+                model.resetAdaptiveLearning(.all)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This deletes local aggregates. It does not change your keyboard layout or cloud-consent setting.")
         }
     }
 
@@ -202,6 +245,8 @@ struct SettingsView: View {
         autoCorrectDictation = settings.autoCorrectDictation
         automaticallyCorrectWords = settings.automaticallyCorrectWords
         correctionUndoDuration = settings.correctionUndoDuration
+        adaptiveTypingEnabled = settings.adaptiveTypingEnabled
+        personalizedPracticeEnabled = settings.personalizedPracticeEnabled
         acceptsCloudProcessing = settings.hasAcceptedCloudProcessing
     }
 }
@@ -210,13 +255,13 @@ private struct PrivacyPolicyView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("Last updated July 15, 2026")
+                Text("Last updated July 16, 2026")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
                 policySection(
                     title: "What stays on your device",
-                    text: "Normal keyboard input is not sent anywhere. BuddyGrammar stores learned vocabulary and context frequency counts locally to personalize suggestions and predictions. Provider API keys are never included in the app or keyboard. The latest raw transcript and final text are stored locally until you clear them. A separate keyboard handoff copy expires after 24 hours or is removed after insertion. BuddyGrammar has no advertising or analytics SDKs."
+                    text: "Normal keyboard input is not sent anywhere. BuddyGrammar stores learned vocabulary, bounded key-offset aggregates, and practice mastery locally to improve typing and choose exercises. It does not retain a readable touch history. During a Lab exercise, the keyboard can read the curated target text for up to 30 minutes; the user’s response is not stored in that session record. Provider API keys are never included in the app or keyboard. The latest raw transcript and final text are stored locally until you clear them. A separate keyboard handoff copy expires after 24 hours or is removed after insertion. BuddyGrammar has no advertising or analytics SDKs."
                 )
 
                 policySection(
@@ -231,7 +276,7 @@ private struct PrivacyPolicyView: View {
 
                 policySection(
                     title: "Accounts, retention, and deletion",
-                    text: "The BuddyGrammar service forwards correction text and audio only to provide the requested feature and does not intentionally log or store that content. Provider retention depends on the configured OpenRouter and ElevenLabs account settings and the model provider selected by OpenRouter. ElevenLabs may retain submitted audio and transcripts unless zero-retention mode is enabled for the service account. You can revoke cloud consent and clear the locally saved dictation in the app."
+                    text: "The BuddyGrammar service forwards correction text and audio only to provide the requested feature and does not intentionally log or store that content. Provider retention depends on the configured OpenRouter and ElevenLabs account settings and the model provider selected by OpenRouter. ElevenLabs may retain submitted audio and transcripts unless zero-retention mode is enabled for the service account. In Settings, you can revoke cloud consent, clear saved dictation, and reset touch calibration, learned words, practice history, or all on-device learning independently."
                 )
 
                 VStack(alignment: .leading, spacing: 12) {

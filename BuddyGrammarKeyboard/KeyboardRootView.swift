@@ -1,3 +1,4 @@
+import BuddyGrammarKit
 import SwiftUI
 
 struct KeyboardMetrics: Equatable {
@@ -268,6 +269,8 @@ private struct StatusIndicator: View {
     }
 }
 
+private let letterKeyboardCoordinateSpace = "keyboard.swipeSpace"
+
 private struct LetterKeyboardLayer: View {
     let model: KeyboardModel
     let controllerBridge: KeyboardControllerBridge
@@ -277,21 +280,34 @@ private struct LetterKeyboardLayer: View {
     @State private var swipePoints: [CGPoint] = []
     @State private var swipeTrace: [Character] = []
 
-    private static let coordinateSpace = "keyboard.swipeSpace"
-
     var body: some View {
         VStack(spacing: metrics.rowSpacing) {
-            CharacterRow(characters: LetterKeys.top, model: model, metrics: metrics)
-            CharacterRow(characters: LetterKeys.middle, model: model, metrics: metrics)
+            CharacterRow(
+                characters: LetterKeys.top,
+                model: model,
+                metrics: metrics,
+                onLetterTap: handleLetterTap
+            )
+            CharacterRow(
+                characters: LetterKeys.middle,
+                model: model,
+                metrics: metrics,
+                onLetterTap: handleLetterTap
+            )
                 .padding(.horizontal, metrics.letterKeyWidth / 2)
             HStack(spacing: metrics.keySpacing) {
                 ShiftKey(model: model, metrics: metrics)
-                CharacterRow(characters: LetterKeys.bottom, model: model, metrics: metrics)
+                CharacterRow(
+                    characters: LetterKeys.bottom,
+                    model: model,
+                    metrics: metrics,
+                    onLetterTap: handleLetterTap
+                )
                 DeleteKey(model: model, metrics: metrics)
             }
             KeyboardControlRow(model: model, controllerBridge: controllerBridge, metrics: metrics)
         }
-        .coordinateSpace(name: Self.coordinateSpace)
+        .coordinateSpace(.named(letterKeyboardCoordinateSpace))
         .onPreferenceChange(KeyFramePreferenceKey.self) { keyFrames = $0 }
         .overlay {
             SwipeTrail(points: swipePoints)
@@ -301,7 +317,7 @@ private struct LetterKeyboardLayer: View {
     }
 
     private var swipeGesture: some Gesture {
-        DragGesture(minimumDistance: 24, coordinateSpace: .named(Self.coordinateSpace))
+        DragGesture(minimumDistance: 24, coordinateSpace: .named(letterKeyboardCoordinateSpace))
             .onChanged { value in
                 if swipePoints.isEmpty {
                     appendSwipeSample(at: value.startLocation)
@@ -314,25 +330,59 @@ private struct LetterKeyboardLayer: View {
                 swipePoints = []
                 swipeTrace = []
                 guard Set(trace).count >= 2 else { return }
-                let path = points.compactMap(keySpacePoint(for:))
+                let path = points.compactMap { keySpacePoint(for: $0) }
                 guard path.count >= 2 else { return }
                 model.commitSwipe(path: path)
             }
     }
 
+    private func handleLetterTap(_ point: CGPoint, _ literalKey: Character) {
+        guard let normalized = keySpacePoint(for: point, literalKey: literalKey) else {
+            model.insertLiteralCharacter(String(literalKey))
+            return
+        }
+        model.insertLetter(at: normalized, literalKey: literalKey)
+    }
+
     /// Converts a point in the keyboard's coordinate space into the engine's
-    /// key-space (1 unit = 1 key width), anchored on the q/p/z key centers.
-    private func keySpacePoint(for point: CGPoint) -> CGPoint? {
-        guard let q = keyFrames["q"], let p = keyFrames["p"], let z = keyFrames["z"] else {
+    /// key-space (1 unit = 1 key width), preserving each row's actual inset.
+    private func keySpacePoint(
+        for point: CGPoint,
+        literalKey: Character? = nil
+    ) -> CGPoint? {
+        guard let q = keyFrames["q"], let p = keyFrames["p"],
+              let a = keyFrames["a"], let l = keyFrames["l"],
+              let z = keyFrames["z"], let m = keyFrames["m"] else {
             return nil
         }
-        let qCenter = CGPoint(x: q.midX, y: q.midY)
-        let xScale = (p.midX - qCenter.x) / 9
-        let yScale = (z.midY - qCenter.y) / 2
-        guard xScale > 0, yScale > 0 else { return nil }
+
+        let topY = (q.midY + p.midY) / 2
+        let middleY = (a.midY + l.midY) / 2
+        let bottomY = (z.midY + m.midY) / 2
+        guard middleY > topY, bottomY > middleY else { return nil }
+        let normalizedY = point.y <= middleY
+            ? (point.y - topY) / (middleY - topY)
+            : 1 + (point.y - middleY) / (bottomY - middleY)
+
+        let inferredRow = Int(min(2, max(0, normalizedY.rounded())))
+        let row = literalKey
+            .flatMap { QwertyKeyLayout.position(of: $0) }
+            .map { Int($0.y.rounded()) }
+            ?? inferredRow
+        let horizontal: (first: CGRect, last: CGRect, firstX: CGFloat, steps: CGFloat)
+        switch row {
+        case 1:
+            horizontal = (a, l, 0.25, 8)
+        case 2:
+            horizontal = (z, m, 0.75, 6)
+        default:
+            horizontal = (q, p, 0, 9)
+        }
+        let xScale = (horizontal.last.midX - horizontal.first.midX) / horizontal.steps
+        guard xScale > 0 else { return nil }
         return CGPoint(
-            x: (point.x - qCenter.x) / xScale,
-            y: (point.y - qCenter.y) / yScale
+            x: horizontal.firstX + (point.x - horizontal.first.midX) / xScale,
+            y: normalizedY
         )
     }
 
@@ -516,11 +566,17 @@ private struct CharacterRow: View {
     let characters: [KeyboardCharacter]
     let model: KeyboardModel
     let metrics: KeyboardMetrics
+    var onLetterTap: ((CGPoint, Character) -> Void)? = nil
 
     var body: some View {
         HStack(spacing: metrics.keySpacing) {
             ForEach(characters) { character in
-                KeyboardCharacterButton(character: character, model: model, metrics: metrics)
+                KeyboardCharacterButton(
+                    character: character,
+                    model: model,
+                    metrics: metrics,
+                    onLetterTap: onLetterTap
+                )
             }
         }
         .frame(maxWidth: .infinity)
@@ -531,16 +587,51 @@ private struct KeyboardCharacterButton: View {
     let character: KeyboardCharacter
     let model: KeyboardModel
     let metrics: KeyboardMetrics
+    let onLetterTap: ((CGPoint, Character) -> Void)?
+
+    @State private var isPressed = false
 
     var body: some View {
-        Button {
-            model.insertCharacter(character.output)
-        } label: {
-            Text(displayedCharacter)
-                .font(.title3)
-                .frame(maxWidth: .infinity, minHeight: metrics.keyHeight)
+        Group {
+            if let onLetterTap {
+                keyLabel
+                    .foregroundStyle(Color.primary)
+                    .background(
+                        isPressed
+                            ? Color(uiColor: .systemGray3)
+                            : Color(uiColor: .systemBackground)
+                    )
+                    .clipShape(.rect(cornerRadius: 6))
+                    .shadow(color: .black.opacity(0.16), radius: 0.5, y: 1)
+                    .contentShape(.rect)
+                    .gesture(
+                        DragGesture(
+                            minimumDistance: 0,
+                            coordinateSpace: .named(letterKeyboardCoordinateSpace)
+                        )
+                        .onChanged { _ in isPressed = true }
+                        .onEnded { value in
+                            isPressed = false
+                            let distance = hypot(
+                                value.translation.width,
+                                value.translation.height
+                            )
+                            guard distance < 24,
+                                  let literalKey = character.output.first else {
+                                return
+                            }
+                            onLetterTap(value.startLocation, literalKey)
+                        }
+                    )
+            } else {
+                Button {
+                    model.insertCharacter(character.output)
+                } label: {
+                    keyLabel
+                }
+                .buttonStyle(KeyboardKeyButtonStyle())
+            }
         }
-        .buttonStyle(KeyboardKeyButtonStyle())
         .background {
             if model.layoutMode == .letters {
                 GeometryReader { proxy in
@@ -548,7 +639,7 @@ private struct KeyboardCharacterButton: View {
                         key: KeyFramePreferenceKey.self,
                         value: [
                             character.output: proxy.frame(
-                                in: .named("keyboard.swipeSpace")
+                                in: .named(letterKeyboardCoordinateSpace)
                             ),
                         ]
                     )
@@ -556,7 +647,17 @@ private struct KeyboardCharacterButton: View {
             }
         }
         .accessibilityLabel(character.accessibilityLabel)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            model.insertLiteralCharacter(character.output)
+        }
         .accessibilityIdentifier("keyboard.key.\(character.id)")
+    }
+
+    private var keyLabel: some View {
+        Text(displayedCharacter)
+            .font(.title3)
+            .frame(maxWidth: .infinity, minHeight: metrics.keyHeight)
     }
 
     private var displayedCharacter: String {

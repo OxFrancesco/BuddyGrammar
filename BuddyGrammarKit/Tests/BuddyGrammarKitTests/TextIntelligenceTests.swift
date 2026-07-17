@@ -79,7 +79,7 @@ final class TextIntelligenceTests: XCTestCase {
         )
     }
 
-    func testPersonalVocabularySuppressesOnlySameLanguageSpellingCorrection() {
+    func testPersonalVocabularyRequiresRepeatedEvidenceBeforeSuppressingCorrection() {
         let intelligence = TextIntelligence(
             personalLanguageModel: PersonalLanguageModel(defaults: nil)
         )
@@ -88,6 +88,24 @@ final class TextIntelligenceTests: XCTestCase {
             precededBy: nil,
             languageCode: "en-US"
         )
+
+        XCTAssertEqual(
+            intelligence.suggestions(
+                for: "teh",
+                spellingCandidates: ["the"],
+                languageCode: "en-US",
+                limit: 1
+            ).first?.kind,
+            .correction
+        )
+
+        for _ in 0..<2 {
+            intelligence.observeCommittedText(
+                "teh",
+                precededBy: nil,
+                languageCode: "en-US"
+            )
+        }
 
         XCTAssertFalse(
             intelligence.suggestions(

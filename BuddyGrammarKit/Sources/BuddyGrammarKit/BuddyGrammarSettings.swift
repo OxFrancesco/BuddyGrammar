@@ -8,6 +8,8 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
         case autoCorrectDictation
         case automaticallyCorrectWords
         case correctionUndoDuration
+        case adaptiveTypingEnabled
+        case personalizedPracticeEnabled
         case hasAcceptedCloudProcessing
         case hasCompletedOnboarding
         case enablesQuickDictation
@@ -19,6 +21,8 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
     public var autoCorrectDictation: Bool
     public var automaticallyCorrectWords: Bool
     public var correctionUndoDuration: TimeInterval
+    public var adaptiveTypingEnabled: Bool
+    public var personalizedPracticeEnabled: Bool
     public var hasAcceptedCloudProcessing: Bool
     public var hasCompletedOnboarding: Bool
     public var enablesQuickDictation: Bool
@@ -30,6 +34,8 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
         autoCorrectDictation: Bool = true,
         automaticallyCorrectWords: Bool = true,
         correctionUndoDuration: TimeInterval = 3,
+        adaptiveTypingEnabled: Bool = true,
+        personalizedPracticeEnabled: Bool = true,
         hasAcceptedCloudProcessing: Bool = false,
         hasCompletedOnboarding: Bool = false,
         enablesQuickDictation: Bool = false
@@ -44,6 +50,8 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
         self.autoCorrectDictation = autoCorrectDictation
         self.automaticallyCorrectWords = automaticallyCorrectWords
         self.correctionUndoDuration = Self.clampedUndoDuration(correctionUndoDuration)
+        self.adaptiveTypingEnabled = adaptiveTypingEnabled
+        self.personalizedPracticeEnabled = personalizedPracticeEnabled
         self.hasAcceptedCloudProcessing = hasAcceptedCloudProcessing
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.enablesQuickDictation = enablesQuickDictation
@@ -86,6 +94,14 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
                 forKey: .correctionUndoDuration
             ) ?? 3
         )
+        adaptiveTypingEnabled = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .adaptiveTypingEnabled
+        ) ?? true
+        personalizedPracticeEnabled = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .personalizedPracticeEnabled
+        ) ?? true
         hasAcceptedCloudProcessing = try container.decodeIfPresent(
             Bool.self,
             forKey: .hasAcceptedCloudProcessing

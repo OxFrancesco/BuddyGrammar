@@ -143,6 +143,7 @@ protocol KeyboardModelDelegate: AnyObject {
     var contextBeforeInput: String? { get }
     var keyboardLanguage: String { get }
     var allowsAutomaticTextCorrection: Bool { get }
+    var allowsPersonalizedLearning: Bool { get }
 
     func insertText(_ text: String)
     func deleteBackward()
@@ -246,6 +247,7 @@ final class KeyboardModel {
     @ObservationIgnored private let correctionClient: OpenRouterCorrectionClient
     @ObservationIgnored private let handwritingClient: HandwritingRecognitionClient
     @ObservationIgnored private let preferences: SharedPreferences?
+    @ObservationIgnored private let adaptiveStore: AdaptiveLearningStore?
     @ObservationIgnored private let completionSource = WordCompletionSource()
     @ObservationIgnored private var correctionTask: Task<Void, Never>?
     @ObservationIgnored private var correctionRequestID: UUID?
@@ -261,17 +263,37 @@ final class KeyboardModel {
     @ObservationIgnored private var didWarmUpConnection = false
     @ObservationIgnored private let textIntelligence: TextIntelligence
     @ObservationIgnored private var observedTextSuffix = ObservedTextSuffix()
+    @ObservationIgnored private var typingIntelligence: TypingIntelligence
+    @ObservationIgnored private let tapWordDecoder = TapWordDecoder()
+    @ObservationIgnored private var currentWordTaps: [TapWordLatticeTap] = []
+    @ObservationIgnored private var activePracticeSession: ActivePracticeSession?
+    @ObservationIgnored private var lastTypingDecision: TypingDecision?
+    @ObservationIgnored private var pendingRejectedDecision: TypingDecision?
+    @ObservationIgnored private var adaptiveProfileIsDirty = false
+    @ObservationIgnored private var observationsSinceAdaptiveSave = 0
 
     init(
         correctionClient: OpenRouterCorrectionClient = OpenRouterCorrectionClient(),
         handwritingClient: HandwritingRecognitionClient = HandwritingRecognitionClient(),
         preferences: SharedPreferences? = SharedPreferences(),
-        textIntelligence: TextIntelligence = TextIntelligence()
+        adaptiveStore: AdaptiveLearningStore? = AdaptiveLearningStore(),
+        textIntelligence: TextIntelligence? = nil
     ) {
         self.correctionClient = correctionClient
         self.handwritingClient = handwritingClient
         self.preferences = preferences
-        self.textIntelligence = textIntelligence
+        self.adaptiveStore = adaptiveStore
+        self.textIntelligence = textIntelligence ?? TextIntelligence(
+            personalLanguageModel: PersonalLanguageModel(
+                defaults: UserDefaults(
+                    suiteName: BuddyGrammarConfiguration.appGroupIdentifier
+                ) ?? .standard
+            )
+        )
+        self.typingIntelligence = TypingIntelligence(
+            profile: adaptiveStore?.loadTypingProfile() ?? TypingProfile(),
+            policy: .literal
+        )
     }
 
     func connect(delegate: KeyboardModelDelegate) {
@@ -280,6 +302,7 @@ final class KeyboardModel {
     }
 
     func activate() {
+        refreshAdaptiveState()
         refreshAvailability()
         refreshPendingTranscriptAvailability()
         refreshSuggestions()
@@ -315,11 +338,17 @@ final class KeyboardModel {
     }
 
     func insertCharacter(_ character: String) {
+        lastTypingDecision = nil
+        pendingRejectedDecision = nil
         cancelCorrectionForLocalEdit()
         if Self.autocorrectionBoundaryCharacters.contains(character) {
             commitCurrentWord()
+            currentWordTaps.removeAll(keepingCapacity: true)
         } else {
             observedTextSuffix.clear()
+            if !character.allSatisfy({ $0.isLetter || $0 == "'" }) {
+                currentWordTaps.removeAll(keepingCapacity: true)
+            }
         }
         let output = shiftState.isShifted && layoutMode == .letters
             ? character.uppercased()
@@ -332,16 +361,96 @@ final class KeyboardModel {
         refreshSuggestions()
     }
 
+    /// Resolves a physical touch without changing the visible keyboard. The
+    /// coordinate is already normalized into QWERTY key-space by the view.
+    func insertLetter(
+        at keySpacePoint: CGPoint,
+        literalKey: Character,
+        timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime
+    ) {
+        configureTypingPolicy()
+        let normalizedLiteral = Character(String(literalKey).lowercased())
+        let tap = TouchSample(
+            x: keySpacePoint.x,
+            y: keySpacePoint.y,
+            literalKey: normalizedLiteral,
+            timestamp: timestamp
+        )
+
+        if activePracticeSession == nil,
+           let pendingRejectedDecision,
+           timestamp - pendingRejectedDecision.receipt.tap.timestamp <= 3 {
+            typingIntelligence.observe(
+                .rejection(
+                    receipt: pendingRejectedDecision.receipt,
+                    correctedKey: normalizedLiteral,
+                    source: .retype
+                )
+            )
+            markAdaptiveProfileDirty()
+        }
+        pendingRejectedDecision = nil
+
+        let context = delegate?.contextBeforeInput ?? ""
+        let decision = typingIntelligence.resolve(
+            tap: tap,
+            context: TypingContext(
+                rawText: context,
+                languageCode: delegate?.keyboardLanguage
+            )
+        )
+
+        if let intendedKey = expectedPracticeKey(atResponseLength: context.count) {
+            typingIntelligence.observe(
+                .positive(
+                    receipt: decision.receipt,
+                    intendedKey: intendedKey,
+                    source: .practice
+                )
+            )
+            markAdaptiveProfileDirty()
+        }
+
+        currentWordTaps.append(TapWordLatticeTap(decision: decision))
+        insertCharacter(String(decision.key))
+        lastTypingDecision = decision
+    }
+
+    /// Accessibility activation is intentionally literal: VoiceOver users
+    /// selected a named key rather than an ambiguous point between keys.
+    func insertLiteralCharacter(_ character: String) {
+        lastTypingDecision = nil
+        pendingRejectedDecision = nil
+        if let key = character.first,
+           character.count == 1,
+           key.isLetter {
+            currentWordTaps.append(
+                TapWordLatticeTap(
+                    literalKey: key,
+                    resolvedKey: key,
+                    candidates: [TypingCandidate(key: key, confidence: 1)]
+                )
+            )
+        }
+        insertCharacter(character)
+    }
+
     func insertSpace() {
+        lastTypingDecision = nil
+        pendingRejectedDecision = nil
         cancelCorrectionForLocalEdit()
         commitCurrentWord()
+        currentWordTaps.removeAll(keepingCapacity: true)
         delegate?.insertText(" ")
         refreshSuggestions()
     }
 
     func insertReturn() {
+        lastTypingDecision = nil
+        pendingRejectedDecision = nil
         cancelCorrectionForLocalEdit()
         commitCurrentWord()
+        currentWordTaps.removeAll(keepingCapacity: true)
         delegate?.insertText("\n")
         if layoutMode == .letters, shiftState == .lowercase {
             shiftState = .uppercase
@@ -350,8 +459,16 @@ final class KeyboardModel {
     }
 
     func deleteBackward() {
+        if let decision = lastTypingDecision,
+           ProcessInfo.processInfo.systemUptime - decision.receipt.tap.timestamp <= 3 {
+            pendingRejectedDecision = decision
+        }
+        lastTypingDecision = nil
         cancelCorrectionForLocalEdit()
         observedTextSuffix.clear()
+        if !currentWordTaps.isEmpty {
+            currentWordTaps.removeLast()
+        }
         delegate?.deleteBackward()
         refreshSuggestions()
     }
@@ -366,6 +483,7 @@ final class KeyboardModel {
 
     func setLayout(_ mode: KeyboardLayoutMode) {
         cancelCorrectionForLocalEdit()
+        currentWordTaps.removeAll(keepingCapacity: true)
         layoutMode = mode
         refreshSuggestions()
     }
@@ -381,6 +499,7 @@ final class KeyboardModel {
     func insertSuggestion(_ suggestion: KeyboardSuggestion) {
         cancelCorrectionForLocalEdit()
         observedTextSuffix.clear()
+        currentWordTaps.removeAll(keepingCapacity: true)
         let context = delegate?.contextBeforeInput ?? ""
         let prefix = String(context.dropLast(suggestion.deleteCount))
         for _ in 0..<suggestion.deleteCount {
@@ -388,7 +507,7 @@ final class KeyboardModel {
         }
         delegate?.insertText(suggestion.insertion)
         if suggestion.kind != .emoji {
-            textIntelligence.observeCommittedText(
+            observePersonalCommittedText(
                 suggestion.insertion,
                 precededBy: prefix,
                 languageCode: delegate?.keyboardLanguage
@@ -407,6 +526,7 @@ final class KeyboardModel {
     func insertEmoji(_ emoji: String) {
         cancelCorrectionForLocalEdit()
         observedTextSuffix.clear()
+        currentWordTaps.removeAll(keepingCapacity: true)
         delegate?.insertText(emoji)
         refreshSuggestions()
     }
@@ -443,6 +563,7 @@ final class KeyboardModel {
         languageCode: String? = nil
     ) {
         observedTextSuffix.clear()
+        currentWordTaps.removeAll(keepingCapacity: true)
         let whitespaceToDelete = RecognizedTextFormatter.whitespaceToDeleteBefore(
             text,
             contextBeforeInput: context
@@ -459,7 +580,7 @@ final class KeyboardModel {
         )
         guard !insertion.isEmpty else { return }
         delegate?.insertText(insertion)
-        textIntelligence.observeCommittedText(
+        observePersonalCommittedText(
             insertion,
             precededBy: retainedContext,
             languageCode: languageCode ?? delegate?.keyboardLanguage
@@ -489,6 +610,7 @@ final class KeyboardModel {
         guard let best = candidates.first else { return }
 
         cancelCorrectionForLocalEdit()
+        currentWordTaps.removeAll(keepingCapacity: true)
         let word = applyingShift(to: best)
         commitRecognizedText(word, context: context)
         if shiftState == .uppercase {
@@ -498,7 +620,8 @@ final class KeyboardModel {
         // Offer runner-up replacements only when the host editor allows
         // dictionary intelligence. Structured and no-suggestion fields must
         // stay free of candidates even after a direct swipe gesture.
-        if delegate?.allowsAutomaticTextCorrection == true {
+        if activePracticeSession == nil,
+           delegate?.allowsAutomaticTextCorrection == true {
             suggestions = candidates.dropFirst().map { alternate in
                 let display = applyingShift(to: alternate, matching: word)
                 return KeyboardSuggestion(
@@ -541,6 +664,93 @@ final class KeyboardModel {
         }
     }
 
+    private func refreshAdaptiveState() {
+        activePracticeSession = adaptiveStore?.loadActivePracticeSession()
+        if !adaptiveProfileIsDirty {
+            typingIntelligence = TypingIntelligence(
+                profile: adaptiveStore?.loadTypingProfile() ?? typingIntelligence.snapshot,
+                policy: typingPolicy()
+            )
+        } else {
+            configureTypingPolicy()
+        }
+    }
+
+    private func configureTypingPolicy() {
+        let policy = typingPolicy()
+        guard typingIntelligence.policy != policy else { return }
+        typingIntelligence = TypingIntelligence(
+            profile: typingIntelligence.snapshot,
+            policy: policy
+        )
+    }
+
+    private func typingPolicy() -> TypingPolicy {
+        let settings = preferences?.loadSettings() ?? .default
+        if activePracticeSession != nil {
+            return settings.adaptiveTypingEnabled ? .practice : .literal
+        }
+        guard settings.adaptiveTypingEnabled,
+              delegate?.allowsAutomaticTextCorrection == true else {
+            return .literal
+        }
+        return delegate?.allowsPersonalizedLearning == true
+            ? .personalizedLearning
+            : .personalizedReadOnly
+    }
+
+    private func expectedPracticeKey(atResponseLength responseLength: Int) -> Character? {
+        let settings = preferences?.loadSettings() ?? .default
+        guard settings.personalizedPracticeEnabled,
+              let session = activePracticeSession else {
+            return nil
+        }
+        let target = Array(session.expectedText)
+        guard target.indices.contains(responseLength) else { return nil }
+        let candidate = Character(String(target[responseLength]).lowercased())
+        guard candidate.isLetter else { return nil }
+        return candidate
+    }
+
+    private func markAdaptiveProfileDirty() {
+        adaptiveProfileIsDirty = true
+        observationsSinceAdaptiveSave += 1
+        if observationsSinceAdaptiveSave >= 8 {
+            persistAdaptiveProfileIfNeeded()
+        }
+    }
+
+    private func persistAdaptiveProfileIfNeeded(force: Bool = false) {
+        guard adaptiveProfileIsDirty, force || observationsSinceAdaptiveSave >= 8 else {
+            return
+        }
+        do {
+            try adaptiveStore?.saveTypingProfile(typingIntelligence.snapshot)
+            adaptiveProfileIsDirty = false
+            observationsSinceAdaptiveSave = 0
+        } catch {
+            // Typing must never block or fail because aggregate persistence did.
+        }
+    }
+
+    private var allowsPersonalLanguageLearning: Bool {
+        activePracticeSession == nil
+            && delegate?.allowsPersonalizedLearning == true
+    }
+
+    private func observePersonalCommittedText(
+        _ text: String,
+        precededBy context: String?,
+        languageCode: String?
+    ) {
+        guard allowsPersonalLanguageLearning else { return }
+        textIntelligence.observeCommittedText(
+            text,
+            precededBy: context,
+            languageCode: languageCode
+        )
+    }
+
     func recognizeHandwriting(_ imageData: Data) async throws -> String? {
         guard delegate?.keyboardHasFullAccess == true,
               let preferences else {
@@ -562,7 +772,8 @@ final class KeyboardModel {
     }
 
     func refreshSuggestions() {
-        guard delegate?.allowsAutomaticTextCorrection == true else {
+        guard activePracticeSession == nil,
+              delegate?.allowsAutomaticTextCorrection == true else {
             suggestions = []
             return
         }
@@ -573,10 +784,47 @@ final class KeyboardModel {
         var next = localTextSuggestions(for: context, limit: textLimit).map {
             keyboardSuggestion(from: $0)
         }
+        if let latticeSuggestion = latticeSuggestion(for: context),
+           !next.contains(where: {
+               $0.display.caseInsensitiveCompare(latticeSuggestion.display) == .orderedSame
+           }) {
+            next.insert(latticeSuggestion, at: 0)
+        }
         if let emojiSuggestion {
             next.append(emojiSuggestion)
         }
         suggestions = Array(next.prefix(3))
+    }
+
+    private func latticeSuggestion(for context: String?) -> KeyboardSuggestion? {
+        guard case .typingWord(let visibleWord) = TypingContextAnalyzer
+            .analyze(context).mode,
+              currentWordTaps.count == visibleWord.count else {
+            return nil
+        }
+        let precedingContext = String((context ?? "").dropLast(visibleWord.count))
+        let result = tapWordDecoder.decode(
+            currentWordTaps,
+            previousWord: lastWord(in: precedingContext),
+            languageCode: delegate?.keyboardLanguage,
+            limit: 5
+        )
+        guard let best = result.candidates.first,
+              best.confidence >= 0.38,
+              result.margin >= 0.08 else {
+            return nil
+        }
+        let candidate = matchingCapitalization(of: best.word, to: visibleWord)
+        guard candidate.caseInsensitiveCompare(visibleWord) != .orderedSame else {
+            return nil
+        }
+        return KeyboardSuggestion(
+            id: "tap-lattice-\(candidate)",
+            kind: .correction,
+            display: candidate,
+            deleteCount: visibleWord.count,
+            insertion: candidate + " "
+        )
     }
 
     private func localTextSuggestions(
@@ -682,22 +930,81 @@ final class KeyboardModel {
         var committedWord = word
 
         let settings = preferences?.loadSettings() ?? .default
-        if settings.automaticallyCorrectWords,
+        var appliedCorrection = false
+        if activePracticeSession == nil,
+           settings.automaticallyCorrectWords,
+           delegate?.allowsAutomaticTextCorrection == true {
+            if let correction = latticeCorrection(
+                for: word,
+                precedingContext: prefix,
+                languageCode: delegate?.keyboardLanguage
+            ) {
+                replaceCurrentWord(word, with: correction)
+                committedWord = correction
+                appliedCorrection = true
+            }
+        }
+
+        if activePracticeSession == nil,
+           !appliedCorrection,
+           settings.automaticallyCorrectWords,
            delegate?.allowsAutomaticTextCorrection == true,
            let correction = localTextSuggestions(for: context, limit: 3)
                .first(where: { $0.kind == .correction }) {
-            for _ in word {
-                delegate?.deleteBackward()
-            }
-            delegate?.insertText(correction.text)
+            replaceCurrentWord(word, with: correction.text)
             committedWord = correction.text
         }
 
-        textIntelligence.observeCommittedText(
+        observePersonalCommittedText(
             committedWord,
             precededBy: prefix,
             languageCode: delegate?.keyboardLanguage
         )
+    }
+
+    private func latticeCorrection(
+        for visibleWord: String,
+        precedingContext: String,
+        languageCode: String?
+    ) -> String? {
+        guard currentWordTaps.count == visibleWord.count else { return nil }
+        let result = tapWordDecoder.decode(
+            currentWordTaps,
+            previousWord: lastWord(in: precedingContext),
+            languageCode: languageCode,
+            limit: 5
+        )
+        guard let best = result.candidates.first,
+              best.confidence >= 0.50,
+              result.margin >= 0.18 else {
+            return nil
+        }
+        let candidate = matchingCapitalization(
+            of: best.word,
+            to: visibleWord
+        )
+        guard candidate.caseInsensitiveCompare(visibleWord) != .orderedSame else {
+            return nil
+        }
+        return candidate
+    }
+
+    private func replaceCurrentWord(_ original: String, with replacement: String) {
+        for _ in original {
+            delegate?.deleteBackward()
+        }
+        delegate?.insertText(replacement)
+    }
+
+    private func matchingCapitalization(of candidate: String, to source: String) -> String {
+        if source.contains(where: { $0.isLetter }) &&
+            source.allSatisfy({ !$0.isLetter || $0.isUppercase }) {
+            return candidate.uppercased()
+        }
+        if source.first?.isUppercase == true {
+            return capitalized(candidate.lowercased())
+        }
+        return candidate.lowercased()
     }
 
     func documentContextDidChange() {
@@ -708,6 +1015,16 @@ final class KeyboardModel {
         observedTextSuffix.retainIfUnchanged(
             contextBeforeInput: delegate?.contextBeforeInput
         )
+        let currentWordLength: Int
+        if case .typingWord(let word) = TypingContextAnalyzer
+            .analyze(delegate?.contextBeforeInput).mode {
+            currentWordLength = word.count
+        } else {
+            currentWordLength = 0
+        }
+        if currentWordTaps.count != currentWordLength {
+            currentWordTaps.removeAll(keepingCapacity: true)
+        }
         refreshSuggestions()
         guard correctionTask != nil else { return }
         cancelCorrection()
@@ -717,6 +1034,10 @@ final class KeyboardModel {
     func deactivate() {
         cancelCorrection()
         clearCorrectionUndo()
+        persistAdaptiveProfileIfNeeded(force: true)
+        lastTypingDecision = nil
+        pendingRejectedDecision = nil
+        currentWordTaps.removeAll(keepingCapacity: true)
         textIntelligence.persist()
         dictationMonitorTask?.cancel()
         dictationMonitorTask = nil
@@ -1073,7 +1394,7 @@ final class KeyboardModel {
         canUndoCorrection = false
 
         guard acceptLearning, let learning else { return }
-        textIntelligence.observeCommittedText(
+        observePersonalCommittedText(
             learning.text,
             precededBy: learning.precedingContext,
             languageCode: learning.languageCode

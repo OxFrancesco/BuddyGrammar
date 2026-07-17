@@ -7,6 +7,8 @@ data class BuddySettings(
     val autoCorrectDictation: Boolean = true,
     val automaticallyCorrectWords: Boolean = true,
     val correctionUndoDurationSeconds: Int = 3,
+    val adaptiveTypingEnabled: Boolean = true,
+    val personalizedPracticeEnabled: Boolean = true,
     val hasAcceptedCloudProcessing: Boolean = false,
     val hasCompletedOnboarding: Boolean = false,
 ) {

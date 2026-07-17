@@ -16,6 +16,16 @@ import com.francescooddo.buddygrammar.core.BuddyGrammarApi
 import com.francescooddo.buddygrammar.core.BuddySettings
 import com.francescooddo.buddygrammar.core.PendingTranscript
 import com.francescooddo.buddygrammar.core.PreferencesRepository
+import com.francescooddo.buddygrammar.core.adaptive.ActivePracticeSession
+import com.francescooddo.buddygrammar.core.adaptive.AdaptivePracticeStore
+import com.francescooddo.buddygrammar.core.adaptive.PracticeAssistance
+import com.francescooddo.buddygrammar.core.adaptive.PracticeAttempt
+import com.francescooddo.buddygrammar.core.adaptive.PracticeCoach
+import com.francescooddo.buddygrammar.core.adaptive.PracticeProfile
+import com.francescooddo.buddygrammar.core.adaptive.PracticePrompt
+import com.francescooddo.buddygrammar.core.adaptive.PracticeRequest
+import com.francescooddo.buddygrammar.core.adaptive.PracticeResult
+import com.francescooddo.buddygrammar.core.adaptive.PracticeTrack
 import com.francescooddo.buddygrammar.ime.BuddyGrammarImeService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
@@ -38,17 +48,32 @@ enum class AppScreen {
 
 data class AppNotice(val message: String, val isError: Boolean = false)
 
+data class PracticeProgressSummary(
+    val completedAttempts: Int,
+    val averageAccuracy: Double,
+    val averageMastery: Double,
+    val trackedSkills: Int,
+    val nextReviewAtEpochMillis: Long?,
+    val reviewIsDue: Boolean,
+)
+
 class BuddyGrammarAppState(context: Context) {
     private val appContext = context.applicationContext
     private val preferences = PreferencesRepository(appContext)
+    private val initialSettings = preferences.loadSettings()
+    private val practiceStore = AdaptivePracticeStore(appContext)
+    private var practiceCoach = PracticeCoach(
+        if (initialSettings.personalizedPracticeEnabled) practiceStore.load() else PracticeProfile(),
+    )
     private val api = BuddyGrammarApi()
     private val recorder = AudioRecorder(appContext)
     private val clipboard = appContext.getSystemService(ClipboardManager::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val initialPendingTranscript = preferences.loadPendingTranscript()
     private val initialSavedDictation = preferences.loadSavedDictation()
+    private var practiceEditorActive = false
 
-    var settings by mutableStateOf(preferences.loadSettings())
+    var settings by mutableStateOf(initialSettings)
         private set
     var screen by mutableStateOf(AppScreen.HOME)
         private set
@@ -74,9 +99,36 @@ class BuddyGrammarAppState(context: Context) {
         private set
     var keyboardSelected by mutableStateOf(false)
         private set
+    var practiceTrack by mutableStateOf(PracticeTrack.MIXED)
+        private set
+    var practicePrompt by mutableStateOf<PracticePrompt?>(null)
+        private set
+    var practiceResponse by mutableStateOf("")
+        private set
+    var practiceResult by mutableStateOf<PracticeResult?>(null)
+        private set
+    var practiceProfile by mutableStateOf(practiceCoach.snapshot())
+        private set
 
     val needsOnboarding: Boolean
         get() = !settings.hasCompletedOnboarding
+
+    val practiceSummary: PracticeProgressSummary
+        get() {
+            val skills = practiceProfile.skills.values
+            val now = System.currentTimeMillis()
+            val reviewDates = skills
+                .flatMap { it.retentionSchedule }
+                .map { it.dueAtEpochMillis }
+            return PracticeProgressSummary(
+                completedAttempts = practiceProfile.completedAttempts,
+                averageAccuracy = practiceProfile.meanRawAccuracy,
+                averageMastery = if (skills.isEmpty()) 0.0 else skills.map { it.mastery }.average(),
+                trackedSkills = skills.size,
+                nextReviewAtEpochMillis = reviewDates.filter { it > now }.minOrNull(),
+                reviewIsDue = reviewDates.any { it <= now },
+            )
+        }
 
     fun updateOnboardingPage(page: Int) {
         onboardingPage = page.coerceIn(0, 2)
@@ -92,14 +144,122 @@ class BuddyGrammarAppState(context: Context) {
     }
 
     fun navigate(destination: AppScreen) {
+        if (screen == AppScreen.KEYBOARD_LAB && destination != AppScreen.KEYBOARD_LAB) {
+            leavePracticeEditor()
+        }
         screen = destination
         notice = null
+        if (destination == AppScreen.KEYBOARD_LAB) ensurePracticePrompt()
     }
 
     fun saveSettings(updated: BuddySettings) {
+        val personalizationChanged = settings.personalizedPracticeEnabled !=
+            updated.personalizedPracticeEnabled
         settings = updated.copy(hasCompletedOnboarding = true)
         preferences.saveSettings(settings)
+        if (personalizationChanged) {
+            practiceCoach = PracticeCoach(
+                if (settings.personalizedPracticeEnabled) practiceStore.load() else PracticeProfile(),
+            )
+            practiceProfile = practiceCoach.snapshot()
+            practicePrompt = null
+            practiceResponse = ""
+            practiceResult = null
+            practiceStore.clearActiveSession()
+            if (screen == AppScreen.KEYBOARD_LAB) ensurePracticePrompt()
+        }
         showNotice("Settings saved.")
+    }
+
+    fun selectPracticeTrack(track: PracticeTrack) {
+        if (practiceTrack == track && practicePrompt != null && practiceResult == null) return
+        practiceTrack = track
+        practiceResponse = ""
+        practiceResult = null
+        choosePracticePrompt()
+    }
+
+    fun updatePracticeResponse(value: String) {
+        practiceResponse = value.take(MAX_PRACTICE_RESPONSE_LENGTH)
+    }
+
+    fun setPracticeEditorActive(active: Boolean) {
+        practiceEditorActive = active && screen == AppScreen.KEYBOARD_LAB && practiceResult == null
+        if (practiceEditorActive) {
+            practicePrompt?.let(::saveActivePracticeSession)
+        } else {
+            practiceStore.clearActiveSession()
+        }
+    }
+
+    fun submitPracticeAttempt() {
+        val prompt = practicePrompt ?: return
+        if (practiceResponse.isBlank()) {
+            showError("Type a response before submitting, or skip this prompt.")
+            return
+        }
+        val result = practiceCoach.record(
+            PracticeAttempt(
+                prompt = prompt,
+                rawText = practiceResponse,
+                assistance = if (settings.adaptiveTypingEnabled && keyboardSelected) {
+                    PracticeAssistance.ADAPTIVE_KEYBOARD
+                } else {
+                    PracticeAssistance.NONE
+                },
+            ),
+            nowEpochMillis = System.currentTimeMillis(),
+        )
+        practiceResult = result
+        practiceProfile = practiceCoach.snapshot()
+        persistPracticeProfileIfAllowed()
+        practiceEditorActive = false
+        practiceStore.clearActiveSession()
+        showNotice("Attempt scored locally. Your response was not saved.")
+    }
+
+    fun skipPracticePrompt() {
+        practicePrompt?.let { prompt ->
+            practiceCoach.record(
+                PracticeAttempt(prompt = prompt, rawText = "", abandoned = true),
+                nowEpochMillis = System.currentTimeMillis(),
+            )
+            practiceProfile = practiceCoach.snapshot()
+            persistPracticeProfileIfAllowed()
+        }
+        practiceResponse = ""
+        practiceResult = null
+        practiceEditorActive = false
+        practiceStore.clearActiveSession()
+        choosePracticePrompt()
+    }
+
+    fun nextPracticePrompt() {
+        practiceResponse = ""
+        practiceResult = null
+        choosePracticePrompt()
+    }
+
+    fun resetPracticeProgress() {
+        clearPracticeProgress()
+        showNotice("Adaptive practice progress reset.")
+    }
+
+    fun resetTypingCalibration() {
+        preferences.clearTypingProfile()
+        showNotice("Touch calibration reset.")
+    }
+
+    fun resetLearnedWords() {
+        preferences.clearPersonalLanguageModel()
+        showNotice("Learned words reset.")
+    }
+
+    fun resetAllLearning() {
+        preferences.clearTypingProfile()
+        preferences.clearPersonalLanguageModel()
+        clearPracticeProgress()
+        showNotice("All on-device learning reset.")
     }
 
     fun updateTranscript(value: String) {
@@ -237,7 +397,18 @@ class BuddyGrammarAppState(context: Context) {
     }
 
     fun refresh() {
-        settings = preferences.loadSettings()
+        val refreshedSettings = preferences.loadSettings()
+        if (settings.personalizedPracticeEnabled != refreshedSettings.personalizedPracticeEnabled) {
+            practiceCoach = PracticeCoach(
+                if (refreshedSettings.personalizedPracticeEnabled) {
+                    practiceStore.load()
+                } else {
+                    PracticeProfile()
+                },
+            )
+            practiceProfile = practiceCoach.snapshot()
+        }
+        settings = refreshedSettings
         pendingTranscript = preferences.loadPendingTranscript()
         if (transcript.isEmpty()) {
             val savedDictation = preferences.loadSavedDictation()
@@ -283,13 +454,69 @@ class BuddyGrammarAppState(context: Context) {
         clipboard.setPrimaryClip(ClipData.newPlainText("BuddyGrammar transcript", text))
     }
 
+    private fun ensurePracticePrompt() {
+        if (practicePrompt == null || practiceResult != null) choosePracticePrompt()
+        else saveActivePracticeSession(practicePrompt ?: return)
+    }
+
+    private fun choosePracticePrompt() {
+        val now = System.currentTimeMillis()
+        val prompt = practiceCoach.nextPrompt(
+            PracticeRequest(track = practiceTrack),
+            nowEpochMillis = now,
+        )
+        practicePrompt = prompt
+        saveActivePracticeSession(prompt, now)
+    }
+
+    private fun saveActivePracticeSession(
+        prompt: PracticePrompt,
+        nowEpochMillis: Long = System.currentTimeMillis(),
+    ) {
+        if (screen != AppScreen.KEYBOARD_LAB || !practiceEditorActive) return
+        practiceStore.saveActiveSession(
+            ActivePracticeSession(
+                promptId = prompt.id,
+                expectedText = prompt.expectedText,
+                startedAtEpochMillis = nowEpochMillis,
+                expiresAtEpochMillis = nowEpochMillis + PRACTICE_SESSION_TTL_MILLIS,
+            ),
+        )
+    }
+
+    private fun persistPracticeProfileIfAllowed() {
+        if (settings.personalizedPracticeEnabled) practiceStore.save(practiceProfile)
+    }
+
+    private fun clearPracticeProgress() {
+        practiceStore.reset()
+        practiceCoach = PracticeCoach()
+        practiceProfile = practiceCoach.snapshot()
+        practicePrompt = null
+        practiceResponse = ""
+        practiceResult = null
+        practiceEditorActive = false
+        if (screen == AppScreen.KEYBOARD_LAB) ensurePracticePrompt()
+    }
+
+    private fun leavePracticeEditor() {
+        practiceEditorActive = false
+        practiceStore.clearActiveSession()
+        practiceResponse = ""
+        practiceResult = null
+        practicePrompt = null
+    }
+
     fun close() {
         recorder.cancel()
+        leavePracticeEditor()
         scope.cancel()
     }
 
     private companion object {
         const val DICTATION_LOG_TAG = "BuddyGrammarDictation"
+        const val PRACTICE_SESSION_TTL_MILLIS = 30 * 60 * 1_000L
+        const val MAX_PRACTICE_RESPONSE_LENGTH = 2_000
     }
 }
 

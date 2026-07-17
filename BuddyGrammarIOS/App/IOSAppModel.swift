@@ -67,6 +67,7 @@ final class IOSAppModel {
     let companion: DictationCompanionController
 
     private let preferences: SharedPreferences?
+    private let adaptiveStore: AdaptiveLearningStore?
     private let audioRecorder: IOSAudioRecorder
     private let transcriptionClient: ElevenLabsTranscriptionClient
     private let correctionClient: OpenRouterCorrectionClient
@@ -76,6 +77,7 @@ final class IOSAppModel {
 
     init(
         preferences: SharedPreferences? = nil,
+        adaptiveStore: AdaptiveLearningStore? = nil,
         audioRecorder: IOSAudioRecorder = IOSAudioRecorder(),
         transcriptionClient: ElevenLabsTranscriptionClient = ElevenLabsTranscriptionClient(),
         correctionClient: OpenRouterCorrectionClient = OpenRouterCorrectionClient()
@@ -83,6 +85,7 @@ final class IOSAppModel {
         let sharedPreferences = preferences ?? SharedPreferences()
         isSharedContainerReady = sharedPreferences != nil
         self.preferences = sharedPreferences
+        self.adaptiveStore = adaptiveStore ?? AdaptiveLearningStore()
         companion = DictationCompanionController(preferences: sharedPreferences)
         self.audioRecorder = audioRecorder
         self.transcriptionClient = transcriptionClient
@@ -179,6 +182,8 @@ final class IOSAppModel {
         autoCorrectDictation: Bool,
         automaticallyCorrectWords: Bool,
         correctionUndoDuration: TimeInterval,
+        adaptiveTypingEnabled: Bool,
+        personalizedPracticeEnabled: Bool,
         acceptsCloudProcessing: Bool
     ) {
         let trimmedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -203,6 +208,8 @@ final class IOSAppModel {
         settings.correctionUndoDuration = BuddyGrammarSettings.clampedUndoDuration(
             correctionUndoDuration
         )
+        settings.adaptiveTypingEnabled = adaptiveTypingEnabled
+        settings.personalizedPracticeEnabled = personalizedPracticeEnabled
         settings.hasAcceptedCloudProcessing = acceptsCloudProcessing
         persistSettings(successMessage: "Preferences saved")
     }
@@ -394,6 +401,33 @@ final class IOSAppModel {
         detectedLanguageCode = nil
         dictationPhase = .idle
         showNotice("Transcript cleared", kind: .information)
+    }
+
+    func resetAdaptiveLearning(_ scope: AdaptiveLearningScope) {
+        guard let adaptiveStore else {
+            showAlert(
+                title: "Couldn’t reset learning",
+                message: SharedContainerError.unavailable.localizedDescription
+            )
+            return
+        }
+        adaptiveStore.reset(scope)
+        if scope == .language || scope == .all {
+            let defaults = UserDefaults(
+                suiteName: BuddyGrammarConfiguration.appGroupIdentifier
+            ) ?? .standard
+            PersonalLanguageModel(defaults: defaults).reset()
+        }
+        showNotice(resetMessage(for: scope), kind: .information)
+    }
+
+    private func resetMessage(for scope: AdaptiveLearningScope) -> String {
+        switch scope {
+        case .typing: "Touch calibration reset"
+        case .language: "Learned words reset"
+        case .practice: "Practice history reset"
+        case .all: "All on-device learning reset"
+        }
     }
 
     func handleDeepLink(_ url: URL) {

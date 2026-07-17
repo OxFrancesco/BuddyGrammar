@@ -52,6 +52,18 @@ public final class TextIntelligence {
         personalLanguageModel.usageCount(for: word, languageCode: languageCode)
     }
 
+    public func rejectCommittedWord(
+        _ word: String,
+        precededBy previousWord: String? = nil,
+        languageCode: String? = nil
+    ) {
+        personalLanguageModel.reject(
+            previousWord: previousWord,
+            word: word,
+            languageCode: languageCode
+        )
+    }
+
     public func persist() {
         personalLanguageModel.persist()
     }
@@ -133,7 +145,7 @@ public final class TextIntelligence {
            personalLanguageModel.usageCount(
                for: partial,
                languageCode: languageCode
-           ) == 0,
+           ) < 3,
            let correction = LocalWordCorrector.bestCorrection(
                for: partial,
                candidates: spellingCandidates

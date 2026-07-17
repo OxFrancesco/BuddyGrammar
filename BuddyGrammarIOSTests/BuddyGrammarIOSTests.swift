@@ -29,5 +29,7 @@ final class BuddyGrammarIOSTests: XCTestCase {
         XCTAssertTrue(settings.autoCorrectDictation)
         XCTAssertTrue(settings.automaticallyCorrectWords)
         XCTAssertEqual(settings.correctionUndoDuration, 3)
+        XCTAssertTrue(settings.adaptiveTypingEnabled)
+        XCTAssertTrue(settings.personalizedPracticeEnabled)
     }
 }

@@ -68,6 +68,7 @@
 		BDFB82EF1ADBB4095AD163B8 /* HotkeyRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E2A8E0743E33B2844ED3BC /* HotkeyRecorderView.swift */; };
 		BFA322A6BF2B2CE41E215B36 /* MLXLMTransformers in Frameworks */ = {isa = PBXBuildFile; productRef = C5E6982152F9F3D4CFDCB060 /* MLXLMTransformers */; };
 		BFEEEEF4C8216517B988BC05 /* IOSAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32B1A95A454172DBF19DE5DC /* IOSAppModel.swift */; };
+		C35E648355B14E3E72E6945B /* KeyboardLabModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75A57C3F088BD0C6D1C349C9 /* KeyboardLabModel.swift */; };
 		C57558F1909DBA8252C90311 /* ClipboardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFEA136271E55DAC4050C406 /* ClipboardService.swift */; };
 		C754A367DE67EFFE54972655 /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C16CA3F46F9C78C0728BA3F0 /* NotesView.swift */; };
 		C90CF34F6DBA3BEB7B2438F5 /* DebugPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1536056E4C54D54AC0351C8 /* DebugPanelView.swift */; };
@@ -174,6 +175,7 @@
 		6E074A18A6634D312DCDA6CE /* TestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
 		6F4BAA325CEFF349E32F3E10 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		705B126510A088CBC55A5D35 /* LocalModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalModelStore.swift; sourceTree = "<group>"; };
+		75A57C3F088BD0C6D1C349C9 /* KeyboardLabModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardLabModel.swift; sourceTree = "<group>"; };
 		75EB93F150231FE0395A7D3A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		760B2FC95A9B8C41EA7EBC4F /* RewriteOutputGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteOutputGuardTests.swift; sourceTree = "<group>"; };
 		7F94AD80242C2DE1BB6AC187 /* DictationCompanionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationCompanionController.swift; sourceTree = "<group>"; };
@@ -518,6 +520,7 @@
 		F36116F0CFC10F75388D6734 /* KeyboardLab */ = {
 			isa = PBXGroup;
 			children = (
+				75A57C3F088BD0C6D1C349C9 /* KeyboardLabModel.swift */,
 				EE5698D93D654A8D8E12DA2F /* KeyboardLabView.swift */,
 			);
 			path = KeyboardLab;
@@ -796,6 +799,7 @@
 				7772B7356D1D6C69AFD8EA2C /* HomeView.swift in Sources */,
 				BFEEEEF4C8216517B988BC05 /* IOSAppModel.swift in Sources */,
 				3ED5E97B27EBD5D59545D792 /* IOSAudioRecorder.swift in Sources */,
+				C35E648355B14E3E72E6945B /* KeyboardLabModel.swift in Sources */,
 				365E6F54A18E39C8F1647403 /* KeyboardLabView.swift in Sources */,
 				EA9F5A96B28672084B1644ED /* OnboardingView.swift in Sources */,
 				CE5DABAA7C59C2B282C05A4D /* QuickDictationBar.swift in Sources */,
@@ -994,7 +998,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = G2442WAF29;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -1195,7 +1199,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = G2442WAF29;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

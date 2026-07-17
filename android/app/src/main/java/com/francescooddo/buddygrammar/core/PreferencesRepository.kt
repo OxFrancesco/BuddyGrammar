@@ -1,10 +1,13 @@
 package com.francescooddo.buddygrammar.core
 
 import android.content.Context
+import com.francescooddo.buddygrammar.core.adaptive.TypingProfileCodec
+import com.francescooddo.buddygrammar.core.adaptive.TypingProfileSnapshot
 import java.util.UUID
 
 class PreferencesRepository(context: Context) {
-    private val preferences = context.applicationContext.getSharedPreferences(
+    private val appContext = context.applicationContext
+    private val preferences = appContext.getSharedPreferences(
         PREFERENCES_NAME,
         Context.MODE_PRIVATE,
     )
@@ -36,6 +39,11 @@ class PreferencesRepository(context: Context) {
             automaticallyCorrectWords = preferences.getBoolean(KEY_AUTOMATIC_WORD_CORRECTION, true),
             correctionUndoDurationSeconds = preferences.getInt(KEY_CORRECTION_UNDO_DURATION, 3)
                 .coerceIn(1, 10),
+            adaptiveTypingEnabled = preferences.getBoolean(KEY_ADAPTIVE_TYPING, true),
+            personalizedPracticeEnabled = preferences.getBoolean(
+                KEY_PERSONALIZED_PRACTICE,
+                true,
+            ),
             hasAcceptedCloudProcessing = preferences.getBoolean(KEY_CLOUD_CONSENT, false),
             hasCompletedOnboarding = preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false),
         )
@@ -50,6 +58,8 @@ class PreferencesRepository(context: Context) {
             .putBoolean(KEY_AUTO_CORRECT, settings.autoCorrectDictation)
             .putBoolean(KEY_AUTOMATIC_WORD_CORRECTION, settings.automaticallyCorrectWords)
             .putInt(KEY_CORRECTION_UNDO_DURATION, normalized.correctionUndoDurationSeconds)
+            .putBoolean(KEY_ADAPTIVE_TYPING, settings.adaptiveTypingEnabled)
+            .putBoolean(KEY_PERSONALIZED_PRACTICE, settings.personalizedPracticeEnabled)
             .putBoolean(KEY_CLOUD_CONSENT, settings.hasAcceptedCloudProcessing)
             .putBoolean(KEY_ONBOARDING_COMPLETE, settings.hasCompletedOnboarding)
             .apply()
@@ -62,6 +72,27 @@ class PreferencesRepository(context: Context) {
         return UUID.randomUUID().also { identifier ->
             preferences.edit().putString(KEY_INSTALLATION_ID, identifier.toString()).apply()
         }
+    }
+
+    fun loadTypingProfile(): TypingProfileSnapshot = TypingProfileCodec.decode(
+        preferences.getString(KEY_TYPING_PROFILE, null),
+    )
+
+    fun saveTypingProfile(profile: TypingProfileSnapshot) {
+        preferences.edit()
+            .putString(KEY_TYPING_PROFILE, TypingProfileCodec.encode(profile))
+            .apply()
+    }
+
+    fun clearTypingProfile() {
+        preferences.edit().remove(KEY_TYPING_PROFILE).apply()
+    }
+
+    fun clearPersonalLanguageModel() {
+        appContext.getSharedPreferences(PERSONAL_MODEL_PREFERENCES, Context.MODE_PRIVATE)
+            .edit()
+            .remove(PERSONAL_MODEL_KEY)
+            .apply()
     }
 
     fun savePendingTranscript(
@@ -145,9 +176,12 @@ class PreferencesRepository(context: Context) {
         const val KEY_AUTO_CORRECT = "settings.autoCorrectDictation"
         const val KEY_AUTOMATIC_WORD_CORRECTION = "settings.automaticallyCorrectWords"
         const val KEY_CORRECTION_UNDO_DURATION = "settings.correctionUndoDurationSeconds"
+        const val KEY_ADAPTIVE_TYPING = "settings.adaptiveTypingEnabled"
+        const val KEY_PERSONALIZED_PRACTICE = "settings.personalizedPracticeEnabled"
         const val KEY_CLOUD_CONSENT = "settings.cloudConsent"
         const val KEY_ONBOARDING_COMPLETE = "settings.onboardingComplete"
         const val KEY_INSTALLATION_ID = "installation.identifier"
+        const val KEY_TYPING_PROFILE = "adaptive.typing.v1"
         const val KEY_TRANSCRIPT_TEXT = "transcript.text"
         const val KEY_TRANSCRIPT_DATE = "transcript.createdAt"
         const val KEY_TRANSCRIPT_LANGUAGE = "transcript.languageCode"
@@ -155,5 +189,7 @@ class PreferencesRepository(context: Context) {
         const val KEY_SAVED_TEXT = "dictation.text"
         const val KEY_SAVED_DATE = "dictation.createdAt"
         const val KEY_SAVED_LANGUAGE = "dictation.languageCode"
+        const val PERSONAL_MODEL_PREFERENCES = "personal_language_model"
+        const val PERSONAL_MODEL_KEY = "model"
     }
 }

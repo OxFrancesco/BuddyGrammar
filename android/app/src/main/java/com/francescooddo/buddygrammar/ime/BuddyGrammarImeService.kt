@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.inputmethodservice.InputMethodService
 import android.os.Build
+import android.os.SystemClock
 import android.text.InputType
 import android.view.KeyEvent
 import android.view.View
@@ -40,6 +41,17 @@ import com.francescooddo.buddygrammar.core.SuggestionKind
 import com.francescooddo.buddygrammar.core.TextCorrectionCandidate
 import com.francescooddo.buddygrammar.core.TextContextExtractor
 import com.francescooddo.buddygrammar.core.TextInsertionFormatter
+import com.francescooddo.buddygrammar.core.adaptive.ActivePracticeSession
+import com.francescooddo.buddygrammar.core.adaptive.AdaptivePracticeStore
+import com.francescooddo.buddygrammar.core.adaptive.KeyCandidate
+import com.francescooddo.buddygrammar.core.adaptive.OutcomeEvidence
+import com.francescooddo.buddygrammar.core.adaptive.TapPoint
+import com.francescooddo.buddygrammar.core.adaptive.TapWordDecoder
+import com.francescooddo.buddygrammar.core.adaptive.TapWordLatticeTap
+import com.francescooddo.buddygrammar.core.adaptive.TypingContext
+import com.francescooddo.buddygrammar.core.adaptive.TypingIntelligence
+import com.francescooddo.buddygrammar.core.adaptive.TypingOutcome
+import com.francescooddo.buddygrammar.core.adaptive.TypingPolicy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -67,6 +79,11 @@ class BuddyGrammarImeService :
         )
     }
     private val api = BuddyGrammarApi()
+    private val typingIntelligence by lazy {
+        TypingIntelligence(preferences.loadTypingProfile())
+    }
+    private val practiceStore by lazy { AdaptivePracticeStore(this) }
+    private val tapWordDecoder = TapWordDecoder()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val lifecycleRegistry = LifecycleRegistry(this)
@@ -112,6 +129,12 @@ class BuddyGrammarImeService :
     private var allowsPersonalizedLearning = false
     private var currentLanguageTag = LanguageSupport.DEFAULT_LANGUAGE_TAG
     private val observedTextSuffix = ObservedTextSuffix(SUGGESTION_CONTEXT)
+    private var lastAdaptiveDecision: AdaptiveDecision? = null
+    private var pendingRejectedDecision: AdaptiveDecision? = null
+    private var adaptiveProfileDirty = false
+    private var adaptiveObservationsSinceSave = 0
+    private var activePracticeSession: ActivePracticeSession? = null
+    private val currentWordTaps = mutableListOf<TapWordLatticeTap>()
 
     override fun onCreate() {
         super.onCreate()
@@ -147,7 +170,12 @@ class BuddyGrammarImeService :
             ?.let(EditorSuggestionPolicy::allowsDictionarySuggestions)
             ?: false
         allowsPersonalizedLearning = info != null && !secureField &&
+            allowsDictionarySuggestions &&
             info.imeOptions.and(EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) == 0
+        activePracticeSession = practiceStore.loadActiveSession()
+        currentWordTaps.clear()
+        lastAdaptiveDecision = null
+        pendingRejectedDecision = null
         observedTextSuffix.clear()
         val inputClass = info?.inputType?.and(InputType.TYPE_MASK_CLASS)
         val startOnNumbers = inputClass == InputType.TYPE_CLASS_NUMBER ||
@@ -168,6 +196,11 @@ class BuddyGrammarImeService :
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
+        persistAdaptiveProfile(force = true)
+        lastAdaptiveDecision = null
+        pendingRejectedDecision = null
+        activePracticeSession = null
+        currentWordTaps.clear()
         personalModel.persist()
         clearCorrectionUndo()
         cancelCorrection()
@@ -191,10 +224,18 @@ class BuddyGrammarImeService :
         if (canUndoCorrection && !correctionUndoStillMatches()) {
             clearCorrectionUndo()
         }
+        val currentWordLength = currentInputConnection
+            ?.getTextBeforeCursor(SUGGESTION_CONTEXT, 0)
+            ?.toString()
+            .orEmpty()
+            .takeLastWhile { it.isLetterOrDigit() || it == '\'' }
+            .length
+        if (currentWordTaps.size != currentWordLength) currentWordTaps.clear()
         refreshTypingState()
     }
 
     override fun onDestroy() {
+        persistAdaptiveProfile(force = true)
         voice.destroy()
         handwriting.destroy()
         clearCorrectionUndo()
@@ -208,7 +249,81 @@ class BuddyGrammarImeService :
 
     // region Key handling
 
+    fun onAdaptiveCharacterKey(value: String, x: Double, y: Double) {
+        val literal = value.singleOrNull()?.lowercaseChar() ?: return onCharacterKey(value)
+        val now = SystemClock.elapsedRealtime()
+        val policy = adaptiveTypingPolicy()
+        pendingRejectedDecision
+            ?.takeIf {
+                activePracticeSession == null &&
+                    now - it.createdAtMillis <= RETYPE_WINDOW_MS
+            }
+            ?.let { rejected ->
+                typingIntelligence.observe(
+                    TypingOutcome(
+                        tap = rejected.tap,
+                        intendedCharacter = literal,
+                        evidence = OutcomeEvidence.EXPLICIT_RETYPE,
+                        policy = rejected.policy,
+                    ),
+                )
+                markAdaptiveProfileDirty()
+            }
+        pendingRejectedDecision = null
+
+        val tap = TapPoint(x = x, y = y)
+        val before = currentInputConnection
+            ?.getTextBeforeCursor(SUGGESTION_CONTEXT, 0)
+            ?.toString()
+            .orEmpty()
+        val resolution = typingIntelligence.resolve(
+            tap = tap,
+            context = TypingContext(
+                currentWordPrefix = before.takeLastWhile { it.isLetter() || it == '\'' },
+                languageTag = currentLanguageTag,
+                policy = policy,
+            ),
+        )
+        if (
+            policy == TypingPolicy.PRACTICE &&
+            preferences.loadSettings().personalizedPracticeEnabled
+        ) {
+            expectedPracticeCharacter(before.length)?.let { intendedCharacter ->
+                typingIntelligence.observe(
+                    TypingOutcome(
+                        tap = tap,
+                        intendedCharacter = intendedCharacter,
+                        evidence = OutcomeEvidence.PRACTICE_TARGET,
+                        policy = TypingPolicy.PRACTICE,
+                    ),
+                )
+                markAdaptiveProfileDirty()
+            }
+        }
+        currentWordTaps += TapWordLatticeTap(
+            resolution = resolution,
+            literalTap = literal,
+        )
+        onCharacterKey(resolution.character.toString())
+        lastAdaptiveDecision = AdaptiveDecision(tap, policy, now)
+    }
+
+    fun onLiteralCharacterKey(value: String) {
+        val key = value.singleOrNull()?.takeIf(Char::isLetter)
+            ?: return onCharacterKey(value)
+        currentWordTaps += TapWordLatticeTap(
+            literalKey = key,
+            resolvedKey = key,
+            candidates = listOf(
+                KeyCandidate(key, 1.0),
+            ),
+        )
+        onCharacterKey(value)
+    }
+
     fun onCharacterKey(value: String) {
+        lastAdaptiveDecision = null
+        pendingRejectedDecision = null
         val finishesWord = value.length == 1 && value[0] in WORD_BOUNDARY_PUNCTUATION
         localEdit(preserveObservedSuffix = finishesWord)
         if (finishesWord) {
@@ -223,6 +338,9 @@ class BuddyGrammarImeService :
                 applyLocalWordCorrectionIfNeeded()
                 learnCompletedWord()
             }
+            currentWordTaps.clear()
+        } else if (value.any { !it.isLetter() && it != '\'' }) {
+            currentWordTaps.clear()
         }
         val text = if (keyboardState.layer == KeyboardLayer.LETTERS && keyboardState.uppercase) {
             value.uppercase()
@@ -235,17 +353,25 @@ class BuddyGrammarImeService :
     }
 
     fun onSpaceKey() {
+        lastAdaptiveDecision = null
+        pendingRejectedDecision = null
         localEdit(preserveObservedSuffix = true)
         if (!consumeObservedFinalWord()) {
             applyLocalWordCorrectionIfNeeded()
             learnCompletedWord()
         }
+        currentWordTaps.clear()
         currentInputConnection?.commitText(" ", 1)
         refreshTypingState()
     }
 
     fun onDeleteKey() {
+        lastAdaptiveDecision
+            ?.takeIf { SystemClock.elapsedRealtime() - it.createdAtMillis <= RETYPE_WINDOW_MS }
+            ?.let { pendingRejectedDecision = it }
+        lastAdaptiveDecision = null
         localEdit()
+        if (currentWordTaps.isNotEmpty()) currentWordTaps.removeLast()
         val connection = currentInputConnection ?: return
         if (!connection.deleteSurroundingTextInCodePoints(1, 0)) {
             connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
@@ -255,11 +381,14 @@ class BuddyGrammarImeService :
     }
 
     fun onReturnKey() {
+        lastAdaptiveDecision = null
+        pendingRejectedDecision = null
         localEdit(preserveObservedSuffix = true)
         if (!consumeObservedFinalWord()) {
             applyLocalWordCorrectionIfNeeded()
             learnCompletedWord()
         }
+        currentWordTaps.clear()
         val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
         val handledAction = action != null && action != EditorInfo.IME_ACTION_NONE &&
             action != EditorInfo.IME_ACTION_UNSPECIFIED &&
@@ -277,6 +406,7 @@ class BuddyGrammarImeService :
             voice.destroy()
         }
         keyboardState.switchLayer(layer)
+        currentWordTaps.clear()
         when (layer) {
             KeyboardLayer.HANDWRITING -> handwriting.prepareModel()
             KeyboardLayer.LETTERS -> refreshTypingState()
@@ -294,6 +424,7 @@ class BuddyGrammarImeService :
 
     fun applySuggestion(suggestion: Suggestion) {
         localEdit()
+        currentWordTaps.clear()
         val connection = currentInputConnection ?: return
         val before = connection.getTextBeforeCursor(SUGGESTION_CONTEXT, 0)?.toString().orEmpty()
         val replaceCount = suggestion.replaceBeforeCursor.coerceAtMost(before.length)
@@ -317,7 +448,10 @@ class BuddyGrammarImeService :
         } finally {
             connection.endBatchEdit()
         }
-        if (didApply && !suggestion.isEmoji && allowsPersonalizedLearning) {
+        if (
+            didApply && !suggestion.isEmoji && allowsPersonalizedLearning &&
+            activePracticeSession == null
+        ) {
             personalModel.learnCommittedText(
                 suggestion.text.trim(),
                 prefix,
@@ -329,12 +463,14 @@ class BuddyGrammarImeService :
 
     fun commitEmoji(emoji: String) {
         localEdit()
+        currentWordTaps.clear()
         currentInputConnection?.commitText(emoji, 1)
         refreshTypingState()
     }
 
     fun commitHandwriting(text: String) {
         localEdit(preserveObservedSuffix = true)
+        currentWordTaps.clear()
         val connection = currentInputConnection ?: return
         val before = connection.getTextBeforeCursor(SUGGESTION_CONTEXT, 0)?.toString().orEmpty()
         val formatted = HandwritingTextFormatter.textForInsertion(text, before, currentLanguageTag)
@@ -346,6 +482,7 @@ class BuddyGrammarImeService :
     private fun commitDictatedText(text: String) {
         if (secureField) return
         localEdit(preserveObservedSuffix = true)
+        currentWordTaps.clear()
         commitObservedText(text.trim())
         refreshTypingState()
     }
@@ -576,12 +713,43 @@ class BuddyGrammarImeService :
         showBaselineStatus()
     }
 
+    private fun adaptiveTypingPolicy(): TypingPolicy {
+        if (secureField) return TypingPolicy.SENSITIVE
+        val settings = preferences.loadSettings()
+        if (!settings.adaptiveTypingEnabled || !allowsDictionarySuggestions) {
+            return TypingPolicy.LITERAL
+        }
+        if (activePracticeSession != null) return TypingPolicy.PRACTICE
+        return if (allowsPersonalizedLearning) {
+            TypingPolicy.LEARNING
+        } else {
+            TypingPolicy.READ_ONLY
+        }
+    }
+
+    private fun markAdaptiveProfileDirty() {
+        adaptiveProfileDirty = true
+        adaptiveObservationsSinceSave += 1
+        if (adaptiveObservationsSinceSave >= ADAPTIVE_SAVE_INTERVAL) {
+            persistAdaptiveProfile()
+        }
+    }
+
+    private fun persistAdaptiveProfile(force: Boolean = false) {
+        if (!adaptiveProfileDirty || (!force && adaptiveObservationsSinceSave < ADAPTIVE_SAVE_INTERVAL)) {
+            return
+        }
+        preferences.saveTypingProfile(typingIntelligence.snapshot())
+        adaptiveProfileDirty = false
+        adaptiveObservationsSinceSave = 0
+    }
+
     /**
      * Records the word being finished (before a space, return, or
      * punctuation) so predictions adapt to the user's vocabulary.
      */
     private fun learnCompletedWord() {
-        if (!allowsPersonalizedLearning) return
+        if (!allowsPersonalizedLearning || activePracticeSession != null) return
         val before = currentInputConnection
             ?.getTextBeforeCursor(SUGGESTION_CONTEXT, 0)
             ?.toString()
@@ -600,7 +768,7 @@ class BuddyGrammarImeService :
         contextBeforeText: String,
         languageTag: String = currentLanguageTag,
     ) {
-        if (!allowsPersonalizedLearning) return
+        if (!allowsPersonalizedLearning || activePracticeSession != null) return
         personalModel.learnCommittedText(text, contextBeforeText, languageTag)
     }
 
@@ -612,23 +780,30 @@ class BuddyGrammarImeService :
     }
 
     private fun applyLocalWordCorrectionIfNeeded(): Boolean {
-        if (secureField || !allowsDictionarySuggestions) return false
+        if (secureField || activePracticeSession != null || !allowsDictionarySuggestions) return false
         if (!preferences.loadSettings().automaticallyCorrectWords) return false
         val connection = currentInputConnection ?: return false
         val before = connection.getTextBeforeCursor(SUGGESTION_CONTEXT, 0)?.toString().orEmpty()
-        val correction = SuggestionEngine.suggest(before, personalModel, currentLanguageTag)
+        val currentWord = before.takeLastWhile { it.isLetterOrDigit() || it == '\'' }
+        if (currentWord.isEmpty()) return false
+        val replacement = latticeCandidate(
+            visibleWord = currentWord,
+            precedingContext = before.dropLast(currentWord.length),
+            minimumConfidence = 0.50,
+            minimumMargin = 0.18,
+        ) ?: SuggestionEngine.suggest(before, personalModel, currentLanguageTag)
             .firstOrNull { it.kind == SuggestionKind.CORRECTION }
+            ?.text
             ?: return false
-        val original = before.takeLast(correction.replaceBeforeCursor)
 
         connection.beginBatchEdit()
         return try {
-            if (!connection.deleteSurroundingText(correction.replaceBeforeCursor, 0)) {
+            if (!connection.deleteSurroundingText(currentWord.length, 0)) {
                 false
-            } else if (connection.commitText(correction.text, 1)) {
+            } else if (connection.commitText(replacement, 1)) {
                 true
             } else {
-                connection.commitText(original, 1)
+                connection.commitText(currentWord, 1)
                 false
             }
         } finally {
@@ -710,7 +885,7 @@ class BuddyGrammarImeService :
     private fun clearCorrectionUndo(acceptLearning: Boolean = true) {
         correctionUndoJob?.cancel()
         correctionUndoJob = null
-        if (acceptLearning) {
+        if (acceptLearning && activePracticeSession == null) {
             pendingCorrectionLearning?.let { learning ->
                 personalModel.learnCommittedText(
                     learning.text,
@@ -749,13 +924,79 @@ class BuddyGrammarImeService :
             .orEmpty()
         observedTextSuffix.retainIfUnchanged(before)
         keyboardState.updateAutoShift(before)
-        suggestions = SuggestionEngine.suggest(
+        if (activePracticeSession != null) {
+            suggestions = emptyList()
+            return
+        }
+        val baseline = SuggestionEngine.suggest(
             before,
             personalModel,
             currentLanguageTag,
             suggestionsAllowed = allowsDictionarySuggestions,
         )
+        val lattice = latticeSuggestion(before)
+        suggestions = if (lattice == null) {
+            baseline
+        } else {
+            (listOf(lattice) + baseline)
+                .distinctBy { it.text.lowercase(Locale.ROOT) }
+                .take(SuggestionEngine.MAX_SUGGESTIONS)
+        }
     }
+
+    private fun latticeSuggestion(before: String): Suggestion? {
+        val visibleWord = before.takeLastWhile { it.isLetterOrDigit() || it == '\'' }
+        if (visibleWord.isEmpty()) return null
+        val candidate = latticeCandidate(
+            visibleWord = visibleWord,
+            precedingContext = before.dropLast(visibleWord.length),
+            minimumConfidence = 0.38,
+            minimumMargin = 0.08,
+        ) ?: return null
+        return Suggestion(
+            text = candidate,
+            replaceBeforeCursor = visibleWord.length,
+            appendSpace = true,
+            kind = SuggestionKind.CORRECTION,
+        )
+    }
+
+    private fun latticeCandidate(
+        visibleWord: String,
+        precedingContext: String,
+        minimumConfidence: Double,
+        minimumMargin: Double,
+    ): String? {
+        if (currentWordTaps.size != visibleWord.length) return null
+        val previousWord = precedingContext
+            .trimEnd()
+            .takeLastWhile { it.isLetterOrDigit() || it == '\'' }
+            .takeIf(String::isNotEmpty)
+        val result = tapWordDecoder.decode(
+            taps = currentWordTaps,
+            previousWord = previousWord,
+            languageTag = currentLanguageTag,
+            limit = 5,
+        )
+        val best = result.candidates.firstOrNull() ?: return null
+        if (best.confidence < minimumConfidence || result.margin < minimumMargin) return null
+        val candidate = matchingCapitalization(best.word, visibleWord)
+        return candidate.takeUnless { it.equals(visibleWord, ignoreCase = true) }
+    }
+
+    private fun matchingCapitalization(candidate: String, source: String): String = when {
+        source.any(Char::isLetter) && source.all { !it.isLetter() || it.isUpperCase() } ->
+            candidate.uppercase(Locale.ROOT)
+        source.firstOrNull()?.isUpperCase() == true ->
+            candidate.lowercase(Locale.ROOT).replaceFirstChar { it.uppercaseChar() }
+        else -> candidate.lowercase(Locale.ROOT)
+    }
+
+    private fun expectedPracticeCharacter(responseLength: Int): Char? = activePracticeSession
+        ?.expectedText
+        ?.getOrNull(responseLength)
+        ?.lowercaseChar()
+        ?.takeIf(Char::isLetter)
 
     private fun showBaselineStatus() {
         if (secureField) {
@@ -828,6 +1069,12 @@ class BuddyGrammarImeService :
         val languageTag: String,
     )
 
+    private data class AdaptiveDecision(
+        val tap: TapPoint,
+        val policy: TypingPolicy,
+        val createdAtMillis: Long,
+    )
+
     private enum class CorrectionTarget { Selection, CurrentSentence }
 
     private companion object {
@@ -835,6 +1082,8 @@ class BuddyGrammarImeService :
         const val ANCHOR_LENGTH = 64
         const val SUGGESTION_CONTEXT = 64
         const val STATUS_LIFETIME_MS = 4_000L
+        const val RETYPE_WINDOW_MS = 3_000L
+        const val ADAPTIVE_SAVE_INTERVAL = 8
         const val PERSONAL_MODEL_PREFS = "personal_language_model"
         const val PERSONAL_MODEL_KEY = "model"
         val WORD_BOUNDARY_PUNCTUATION = setOf('.', ',', '?', '!', ';', ':')

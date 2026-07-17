@@ -7,12 +7,27 @@ package com.francescooddo.buddygrammar.core
  * Counts stay on device: they are serialized through [onPersist] into the
  * IME's private storage and capped with periodic halving so old habits decay.
  */
-class PersonalLanguageModel(
-    initialData: String? = null,
-    private val onPersist: (String) -> Unit = {},
+class PersonalLanguageModel private constructor(
+    initialData: String?,
+    private val onPersist: (String) -> Unit,
+    private val nowMillis: () -> Long,
 ) {
+    /** Retains the original constructor, including trailing-lambda call sites. */
+    constructor(
+        initialData: String? = null,
+        onPersist: (String) -> Unit = {},
+    ) : this(initialData, onPersist, System::currentTimeMillis)
+
+    /** Testable clock overload; [onPersist] remains the trailing lambda. */
+    constructor(
+        initialData: String? = null,
+        nowMillis: () -> Long,
+        onPersist: (String) -> Unit = {},
+    ) : this(initialData, onPersist, nowMillis)
+
     private val languageModels = mutableMapOf<String, LanguageModel>()
     private var unsavedChanges = 0
+    private var lastDecayAtMillis = nowMillis()
 
     init {
         initialData?.let(::decode)
@@ -32,6 +47,7 @@ class PersonalLanguageModel(
         word: String,
         languageTag: String = LanguageSupport.DEFAULT_LANGUAGE_TAG,
     ) {
+        applyTimeDecayIfNeeded()
         val normalized = normalize(word) ?: return
         val model = modelFor(languageTag)
         model.unigrams[normalized] = (model.unigrams[normalized] ?: 0) + 1
@@ -48,6 +64,53 @@ class PersonalLanguageModel(
         enforceLimits(model)
         unsavedChanges += 1
         if (unsavedChanges >= SAVE_INTERVAL) persist()
+    }
+
+    /**
+     * Removes one observation after the user explicitly deletes, reverts, or
+     * replaces a learned word. Callers supply confirmed feedback; model output
+     * is never treated as evidence against itself.
+     */
+    fun reject(
+        previousWord: String?,
+        word: String,
+        languageTag: String = LanguageSupport.DEFAULT_LANGUAGE_TAG,
+    ) {
+        reject(contextWords = listOfNotNull(previousWord), word = word, languageTag = languageTag)
+    }
+
+    /** Removes one matching unigram, bigram, and trigram observation. */
+    fun reject(
+        contextWords: List<String>,
+        word: String,
+        languageTag: String = LanguageSupport.DEFAULT_LANGUAGE_TAG,
+    ) {
+        applyTimeDecayIfNeeded()
+        val normalized = normalize(word) ?: return
+        val model = languageModels[LanguageSupport.scope(languageTag)] ?: return
+        val normalizedContext = contextWords.mapNotNull(::normalize).takeLast(2)
+        var changed = decrement(model.unigrams, normalized)
+
+        normalizedContext.lastOrNull()?.let { previous ->
+            val continuations = model.bigrams[previous]
+            if (continuations != null) {
+                changed = decrement(continuations, normalized) || changed
+                if (continuations.isEmpty()) model.bigrams.remove(previous)
+            }
+        }
+        if (normalizedContext.size == 2) {
+            val context = TwoWordContext(normalizedContext[0], normalizedContext[1])
+            val continuations = model.trigrams[context]
+            if (continuations != null) {
+                changed = decrement(continuations, normalized) || changed
+                if (continuations.isEmpty()) model.trigrams.remove(context)
+            }
+        }
+
+        if (changed) {
+            unsavedChanges += 1
+            if (unsavedChanges >= SAVE_INTERVAL) persist()
+        }
     }
 
     /**
@@ -89,6 +152,7 @@ class PersonalLanguageModel(
         limit: Int,
         languageTag: String = LanguageSupport.DEFAULT_LANGUAGE_TAG,
     ): List<String> {
+        applyTimeDecayIfNeeded()
         if (limit <= 0) return emptyList()
         val context = contextWords.mapNotNull(::normalize).takeLast(2)
         if (context.isEmpty()) return emptyList()
@@ -116,6 +180,7 @@ class PersonalLanguageModel(
         limit: Int,
         languageTag: String = LanguageSupport.DEFAULT_LANGUAGE_TAG,
     ): List<String> {
+        applyTimeDecayIfNeeded()
         if (limit <= 0) return emptyList()
         val normalized = normalize(prefix) ?: return emptyList()
         val model = languageModels[LanguageSupport.scope(languageTag)] ?: return emptyList()
@@ -131,6 +196,7 @@ class PersonalLanguageModel(
         word: String,
         languageTag: String = LanguageSupport.DEFAULT_LANGUAGE_TAG,
     ): Int {
+        applyTimeDecayIfNeeded()
         val model = languageModels[LanguageSupport.scope(languageTag)] ?: return 0
         return normalize(word)?.let { model.unigrams[it] } ?: 0
     }
@@ -139,6 +205,14 @@ class PersonalLanguageModel(
         if (unsavedChanges == 0) return
         onPersist(encode())
         unsavedChanges = 0
+    }
+
+    /** Clears both live aggregate counts and the durable serialized snapshot. */
+    fun reset() {
+        languageModels.clear()
+        unsavedChanges = 0
+        lastDecayAtMillis = nowMillis()
+        onPersist("")
     }
 
     private fun modelFor(languageTag: String): LanguageModel =
@@ -187,7 +261,63 @@ class PersonalLanguageModel(
         }
     }
 
+    private fun decrement(counts: MutableMap<String, Int>, word: String): Boolean {
+        val count = counts[word] ?: return false
+        if (count <= 1) {
+            counts.remove(word)
+        } else {
+            counts[word] = count - 1
+        }
+        return true
+    }
+
+    private fun applyTimeDecayIfNeeded() {
+        val now = nowMillis()
+        if (now <= lastDecayAtMillis) return
+        val elapsed = now - lastDecayAtMillis
+        if (elapsed < DECAY_INTERVAL_MILLIS) return
+
+        val intervals = (elapsed / DECAY_INTERVAL_MILLIS).coerceAtMost(MAX_DECAY_INTERVALS).toInt()
+        repeat(intervals) {
+            for (model in languageModels.values) {
+                halve(model.unigrams)
+                halveContexts(model.bigrams)
+                halveContexts(model.trigrams)
+            }
+        }
+        languageModels.entries.removeAll { (_, model) ->
+            model.unigrams.isEmpty() && model.bigrams.isEmpty() && model.trigrams.isEmpty()
+        }
+        lastDecayAtMillis = now
+        unsavedChanges += 1
+    }
+
+    private fun halve(counts: MutableMap<String, Int>) {
+        val entries = counts.entries.iterator()
+        while (entries.hasNext()) {
+            val entry = entries.next()
+            val decayed = entry.value / 2
+            if (decayed == 0) {
+                entries.remove()
+            } else {
+                entry.setValue(decayed)
+            }
+        }
+    }
+
+    private fun <Context> halveContexts(
+        contexts: MutableMap<Context, MutableMap<String, Int>>,
+    ) {
+        val entries = contexts.entries.iterator()
+        while (entries.hasNext()) {
+            val entry = entries.next()
+            halve(entry.value)
+            if (entry.value.isEmpty()) entries.remove()
+        }
+    }
+
     private fun encode(): String = buildString {
+        appendLine("d $lastDecayAtMillis")
         for ((language, model) in languageModels.toSortedMap()) {
             val scoped = language != LanguageSupport.DEFAULT_LANGUAGE_TAG
             for ((word, count) in model.unigrams) {
@@ -222,6 +352,8 @@ class PersonalLanguageModel(
         for (line in data.lineSequence()) {
             val parts = line.split(' ')
             when {
+                parts.size == 2 && parts[0] == "d" ->
+                    parts[1].toLongOrNull()?.let { lastDecayAtMillis = it }
                 parts.size == 3 && parts[0] == "u" ->
                     parts[2].toIntOrNull()?.let {
                         modelFor(LanguageSupport.DEFAULT_LANGUAGE_TAG).unigrams[parts[1]] = it
@@ -299,6 +431,9 @@ class PersonalLanguageModel(
         const val MAX_CONTINUATIONS = 6
         const val SAVE_INTERVAL = 20
         const val MAX_WORD_LENGTH = 24
+        const val DAY_MILLIS = 24L * 60L * 60L * 1_000L
+        const val DECAY_INTERVAL_MILLIS = 30L * DAY_MILLIS
+        const val MAX_DECAY_INTERVALS = 12L
         val SENTENCE_BOUNDARIES = setOf('.', '!', '?', '\n', '…')
         val TOKEN_PATTERN = Regex("[\\p{L}]+(?:'[\\p{L}]+)*|[.!?…\\n]+")
     }

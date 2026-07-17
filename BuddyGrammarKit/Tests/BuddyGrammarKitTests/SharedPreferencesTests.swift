@@ -35,6 +35,8 @@ final class SharedPreferencesTests: XCTestCase {
         settings.hasAcceptedCloudProcessing = true
         settings.automaticallyCorrectWords = false
         settings.correctionUndoDuration = 7
+        settings.adaptiveTypingEnabled = false
+        settings.personalizedPracticeEnabled = false
 
         try preferences.saveSettings(settings)
 
@@ -61,6 +63,8 @@ final class SharedPreferencesTests: XCTestCase {
 
         XCTAssertTrue(settings.automaticallyCorrectWords)
         XCTAssertEqual(settings.correctionUndoDuration, 3)
+        XCTAssertTrue(settings.adaptiveTypingEnabled)
+        XCTAssertTrue(settings.personalizedPracticeEnabled)
         XCTAssertEqual(
             settings.correctionInstruction,
             BuddyGrammarConfiguration.standardCorrectionInstruction

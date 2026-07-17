@@ -30,6 +30,79 @@ class PersonalLanguageModelTest {
     }
 
     @Test
+    fun `explicit rejection removes unigram bigram and trigram evidence`() {
+        val model = PersonalLanguageModel()
+        repeat(3) { model.learn(listOf("type", "this"), "teh") }
+
+        model.reject(listOf("type", "this"), "teh")
+
+        assertEquals(2, model.usageCount("teh"))
+        assertEquals(listOf("teh"), model.predictions("this", 1))
+        assertEquals(listOf("teh"), model.predictions(listOf("type", "this"), 1))
+        assertEquals(emptyList<String>(), model.completions("t", 1))
+
+        model.reject(listOf("type", "this"), "teh")
+
+        assertEquals(1, model.usageCount("teh"))
+        assertEquals(emptyList<String>(), model.predictions("this", 1))
+        assertEquals(emptyList<String>(), model.predictions(listOf("type", "this"), 1))
+    }
+
+    @Test
+    fun `previous word rejection uses the same explicit feedback path`() {
+        val model = PersonalLanguageModel()
+        repeat(3) { model.learn("type", "teh") }
+
+        model.reject("type", "teh")
+
+        assertEquals(2, model.usageCount("teh"))
+        assertEquals(listOf("teh"), model.predictions("type", 1))
+        assertEquals(emptyList<String>(), model.completions("t", 1))
+    }
+
+    @Test
+    fun `old aggregate counts decay every thirty elapsed days`() {
+        var now = 1_000L
+        val model = PersonalLanguageModel(nowMillis = { now })
+        repeat(8) { model.learn(listOf("keep", "typing"), "temporary") }
+        assertEquals(8, model.usageCount("temporary"))
+
+        now += 61 * DAY_MILLIS
+
+        assertEquals(2, model.usageCount("temporary"))
+        assertEquals(listOf("temporary"), model.predictions("typing", 1))
+        assertEquals(listOf("temporary"), model.predictions(listOf("keep", "typing"), 1))
+    }
+
+    @Test
+    fun `decay timestamp round trips while legacy snapshots start from load time`() {
+        var now = 1_000L
+        var persisted: String? = null
+        val model = PersonalLanguageModel(
+            onPersist = { persisted = it },
+            nowMillis = { now },
+        )
+        repeat(8) { model.learn(null, "temporary") }
+        model.persist()
+
+        now += 31 * DAY_MILLIS
+        val reloaded = PersonalLanguageModel(initialData = persisted, nowMillis = { now })
+        assertEquals(4, reloaded.usageCount("temporary"))
+
+        var legacyNow = 365 * DAY_MILLIS
+        val legacy = PersonalLanguageModel(
+            initialData = "u legacy 8\nb see you 2\nt we ship today 2\n",
+            nowMillis = { legacyNow },
+        )
+        assertEquals(8, legacy.usageCount("legacy"))
+        assertEquals(listOf("you"), legacy.predictions("see", 1))
+        assertEquals(listOf("today"), legacy.predictions(listOf("we", "ship"), 1))
+
+        legacyNow += 31 * DAY_MILLIS
+        assertEquals(4, legacy.usageCount("legacy"))
+    }
+
+    @Test
     fun `rejects non words`() {
         val model = PersonalLanguageModel()
         repeat(3) {
@@ -43,13 +116,28 @@ class PersonalLanguageModelTest {
     @Test
     fun `round trips through persistence`() {
         var persisted: String? = null
-        val model = PersonalLanguageModel(onPersist = { persisted = it })
+        val model = PersonalLanguageModel(null) { persisted = it }
         repeat(3) { model.learn("ciao", "bella") }
         model.persist()
 
         val reloaded = PersonalLanguageModel(initialData = persisted)
         assertEquals(listOf("bella"), reloaded.predictions("ciao", 1))
         assertEquals(listOf("bella"), reloaded.completions("b", 1))
+    }
+
+    @Test
+    fun `reset clears live counts and persists an empty snapshot immediately`() {
+        var persisted: String? = null
+        val model = PersonalLanguageModel(onPersist = { persisted = it })
+        repeat(3) { model.learn("keep", "privateword") }
+        model.persist()
+        assertEquals(3, model.usageCount("privateword"))
+
+        model.reset()
+
+        assertEquals(0, model.usageCount("privateword"))
+        assertEquals("", persisted)
+        assertEquals(0, PersonalLanguageModel(initialData = persisted).usageCount("privateword"))
     }
 
     @Test
@@ -139,5 +227,9 @@ class PersonalLanguageModelTest {
         assertEquals(listOf("today"), reloaded.predictions(listOf("we", "ship"), 1, "en-US"))
         assertEquals(listOf("caffè"), reloaded.predictions(listOf("mi", "piace"), 1, "it-IT"))
         assertEquals(emptyList<String>(), reloaded.predictions(listOf("mi", "piace"), 1, "en-US"))
+    }
+
+    private companion object {
+        const val DAY_MILLIS = 24L * 60L * 60L * 1_000L
     }
 }

@@ -151,6 +151,13 @@ extension KeyboardViewController: KeyboardModelDelegate {
         return !Self.correctionSensitiveContentTypes.contains(contentType)
     }
 
+    var allowsPersonalizedLearning: Bool {
+        // iOS already replaces custom keyboards in secure fields. Mirror the
+        // stricter correction policy as defense in depth for structured,
+        // identity, contact, and credential fields.
+        allowsAutomaticTextCorrection
+    }
+
     private static let correctionSensitiveContentTypes: [UITextContentType] = [
         .URL,
         .emailAddress,

@@ -7,18 +7,24 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,6 +49,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +75,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -100,22 +108,15 @@ fun BuddyKeyboardTheme(content: @Composable () -> Unit) {
 fun KeyboardScreen(service: BuddyGrammarImeService) {
     BuddyKeyboardTheme {
         Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding(),
-                contentAlignment = Alignment.BottomCenter,
+            val layout = keyboardLayoutSpec()
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                val configuration = LocalConfiguration.current
-                val sidePadding = when {
-                    configuration.screenWidthDp >= 1000 -> 32.dp
-                    configuration.screenWidthDp >= 700 -> 16.dp
-                    else -> 6.dp
-                }
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = sidePadding, vertical = 6.dp)
+                        .padding(horizontal = layout.sidePaddingDp.dp, vertical = 6.dp)
                         .animateContentSize(),
                     verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
@@ -130,8 +131,35 @@ fun KeyboardScreen(service: BuddyGrammarImeService) {
                         KeyboardLayer.VOICE -> VoiceLayer(service)
                     }
                 }
+                SystemNavigationBarSpace(layout)
             }
         }
+    }
+}
+
+@Composable
+private fun keyboardLayoutSpec(): KeyboardLayoutSpec {
+    val configuration = LocalConfiguration.current
+    return KeyboardLayoutPolicy.resolve(
+        screenWidthDp = configuration.screenWidthDp,
+        screenHeightDp = configuration.screenHeightDp,
+    )
+}
+
+/** Keeps the platform IME switcher, gesture handle, and hide button below our keys. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SystemNavigationBarSpace(layout: KeyboardLayoutSpec) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = layout.navigationBarSafetyGapDp.dp)
+            .heightIn(min = layout.minimumNavigationBarHeightDp.dp)
+            .windowInsetsBottomHeight(WindowInsets.navigationBarsIgnoringVisibility),
+    ) {
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+        )
     }
 }
 
@@ -203,6 +231,18 @@ private fun SuggestionStrip(service: BuddyGrammarImeService) {
                 }
             }
         }
+        KeyboardModeButton(
+            icon = Icons.Rounded.Functions,
+            description = "LaTeX keyboard",
+            selected = service.keyboardState.layer == KeyboardLayer.LATEX,
+            onClick = { service.setLayer(KeyboardLayer.LATEX) },
+        )
+        KeyboardModeButton(
+            icon = Icons.Rounded.Draw,
+            description = "Handwriting",
+            selected = service.keyboardState.layer == KeyboardLayer.HANDWRITING,
+            onClick = { service.setLayer(KeyboardLayer.HANDWRITING) },
+        )
         IconButton(
             onClick = service::insertPendingTranscript,
             modifier = Modifier.size(38.dp),
@@ -229,6 +269,29 @@ private fun SuggestionStrip(service: BuddyGrammarImeService) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun KeyboardModeButton(
+    icon: ImageVector,
+    description: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(38.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
     }
 }
 
@@ -292,12 +355,7 @@ private fun SuggestionSlot(
 
 @Composable
 private fun keyHeight(): Dp {
-    val configuration = LocalConfiguration.current
-    return when {
-        configuration.screenHeightDp < 480 -> 44.dp
-        configuration.screenHeightDp >= 900 -> 56.dp
-        else -> 50.dp
-    }
+    return keyboardLayoutSpec().keyHeightDp.dp
 }
 
 @Composable
@@ -423,6 +481,12 @@ private fun DeleteKey(service: BuddyGrammarImeService, modifier: Modifier = Modi
 
 private val functionKeyWidth = Modifier.widthIn(min = 42.dp, max = 96.dp)
 
+@Composable
+private fun controlKeyWidth(wide: Boolean): Dp {
+    val layout = keyboardLayoutSpec()
+    return if (wide) layout.wideControlKeyWidthDp.dp else layout.iconControlKeyWidthDp.dp
+}
+
 // endregion
 
 // region Letters, numbers, symbols
@@ -432,51 +496,74 @@ private fun LettersLayer(service: BuddyGrammarImeService) {
     val state = service.keyboardState
     val uppercase = state.uppercase
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        KeyRow {
-            "qwertyuiop".forEach { key ->
-                LetterKey(service, key, uppercase)
-            }
-        }
-        KeyRow {
-            Spacer(Modifier.weight(0.5f))
-            "asdfghjkl".forEach { key ->
-                LetterKey(service, key, uppercase)
-            }
-            Spacer(Modifier.weight(0.5f))
-        }
-        KeyRow {
+        SplitKeyRow(
+            left = {
+                "qwert".forEach { key ->
+                    LetterKey(service, key, uppercase)
+                }
+            },
+            right = {
+                "yuiop".forEach { key ->
+                    LetterKey(service, key, uppercase)
+                }
+            },
+        )
+        SplitKeyRow(
+            left = {
+                CompactOnlySpacer(weight = 0.5f)
+                "asdfg".forEach { key ->
+                    LetterKey(service, key, uppercase)
+                }
+            },
+            right = {
+                SplitOnlySpacer(weight = 0.5f)
+                "hjkl".forEach { key ->
+                    LetterKey(service, key, uppercase)
+                }
+                Spacer(Modifier.weight(0.5f))
+            },
+        )
+        SplitKeyRow(
+            left = {
+                FunctionKey(
+                    modifier = functionKeyWidth.weight(1.4f),
+                    icon = if (state.capsLock) Icons.Rounded.KeyboardCapslock else Icons.Rounded.ArrowUpward,
+                    description = when {
+                        state.capsLock -> "Caps lock on"
+                        state.shift -> "Shift on"
+                        else -> "Shift off"
+                    },
+                    tonal = !uppercase,
+                    prominent = false,
+                    onClick = service::onShiftKey,
+                )
+                "zxcv".forEach { key ->
+                    LetterKey(service, key, uppercase)
+                }
+            },
+            right = {
+                SplitOnlySpacer(weight = 1f)
+                "bnm".forEach { key ->
+                    LetterKey(service, key, uppercase)
+                }
+                DeleteKey(service, modifier = functionKeyWidth.weight(1.4f))
+            },
+        )
+        KeyboardControlRow {
             FunctionKey(
-                modifier = functionKeyWidth.weight(1.4f),
-                icon = if (state.capsLock) Icons.Rounded.KeyboardCapslock else Icons.Rounded.ArrowUpward,
-                description = when {
-                    state.capsLock -> "Caps lock on"
-                    state.shift -> "Shift on"
-                    else -> "Shift off"
-                },
-                tonal = !uppercase,
-                prominent = false,
-                onClick = service::onShiftKey,
-            )
-            "zxcvbnm".forEach { key ->
-                LetterKey(service, key, uppercase)
-            }
-            DeleteKey(service, modifier = functionKeyWidth.weight(1.4f))
-        }
-        KeyRow {
-            FunctionKey(
-                modifier = functionKeyWidth.weight(1.3f),
+                modifier = Modifier.width(controlKeyWidth(wide = true)),
                 label = "?123",
                 description = "Numbers and punctuation",
                 onClick = { service.setLayer(KeyboardLayer.NUMBERS) },
             )
             FunctionKey(
-                modifier = functionKeyWidth.weight(1f),
+                modifier = Modifier.width(controlKeyWidth(wide = false)),
                 icon = Icons.Rounded.EmojiEmotions,
                 description = "Emoji",
                 onClick = { service.setLayer(KeyboardLayer.EMOJI) },
             )
             FunctionKey(
-                modifier = functionKeyWidth.weight(1f),
+                modifier = Modifier.width(controlKeyWidth(wide = false)),
                 icon = Icons.Rounded.Language,
                 description = "Switch keyboard",
                 onClick = service::switchKeyboard,
@@ -485,48 +572,109 @@ private fun LettersLayer(service: BuddyGrammarImeService) {
                 SpaceKey(service)
             }
             FunctionKey(
-                modifier = functionKeyWidth.weight(1f),
+                modifier = Modifier.width(controlKeyWidth(wide = false)),
                 icon = Icons.Rounded.Mic,
                 description = "Voice typing",
                 onClick = { service.setLayer(KeyboardLayer.VOICE) },
             )
-            ReturnKey(service, modifier = functionKeyWidth.weight(1.3f))
+            ReturnKey(service, modifier = Modifier.width(controlKeyWidth(wide = true)))
         }
     }
 }
 
 @Composable
 private fun RowScope.LetterKey(service: BuddyGrammarImeService, key: Char, uppercase: Boolean) {
-    CharKey(
-        label = if (uppercase) key.uppercaseChar().toString() else key.toString(),
-        output = key.toString(),
-        onKey = service::onCharacterKey,
-    )
+    val label = if (uppercase) key.uppercaseChar().toString() else key.toString()
+    val center = qwertyCenter(key)
+    Surface(
+        modifier = Modifier
+            .weight(1f)
+            .height(keyHeight())
+            .pointerInput(key) {
+                detectTapGestures { offset ->
+                    if (size.width <= 0 || size.height <= 0) return@detectTapGestures
+                    service.onAdaptiveCharacterKey(
+                        value = key.toString(),
+                        x = center.first + offset.x.toDouble() / size.width.toDouble() - 0.5,
+                        y = center.second + offset.y.toDouble() / size.height.toDouble() - 0.5,
+                    )
+                }
+            }
+            .semantics {
+                contentDescription = label
+                onClick(label = "Type $label") {
+                    service.onLiteralCharacterKey(key.toString())
+                    true
+                }
+            },
+        shape = KeyShape,
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 1.dp,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = label,
+                fontSize = 20.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+}
+
+private fun qwertyCenter(key: Char): Pair<Double, Double> {
+    val normalized = key.lowercaseChar()
+    val top = "qwertyuiop"
+    val middle = "asdfghjkl"
+    val bottom = "zxcvbnm"
+    top.indexOf(normalized).takeIf { it >= 0 }?.let { return 0.5 + it to 0.5 }
+    middle.indexOf(normalized).takeIf { it >= 0 }?.let { return 1.0 + it to 1.5 }
+    bottom.indexOf(normalized).takeIf { it >= 0 }?.let { return 2.0 + it to 2.5 }
+    return 0.0 to 0.0
 }
 
 @Composable
 private fun NumbersLayer(service: BuddyGrammarImeService) {
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        KeyRow {
-            "1234567890".forEach { key -> CharKey(key.toString(), onKey = service::onCharacterKey) }
-        }
-        KeyRow {
-            listOf("-", "/", ":", ";", "(", ")", "$", "&", "@", "\"").forEach { key ->
-                CharKey(key, onKey = service::onCharacterKey)
-            }
-        }
-        KeyRow {
-            FunctionKey(
-                modifier = functionKeyWidth.weight(1.4f),
-                label = "#+=",
-                description = "More symbols",
-                onClick = { service.setLayer(KeyboardLayer.SYMBOLS) },
-            )
-            listOf(".", ",", "?", "!", "'").forEach { key ->
-                CharKey(key, onKey = service::onCharacterKey)
-            }
-            DeleteKey(service, modifier = functionKeyWidth.weight(1.4f))
-        }
+        SplitKeyRow(
+            left = {
+                "12345".forEach { key -> CharKey(key.toString(), onKey = service::onCharacterKey) }
+            },
+            right = {
+                "67890".forEach { key -> CharKey(key.toString(), onKey = service::onCharacterKey) }
+            },
+        )
+        SplitKeyRow(
+            left = {
+                listOf("-", "/", ":", ";", "(").forEach { key ->
+                    CharKey(key, onKey = service::onCharacterKey)
+                }
+            },
+            right = {
+                listOf(")", "$", "&", "@", "\"").forEach { key ->
+                    CharKey(key, onKey = service::onCharacterKey)
+                }
+            },
+        )
+        SplitKeyRow(
+            left = {
+                FunctionKey(
+                    modifier = functionKeyWidth.weight(1.4f),
+                    label = "#+=",
+                    description = "More symbols",
+                    onClick = { service.setLayer(KeyboardLayer.SYMBOLS) },
+                )
+                listOf(".", ",").forEach { key ->
+                    CharKey(key, onKey = service::onCharacterKey)
+                }
+                SplitOnlySpacer(weight = 1f)
+            },
+            right = {
+                listOf("?", "!", "'").forEach { key ->
+                    CharKey(key, onKey = service::onCharacterKey)
+                }
+                DeleteKey(service, modifier = functionKeyWidth.weight(1.4f))
+            },
+        )
         UtilityControlRow(service)
     }
 }
@@ -534,28 +682,50 @@ private fun NumbersLayer(service: BuddyGrammarImeService) {
 @Composable
 private fun SymbolsLayer(service: BuddyGrammarImeService) {
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        KeyRow {
-            listOf("[", "]", "{", "}", "#", "%", "^", "*", "+", "=").forEach { key ->
-                CharKey(key, onKey = service::onCharacterKey)
-            }
-        }
-        KeyRow {
-            listOf("_", "\\", "|", "~", "<", ">", "€", "£", "¥", "•").forEach { key ->
-                CharKey(key, onKey = service::onCharacterKey)
-            }
-        }
-        KeyRow {
-            FunctionKey(
-                modifier = functionKeyWidth.weight(1.4f),
-                label = "123",
-                description = "Numbers",
-                onClick = { service.setLayer(KeyboardLayer.NUMBERS) },
-            )
-            listOf(".", ",", "?", "!", "'").forEach { key ->
-                CharKey(key, onKey = service::onCharacterKey)
-            }
-            DeleteKey(service, modifier = functionKeyWidth.weight(1.4f))
-        }
+        SplitKeyRow(
+            left = {
+                listOf("[", "]", "{", "}", "#").forEach { key ->
+                    CharKey(key, onKey = service::onCharacterKey)
+                }
+            },
+            right = {
+                listOf("%", "^", "*", "+", "=").forEach { key ->
+                    CharKey(key, onKey = service::onCharacterKey)
+                }
+            },
+        )
+        SplitKeyRow(
+            left = {
+                listOf("_", "\\", "|", "~", "<").forEach { key ->
+                    CharKey(key, onKey = service::onCharacterKey)
+                }
+            },
+            right = {
+                listOf(">", "€", "£", "¥", "•").forEach { key ->
+                    CharKey(key, onKey = service::onCharacterKey)
+                }
+            },
+        )
+        SplitKeyRow(
+            left = {
+                FunctionKey(
+                    modifier = functionKeyWidth.weight(1.4f),
+                    label = "123",
+                    description = "Numbers",
+                    onClick = { service.setLayer(KeyboardLayer.NUMBERS) },
+                )
+                listOf(".", ",").forEach { key ->
+                    CharKey(key, onKey = service::onCharacterKey)
+                }
+                SplitOnlySpacer(weight = 1f)
+            },
+            right = {
+                listOf("?", "!", "'").forEach { key ->
+                    CharKey(key, onKey = service::onCharacterKey)
+                }
+                DeleteKey(service, modifier = functionKeyWidth.weight(1.4f))
+            },
+        )
         UtilityControlRow(service)
     }
 }
@@ -563,21 +733,21 @@ private fun SymbolsLayer(service: BuddyGrammarImeService) {
 /** Control row for the numbers/symbols layers with LaTeX + handwriting entries. */
 @Composable
 private fun UtilityControlRow(service: BuddyGrammarImeService) {
-    KeyRow {
+    KeyboardControlRow {
         FunctionKey(
-            modifier = functionKeyWidth.weight(1.3f),
+            modifier = Modifier.width(controlKeyWidth(wide = true)),
             label = "ABC",
             description = "Letters",
             onClick = { service.setLayer(KeyboardLayer.LETTERS) },
         )
         FunctionKey(
-            modifier = functionKeyWidth.weight(1f),
+            modifier = Modifier.width(controlKeyWidth(wide = false)),
             icon = Icons.Rounded.Functions,
             description = "LaTeX keyboard",
             onClick = { service.setLayer(KeyboardLayer.LATEX) },
         )
         FunctionKey(
-            modifier = functionKeyWidth.weight(1f),
+            modifier = Modifier.width(controlKeyWidth(wide = false)),
             icon = Icons.Rounded.Draw,
             description = "Handwriting",
             onClick = { service.setLayer(KeyboardLayer.HANDWRITING) },
@@ -585,7 +755,7 @@ private fun UtilityControlRow(service: BuddyGrammarImeService) {
         Row(modifier = Modifier.weight(3.6f)) {
             SpaceKey(service)
         }
-        ReturnKey(service, modifier = functionKeyWidth.weight(1.3f))
+        ReturnKey(service, modifier = Modifier.width(controlKeyWidth(wide = true)))
     }
 }
 
@@ -596,6 +766,48 @@ private fun KeyRow(content: @Composable RowScope.() -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         content = content,
     )
+}
+
+@Composable
+private fun SplitKeyRow(
+    left: @Composable RowScope.() -> Unit,
+    right: @Composable RowScope.() -> Unit,
+) {
+    val gap = keyboardLayoutSpec().centerGapDp.dp
+    KeyRow {
+        left()
+        if (gap > 0.dp) {
+            Spacer(Modifier.width(gap))
+        }
+        right()
+    }
+}
+
+@Composable
+private fun RowScope.SplitOnlySpacer(weight: Float) {
+    if (keyboardLayoutSpec().usesSplitKeyGrid) {
+        Spacer(Modifier.weight(weight))
+    }
+}
+
+@Composable
+private fun RowScope.CompactOnlySpacer(weight: Float) {
+    if (!keyboardLayoutSpec().usesSplitKeyGrid) {
+        Spacer(Modifier.weight(weight))
+    }
+}
+
+@Composable
+private fun KeyboardControlRow(content: @Composable RowScope.() -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+        )
+        KeyRow(content)
+    }
 }
 
 // endregion
@@ -675,18 +887,18 @@ private fun LatexLayer(service: BuddyGrammarImeService) {
                 }
             }
         }
-        KeyRow {
+        KeyboardControlRow {
             FunctionKey(
-                modifier = functionKeyWidth.weight(1.3f),
+                modifier = Modifier.width(controlKeyWidth(wide = true)),
                 label = "ABC",
                 description = "Letters",
                 onClick = { service.setLayer(KeyboardLayer.LETTERS) },
             )
-            DeleteKey(service, modifier = functionKeyWidth.weight(1f))
+            DeleteKey(service, modifier = Modifier.width(controlKeyWidth(wide = false)))
             Row(modifier = Modifier.weight(4f)) {
                 SpaceKey(service)
             }
-            ReturnKey(service, modifier = functionKeyWidth.weight(1.3f))
+            ReturnKey(service, modifier = Modifier.width(controlKeyWidth(wide = true)))
         }
     }
 }
@@ -697,6 +909,7 @@ private fun LatexLayer(service: BuddyGrammarImeService) {
 
 @Composable
 private fun EmojiLayer(service: BuddyGrammarImeService) {
+    val layout = keyboardLayoutSpec()
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
         AndroidView(
             factory = { context ->
@@ -706,13 +919,13 @@ private fun EmojiLayer(service: BuddyGrammarImeService) {
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(260.dp)
+                .height(layout.emojiPanelHeightDp.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.surface),
         )
-        KeyRow {
+        KeyboardControlRow {
             FunctionKey(
-                modifier = functionKeyWidth.weight(1.3f),
+                modifier = Modifier.width(controlKeyWidth(wide = true)),
                 label = "ABC",
                 description = "Letters",
                 onClick = { service.setLayer(KeyboardLayer.LETTERS) },
@@ -720,7 +933,7 @@ private fun EmojiLayer(service: BuddyGrammarImeService) {
             Row(modifier = Modifier.weight(4f)) {
                 SpaceKey(service)
             }
-            DeleteKey(service, modifier = functionKeyWidth.weight(1.3f))
+            DeleteKey(service, modifier = Modifier.width(controlKeyWidth(wide = false)))
         }
     }
 }
@@ -781,16 +994,16 @@ private fun HandwritingLayer(service: BuddyGrammarImeService) {
                 }
             }
         }
-        HandwritingCanvas(controller)
-        KeyRow {
+        HandwritingCanvas(controller, keyboardLayoutSpec().handwritingCanvasHeightDp.dp)
+        KeyboardControlRow {
             FunctionKey(
-                modifier = functionKeyWidth.weight(1.2f),
+                modifier = Modifier.width(controlKeyWidth(wide = true)),
                 label = "ABC",
                 description = "Letters",
                 onClick = { service.setLayer(KeyboardLayer.LETTERS) },
             )
             FunctionKey(
-                modifier = functionKeyWidth.weight(1.2f),
+                modifier = Modifier.width(controlKeyWidth(wide = false)),
                 icon = Icons.Rounded.Delete,
                 description = "Clear handwriting",
                 onClick = controller::clear,
@@ -798,19 +1011,19 @@ private fun HandwritingLayer(service: BuddyGrammarImeService) {
             Row(modifier = Modifier.weight(3f)) {
                 SpaceKey(service)
             }
-            DeleteKey(service, modifier = functionKeyWidth.weight(1.2f))
-            ReturnKey(service, modifier = functionKeyWidth.weight(1.2f))
+            DeleteKey(service, modifier = Modifier.width(controlKeyWidth(wide = false)))
+            ReturnKey(service, modifier = Modifier.width(controlKeyWidth(wide = true)))
         }
     }
 }
 
 @Composable
-private fun HandwritingCanvas(controller: HandwritingController) {
+private fun HandwritingCanvas(controller: HandwritingController, height: Dp) {
     val strokeColor = MaterialTheme.colorScheme.onSurface
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(170.dp)
+            .height(height)
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surface)
             .pointerInput(Unit) {
@@ -857,7 +1070,7 @@ private fun VoiceLayer(service: BuddyGrammarImeService) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(230.dp),
+            .height(keyboardLayoutSpec().voicePanelHeightDp.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -926,9 +1139,9 @@ private fun VoiceLayer(service: BuddyGrammarImeService) {
             }
         }
         Spacer(Modifier.weight(0.01f))
-        KeyRow {
+        KeyboardControlRow {
             FunctionKey(
-                modifier = functionKeyWidth.weight(1.2f),
+                modifier = Modifier.width(controlKeyWidth(wide = true)),
                 label = "ABC",
                 description = "Letters",
                 onClick = { service.setLayer(KeyboardLayer.LETTERS) },
@@ -936,7 +1149,7 @@ private fun VoiceLayer(service: BuddyGrammarImeService) {
             Row(modifier = Modifier.weight(4f)) {
                 SpaceKey(service)
             }
-            DeleteKey(service, modifier = functionKeyWidth.weight(1.2f))
+            DeleteKey(service, modifier = Modifier.width(controlKeyWidth(wide = false)))
         }
     }
 }

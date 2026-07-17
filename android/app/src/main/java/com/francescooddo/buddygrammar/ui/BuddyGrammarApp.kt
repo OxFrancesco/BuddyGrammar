@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -56,6 +58,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.lightColorScheme
@@ -67,6 +70,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -75,12 +79,19 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.francescooddo.buddygrammar.R
 import com.francescooddo.buddygrammar.core.AppConfig
+import com.francescooddo.buddygrammar.core.adaptive.PracticeKind
+import com.francescooddo.buddygrammar.core.adaptive.PracticeRecordStatus
+import com.francescooddo.buddygrammar.core.adaptive.PracticeResult
+import com.francescooddo.buddygrammar.core.adaptive.PracticeTrack
+import java.text.DateFormat
+import java.util.Date
 import kotlin.math.roundToInt
 
 private val BuddyPurple = Color(0xFF6D4AFF)
@@ -89,6 +100,21 @@ private val BuddyInk = Color(0xFF211B35)
 private val BuddyLavender = Color(0xFFF3F0FF)
 private val BuddyMint = Color(0xFFE3F8EC)
 private val BuddyRed = Color(0xFFB3261E)
+
+private enum class LearningResetTarget(val title: String, val message: String) {
+    TYPING(
+        "Reset touch calibration?",
+        "The keyboard will forget its aggregate key offsets.",
+    ),
+    LANGUAGE(
+        "Reset learned words?",
+        "The keyboard will forget its local vocabulary and phrase counts.",
+    ),
+    ALL(
+        "Reset all learning?",
+        "This deletes touch calibration, learned words, and practice progress.",
+    ),
+}
 
 private val BuddyColors: ColorScheme = lightColorScheme(
     primary = BuddyPurple,
@@ -559,6 +585,7 @@ private fun DictationScreen(state: BuddyGrammarAppState, onRecord: () -> Unit) {
 @Composable
 private fun SettingsScreen(state: BuddyGrammarAppState, onOpenKeyboardSettings: () -> Unit) {
     var draft by remember(state.settings) { mutableStateOf(state.settings) }
+    var resetTarget by remember { mutableStateOf<LearningResetTarget?>(null) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -584,6 +611,16 @@ private fun SettingsScreen(state: BuddyGrammarAppState, onOpenKeyboardSettings: 
             body = "Fix clear keyboard typos on-device when you type punctuation, space, or return.",
             checked = draft.automaticallyCorrectWords,
         ) { draft = draft.copy(automaticallyCorrectWords = it) }
+        SettingSwitch(
+            title = "Adapt key hit areas",
+            body = "Bias ambiguous key edges on-device while every key keeps a literal center.",
+            checked = draft.adaptiveTypingEnabled,
+        ) { draft = draft.copy(adaptiveTypingEnabled = it) }
+        SettingSwitch(
+            title = "Personalize practice",
+            body = "Choose exercises from your local mastery and review schedule.",
+            checked = draft.personalizedPracticeEnabled,
+        ) { draft = draft.copy(personalizedPracticeEnabled = it) }
         SettingSwitch(
             title = "Update correction model automatically",
             body = "Use BuddyGrammar’s current recommended OpenRouter model.",
@@ -642,10 +679,55 @@ private fun SettingsScreen(state: BuddyGrammarAppState, onOpenKeyboardSettings: 
             Spacer(Modifier.size(8.dp))
             Text("Privacy and data flow")
         }
+        HorizontalDivider()
+        Text("On-device learning", fontWeight = FontWeight.Bold)
+        Text(
+            "Reset each private aggregate independently. Your visible keyboard layout and cloud consent do not change.",
+            fontSize = 13.sp,
+            color = BuddyInk.copy(alpha = 0.65f),
+        )
+        OutlinedButton(
+            onClick = { resetTarget = LearningResetTarget.TYPING },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = BuddyRed),
+        ) { Text("Reset touch calibration") }
+        OutlinedButton(
+            onClick = { resetTarget = LearningResetTarget.LANGUAGE },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = BuddyRed),
+        ) { Text("Reset learned words") }
+        OutlinedButton(
+            onClick = { resetTarget = LearningResetTarget.ALL },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = BuddyRed),
+        ) { Text("Reset all learning") }
         Text(
             "API credentials are never stored in this app. Requests go through the protected BuddyGrammar worker.",
             fontSize = 13.sp,
             color = BuddyInk.copy(alpha = 0.6f),
+        )
+    }
+
+    resetTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { resetTarget = null },
+            title = { Text(target.title) },
+            text = { Text(target.message) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        when (target) {
+                            LearningResetTarget.TYPING -> state.resetTypingCalibration()
+                            LearningResetTarget.LANGUAGE -> state.resetLearnedWords()
+                            LearningResetTarget.ALL -> state.resetAllLearning()
+                        }
+                        resetTarget = null
+                    },
+                ) { Text("Reset", color = BuddyRed) }
+            },
+            dismissButton = {
+                TextButton(onClick = { resetTarget = null }) { Text("Cancel") }
+            },
         )
     }
 }
@@ -675,6 +757,8 @@ private fun SettingSwitch(
 @Composable
 private fun KeyboardLabScreen(state: BuddyGrammarAppState) {
     var sample by remember { mutableStateOf("this sentence need a little polish") }
+    val prompt = state.practicePrompt
+    val result = state.practiceResult
     Column(modifier = Modifier.fillMaxSize()) {
         SimpleTopBar("Keyboard Lab") { state.navigate(AppScreen.HOME) }
         Column(
@@ -684,11 +768,120 @@ private fun KeyboardLabScreen(state: BuddyGrammarAppState) {
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Tap below to open BuddyGrammar, then press ★. Select a phrase first to correct only that selection.", lineHeight = 22.sp)
+            Text("Adaptive practice", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
+            Text(
+                "Build typing accuracy and writing recall with short exercises selected from local progress.",
+                color = BuddyInk.copy(alpha = 0.7f),
+                lineHeight = 22.sp,
+            )
+            NoticeBanner(state.notice)
+            PracticeSummaryCard(state.practiceSummary)
+            PracticeTrackSelector(
+                selected = state.practiceTrack,
+                onSelect = state::selectPracticeTrack,
+            )
+            if (!state.settings.personalizedPracticeEnabled) {
+                Card(colors = CardDefaults.cardColors(containerColor = BuddyLavender)) {
+                    Text(
+                        "Personalized scheduling is off. This session is still scored, but progress is not saved.",
+                        modifier = Modifier.padding(16.dp),
+                        fontSize = 14.sp,
+                    )
+                }
+            }
+            if (prompt != null) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        Text(
+                            prompt.kind.displayName(),
+                            color = BuddyPurple,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(prompt.instruction, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        prompt.stimulus?.let { stimulus ->
+                            Card(colors = CardDefaults.cardColors(containerColor = BuddyLavender)) {
+                                Text(
+                                    stimulus,
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    textAlign = TextAlign.Center,
+                                    fontSize = 19.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                        }
+                        OutlinedTextField(
+                            value = state.practiceResponse,
+                            onValueChange = state::updatePracticeResponse,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(132.dp)
+                                .onFocusChanged {
+                                    state.setPracticeEditorActive(it.isFocused)
+                                },
+                            label = { Text("Your response") },
+                            placeholder = { Text("Type without copying or using suggestions when you can.") },
+                            enabled = result == null,
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Sentences,
+                                autoCorrectEnabled = false,
+                            ),
+                        )
+                        if (result == null) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Button(
+                                    onClick = state::submitPracticeAttempt,
+                                    enabled = state.practiceResponse.isNotBlank(),
+                                    modifier = Modifier.weight(1f),
+                                ) { Text("Submit") }
+                                OutlinedButton(
+                                    onClick = state::skipPracticePrompt,
+                                    modifier = Modifier.weight(1f),
+                                ) { Text("Skip") }
+                            }
+                        } else {
+                            PracticeResultCard(result)
+                            Button(
+                                onClick = state::nextPracticePrompt,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("Next exercise") }
+                        }
+                    }
+                }
+            }
+            OutlinedButton(
+                onClick = state::resetPracticeProgress,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Rounded.Delete, null)
+                Spacer(Modifier.size(8.dp))
+                Text("Reset practice progress")
+            }
+            HorizontalDivider()
+            Text("Freeform keyboard test", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+            Text(
+                "Tap below to open BuddyGrammar, then press ★. Select a phrase first to correct only that selection.",
+                lineHeight = 22.sp,
+            )
             OutlinedTextField(
                 value = sample,
                 onValueChange = { sample = it },
-                modifier = Modifier.fillMaxWidth().height(180.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+                    .onFocusChanged {
+                        if (it.isFocused) state.setPracticeEditorActive(false)
+                    },
                 label = { Text("Safe test field") },
             )
             Card(colors = CardDefaults.cardColors(containerColor = BuddyLavender)) {
@@ -701,6 +894,121 @@ private fun KeyboardLabScreen(state: BuddyGrammarAppState) {
         }
     }
 }
+
+@Composable
+private fun PracticeTrackSelector(
+    selected: PracticeTrack,
+    onSelect: (PracticeTrack) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Practice focus", fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            PracticeTrack.entries.forEach { track ->
+                if (track == selected) {
+                    FilledTonalButton(
+                        onClick = { onSelect(track) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text(track.displayName()) }
+                } else {
+                    OutlinedButton(
+                        onClick = { onSelect(track) },
+                        modifier = Modifier.weight(1f),
+                    ) { Text(track.displayName()) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PracticeSummaryCard(summary: PracticeProgressSummary) {
+    val reviewText = when {
+        summary.reviewIsDue -> "Due now"
+        summary.nextReviewAtEpochMillis != null -> DateFormat.getDateTimeInstance(
+            DateFormat.MEDIUM,
+            DateFormat.SHORT,
+        ).format(Date(summary.nextReviewAtEpochMillis))
+        else -> "After your first scored exercise"
+    }
+    Card(colors = CardDefaults.cardColors(containerColor = BuddyMint)) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text("Mastery and retention", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                PracticeMetric("Attempts", summary.completedAttempts.toString())
+                PracticeMetric("Accuracy", summary.averageAccuracy.asPercentage())
+                PracticeMetric("Mastery", summary.averageMastery.asPercentage())
+            }
+            Text(
+                "${summary.trackedSkills} skills tracked · Next review: $reviewText",
+                fontSize = 13.sp,
+                color = BuddyInk.copy(alpha = 0.7f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.PracticeMetric(
+    label: String,
+    value: String,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, fontWeight = FontWeight.ExtraBold, fontSize = 19.sp)
+        Text(label, fontSize = 12.sp, color = BuddyInk.copy(alpha = 0.65f))
+    }
+}
+
+@Composable
+private fun PracticeResultCard(result: PracticeResult) {
+    val title = when (result.status) {
+        PracticeRecordStatus.RECORDED -> "Exercise scored"
+        PracticeRecordStatus.ABANDONED -> "Exercise skipped"
+        PracticeRecordStatus.HOLDOUT -> "Retention check scored"
+    }
+    Card(colors = CardDefaults.cardColors(containerColor = BuddyMint)) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(title, fontWeight = FontWeight.Bold)
+            Text("Typed accuracy: ${result.rawAccuracy.asPercentage()}")
+            if (result.decodedAccuracy != result.rawAccuracy) {
+                Text("Keyboard-assisted accuracy: ${result.decodedAccuracy.asPercentage()}")
+            }
+            Text(
+                "Learning evidence: ${(result.evidenceWeight.coerceIn(0.0, 1.5) / 1.5).asPercentage()}",
+                fontSize = 13.sp,
+                color = BuddyInk.copy(alpha = 0.7f),
+            )
+        }
+    }
+}
+
+private fun PracticeTrack.displayName(): String = when (this) {
+    PracticeTrack.MOTOR -> "Typing"
+    PracticeTrack.WRITING -> "Writing"
+    PracticeTrack.MIXED -> "Mixed"
+}
+
+private fun PracticeKind.displayName(): String = when (this) {
+    PracticeKind.COPY -> "Copy"
+    PracticeKind.CLOZE -> "Fill the blank"
+    PracticeKind.CORRECTION -> "Correction"
+    PracticeKind.RECONSTRUCTION -> "Recall"
+    PracticeKind.FREE_PRODUCTION -> "Free writing"
+    PracticeKind.MIXED_TRANSFER -> "Transfer"
+}
+
+private fun Double.asPercentage(): String = "${(coerceIn(0.0, 1.0) * 100).roundToInt()}%"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -716,7 +1024,8 @@ private fun PrivacyScreen(state: BuddyGrammarAppState) {
         ) {
             PrivacyPoint("Only on request", "Text leaves the device only when you tap ★. Audio leaves only after you finish a recording.")
             PrivacyPoint("Protected credentials", "OpenRouter and ElevenLabs keys live on the BuddyGrammar worker and are not bundled with the app or keyboard.")
-            PrivacyPoint("On-device personalization", "The keyboard stores language-scoped vocabulary and context frequency counts locally to improve suggestions. These counts are never sent for prediction.")
+            PrivacyPoint("On-device personalization", "The keyboard stores language-scoped vocabulary, context counts, and bounded aggregate touch offsets locally. It never keeps a readable touch history or sends these aggregates for prediction; Settings can reset them independently.")
+            PrivacyPoint("Private adaptive practice", "Practice saves only aggregate skill scores, exposure counts, accuracy, and review dates. Responses are never saved. A curated target marker is shared with the keyboard only while the practice editor is active and expires after 30 minutes.")
             PrivacyPoint("Minimal local data", "Settings, a random installation ID, and the latest raw transcript and final text are stored locally until you clear them. The keyboard handoff copy expires after 24 hours or is removed after insertion.")
             PrivacyPoint("Secure fields", "The keyboard blocks cloud correction and transcript insertion in password and other secure inputs.")
         }

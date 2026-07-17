@@ -11,11 +11,13 @@ public final class PersonalLanguageModel {
         var unigrams: [String: Int] = [:]
         var bigrams: [String: [String: Int]] = [:]
         var trigrams: [String: [String: Int]] = [:]
+        var lastDecayAt: Date? = nil
 
         private enum CodingKeys: String, CodingKey {
             case unigrams
             case bigrams
             case trigrams
+            case lastDecayAt
         }
 
         init() {}
@@ -34,6 +36,7 @@ public final class PersonalLanguageModel {
                 [String: [String: Int]].self,
                 forKey: .trigrams
             ) ?? [:]
+            lastDecayAt = try container.decodeIfPresent(Date.self, forKey: .lastDecayAt)
         }
     }
 
@@ -45,18 +48,27 @@ public final class PersonalLanguageModel {
     private static let saveInterval = 20
     private static let maximumWordLength = 24
     private static let namespaceSeparator = "\u{1E}"
+    private static let decayInterval: TimeInterval = 30 * 24 * 60 * 60
 
     private var storage: Storage
     private let defaults: UserDefaults?
+    private let now: () -> Date
     private var unsavedChanges = 0
 
-    public init(defaults: UserDefaults? = .standard) {
+    public init(
+        defaults: UserDefaults? = .standard,
+        now: @escaping () -> Date = { .now }
+    ) {
         self.defaults = defaults
+        self.now = now
         if let data = defaults?.data(forKey: Self.storageKey),
            let decoded = try? JSONDecoder().decode(Storage.self, from: data) {
             storage = decoded
         } else {
             storage = Storage()
+        }
+        if storage.lastDecayAt == nil {
+            storage.lastDecayAt = now()
         }
     }
 
@@ -79,6 +91,7 @@ public final class PersonalLanguageModel {
         word: String,
         languageCode: String? = nil
     ) {
+        applyTimeDecayIfNeeded()
         guard let word = Self.normalized(word) else { return }
         let context = previousWords.compactMap(Self.normalized).suffix(2)
         let namespace = Self.namespacePrefix(for: languageCode)
@@ -94,6 +107,58 @@ public final class PersonalLanguageModel {
         unsavedChanges += 1
         if unsavedChanges >= Self.saveInterval {
             persist()
+        }
+    }
+
+    /// Removes one observation when the user explicitly reverts, deletes, or
+    /// replaces a learned word. Negative feedback is never inferred from the
+    /// model's own output; callers must provide a confirmed outcome.
+    public func reject(
+        previousWord: String?,
+        word: String,
+        languageCode: String? = nil
+    ) {
+        reject(
+            previousWords: previousWord.map { [$0] } ?? [],
+            word: word,
+            languageCode: languageCode
+        )
+    }
+
+    public func reject(
+        previousWords: [String],
+        word: String,
+        languageCode: String? = nil
+    ) {
+        applyTimeDecayIfNeeded()
+        guard let word = Self.normalized(word) else { return }
+        let context = previousWords.compactMap(Self.normalized).suffix(2)
+        let namespace = Self.namespacePrefix(for: languageCode)
+        var changed = Self.decrement(word: namespace + word, in: &storage.unigrams)
+
+        if let previous = context.last {
+            let key = namespace + previous
+            changed = Self.decrement(
+                word: word,
+                in: &storage.bigrams[key, default: [:]]
+            ) || changed
+            if storage.bigrams[key]?.isEmpty == true {
+                storage.bigrams.removeValue(forKey: key)
+            }
+        }
+        if context.count == 2 {
+            let key = namespace + Self.trigramKey(Array(context))
+            changed = Self.decrement(
+                word: word,
+                in: &storage.trigrams[key, default: [:]]
+            ) || changed
+            if storage.trigrams[key]?.isEmpty == true {
+                storage.trigrams.removeValue(forKey: key)
+            }
+        }
+
+        if changed {
+            unsavedChanges += 1
         }
     }
 
@@ -145,6 +210,7 @@ public final class PersonalLanguageModel {
         languageCode: String? = nil,
         limit: Int
     ) -> [String] {
+        applyTimeDecayIfNeeded()
         guard limit > 0 else { return [] }
         let context = previousWords.compactMap(Self.normalized).suffix(2)
         let namespace = Self.namespacePrefix(for: languageCode)
@@ -174,6 +240,7 @@ public final class PersonalLanguageModel {
         languageCode: String? = nil,
         limit: Int
     ) -> [String] {
+        applyTimeDecayIfNeeded()
         guard limit > 0, let normalized = Self.normalized(prefix) else { return [] }
         let namespace = Self.namespacePrefix(for: languageCode)
         let scopedPrefix = namespace + normalized
@@ -192,6 +259,7 @@ public final class PersonalLanguageModel {
         for word: String,
         languageCode: String? = nil
     ) -> Int {
+        applyTimeDecayIfNeeded()
         guard let word = Self.normalized(word) else { return 0 }
         return storage.unigrams[Self.namespacePrefix(for: languageCode) + word] ?? 0
     }
@@ -204,6 +272,14 @@ public final class PersonalLanguageModel {
             defaults.set(data, forKey: Self.storageKey)
             unsavedChanges = 0
         }
+    }
+
+    /// Removes both the live aggregate and its durable on-device snapshot.
+    public func reset() {
+        storage = Storage()
+        storage.lastDecayAt = now()
+        unsavedChanges = 0
+        defaults?.removeObject(forKey: Self.storageKey)
     }
 
     // MARK: - Internals
@@ -257,6 +333,53 @@ public final class PersonalLanguageModel {
                 uniquingKeysWith: { first, _ in first }
             )
         }
+    }
+
+    private func applyTimeDecayIfNeeded() {
+        let referenceDate = now()
+        guard let lastDecayAt = storage.lastDecayAt else {
+            storage.lastDecayAt = referenceDate
+            return
+        }
+        let elapsed = referenceDate.timeIntervalSince(lastDecayAt)
+        guard elapsed >= Self.decayInterval else { return }
+
+        let intervals = min(12, Int(elapsed / Self.decayInterval))
+        for _ in 0..<intervals {
+            storage.unigrams = storage.unigrams
+                .mapValues { $0 / 2 }
+                .filter { $0.value > 0 }
+            storage.bigrams = Self.halved(storage.bigrams)
+            storage.trigrams = Self.halved(storage.trigrams)
+        }
+        storage.lastDecayAt = referenceDate
+        unsavedChanges += 1
+    }
+
+    private static func halved(
+        _ contexts: [String: [String: Int]]
+    ) -> [String: [String: Int]] {
+        contexts.reduce(into: [:]) { result, entry in
+            let values = entry.value
+                .mapValues { $0 / 2 }
+                .filter { $0.value > 0 }
+            if !values.isEmpty {
+                result[entry.key] = values
+            }
+        }
+    }
+
+    private static func decrement(
+        word: String,
+        in counts: inout [String: Int]
+    ) -> Bool {
+        guard let count = counts[word], count > 0 else { return false }
+        if count == 1 {
+            counts.removeValue(forKey: word)
+        } else {
+            counts[word] = count - 1
+        }
+        return true
     }
 
     private static func ranked(_ continuations: [String: Int]) -> [String] {

@@ -34,6 +34,33 @@ final class PersonalLanguageModelTests: XCTestCase {
         XCTAssertEqual(model.completions(forPrefix: "fra", limit: 2), ["francesco"])
     }
 
+    func testExplicitRejectionRemovesMistakenVocabularyEvidence() {
+        let model = makeModel()
+        for _ in 0..<3 {
+            model.learn(previousWord: "type", word: "teh")
+        }
+
+        XCTAssertEqual(model.usageCount(for: "teh"), 3)
+
+        model.reject(previousWord: "type", word: "teh")
+
+        XCTAssertEqual(model.usageCount(for: "teh"), 2)
+        XCTAssertEqual(model.completions(forPrefix: "t", limit: 3), [])
+    }
+
+    func testOldCountsDecayWithElapsedTime() {
+        var now = Date(timeIntervalSince1970: 1_000)
+        let model = PersonalLanguageModel(defaults: nil, now: { now })
+        for _ in 0..<8 {
+            model.learn(previousWord: nil, word: "temporary")
+        }
+        XCTAssertEqual(model.usageCount(for: "temporary"), 8)
+
+        now = now.addingTimeInterval(61 * 24 * 60 * 60)
+
+        XCTAssertLessThanOrEqual(model.usageCount(for: "temporary"), 2)
+    }
+
     func testRejectsNonWords() {
         let model = makeModel()
         for _ in 0..<3 {
@@ -57,6 +84,25 @@ final class PersonalLanguageModelTests: XCTestCase {
 
         let reloaded = PersonalLanguageModel(defaults: defaults)
         XCTAssertEqual(reloaded.predictions(after: "ciao", limit: 1), ["bella"])
+    }
+
+    func testResetDeletesInMemoryAndPersistedVocabulary() throws {
+        let suiteName = "PersonalLanguageModelResetTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let model = PersonalLanguageModel(defaults: defaults)
+        for _ in 0..<3 {
+            model.learn(previousWord: nil, word: "privateword")
+        }
+        model.persist()
+
+        model.reset()
+
+        XCTAssertEqual(model.usageCount(for: "privateword"), 0)
+        XCTAssertEqual(
+            PersonalLanguageModel(defaults: defaults).usageCount(for: "privateword"),
+            0
+        )
     }
 
     func testPersonalPredictionsOutrankStaticBigrams() {

@@ -13,6 +13,16 @@ class BuddySettingsTest {
     }
 
     @Test
+    fun `adaptive keyboard and personalized practice default on and can be disabled`() {
+        assertTrue(BuddySettings().adaptiveTypingEnabled)
+        assertTrue(BuddySettings().personalizedPracticeEnabled)
+        assertFalse(BuddySettings().copy(adaptiveTypingEnabled = false).adaptiveTypingEnabled)
+        assertFalse(
+            BuddySettings().copy(personalizedPracticeEnabled = false).personalizedPracticeEnabled,
+        )
+    }
+
+    @Test
     fun `managed models update automatically while custom models remain pinned`() {
         assertEquals(AppConfig.DEFAULT_MODEL, BuddySettings().activeModelId)
         assertEquals(
