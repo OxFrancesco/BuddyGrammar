@@ -39,7 +39,7 @@ const MAX_INSTRUCTION_CHARACTERS = 2_000;
 const MAX_AUDIO_BYTES = 12 * 1024 * 1024;
 const MAX_HANDWRITING_BYTES = 1024 * 1024;
 const OPENROUTER_TIMEOUT_MS = 25_000;
-const ELEVENLABS_TIMEOUT_MS = 90_000;
+const ELEVENLABS_TIMEOUT_MS = 20_000;
 const DEFAULT_MODEL = "openai/gpt-5.6-luna";
 const MODEL_REASONING_EFFORT: Record<string, string> = {
   // Grammar correction is a deterministic copyedit; minimal effort keeps

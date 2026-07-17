@@ -78,6 +78,28 @@ final class CloudClientTests: XCTestCase {
         XCTAssertEqual(result.languageCode, "en")
     }
 
+    func testTranscriptionClientStopsAtConfiguredDeadline() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [HangingURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let endpoint = URL(string: "https://example.test/transcribe")!
+        let client = ElevenLabsTranscriptionClient(
+            session: session,
+            endpoint: endpoint,
+            requestTimeout: .milliseconds(50)
+        )
+
+        do {
+            _ = try await client.transcribe(
+                audioData: Data([0x01, 0x02, 0x03]),
+                clientID: UUID(uuidString: "83001D6E-7DAA-4BB5-AC9A-07F70129AD11")!
+            )
+            XCTFail("Expected transcription to time out")
+        } catch let error as TranscriptionError {
+            XCTAssertEqual(error, .timedOut)
+        }
+    }
+
     func testHandwritingClientSendsPNGToSameConfiguredModel() async throws {
         let session = makeSession()
         let endpoint = URL(string: "https://example.test/handwriting")!
@@ -166,5 +188,12 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
         }
     }
 
+    override func stopLoading() {}
+}
+
+private final class HangingURLProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {}
     override func stopLoading() {}
 }

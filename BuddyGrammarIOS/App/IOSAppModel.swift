@@ -1,13 +1,7 @@
 import BuddyGrammarKit
 import Foundation
 import Observation
-import OSLog
 import UIKit
-
-let appDictationLog = Logger(
-    subsystem: "com.francescooddo.BuddyGrammar",
-    category: "app.dictation"
-)
 
 enum AppTab: Hashable {
     case home
@@ -352,7 +346,7 @@ final class IOSAppModel {
                 .split(separator: "-")
                 .first
                 .map(String.init)
-            let transcript = try await transcribeWithRetry(
+            let transcript = try await transcriptionClient.transcribe(
                 audioData: audioData,
                 clientID: clientID,
                 languageCode: languageHint
@@ -590,32 +584,6 @@ final class IOSAppModel {
         try savePendingTranscript(text, languageCode: languageCode)
     }
 
-    private func transcribeWithRetry(
-        audioData: Data,
-        clientID: UUID,
-        languageCode: String?
-    ) async throws -> ElevenLabsTranscript {
-        for attempt in 1...2 {
-            do {
-                return try await transcriptionClient.transcribe(
-                    audioData: audioData,
-                    clientID: clientID,
-                    languageCode: languageCode
-                )
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                appDictationLog.error(
-                    "Transcription attempt \(attempt, privacy: .public) failed: \(error.localizedDescription, privacy: .public)"
-                )
-                if attempt == 1 {
-                    try await Task.sleep(for: .milliseconds(750))
-                }
-            }
-        }
-        throw TranscriptionRetryError.failedTwice
-    }
-
     private func copyToClipboard(_ text: String) {
         UIPasteboard.general.string = text
     }
@@ -661,13 +629,5 @@ private enum SharedContainerError: LocalizedError {
 
     var errorDescription: String? {
         "BuddyGrammar could not open its shared App Group, so the keyboard cannot receive this transcript."
-    }
-}
-
-private enum TranscriptionRetryError: LocalizedError {
-    case failedTwice
-
-    var errorDescription: String? {
-        "We couldn’t transcribe this recording after two attempts. Please try again later."
     }
 }

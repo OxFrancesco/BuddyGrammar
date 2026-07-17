@@ -189,10 +189,12 @@ final class DynamicIslandDictationController {
             throw DynamicIslandDictationError.microphoneUnavailable
         }
         if !inputTapInstalled {
-            input.installTap(onBus: 0, bufferSize: 1_024, format: format) { _, _ in
-                // Readiness audio is deliberately discarded. Only audio captured
-                // after a keyboard mic tap is written to a recording file.
-            }
+            input.installTap(
+                onBus: 0,
+                bufferSize: 1_024,
+                format: format,
+                block: Self.discardReadinessAudio
+            )
             inputTapInstalled = true
         }
         audioEngine.prepare()
@@ -202,6 +204,15 @@ final class DynamicIslandDictationController {
             stopReadinessAudio(deactivateSession: true)
             throw error
         }
+    }
+
+    private nonisolated static func discardReadinessAudio(
+        _: AVAudioPCMBuffer,
+        _: AVAudioTime
+    ) {
+        // AVFAudio invokes tap callbacks on a realtime queue, not MainActor.
+        // Readiness audio is deliberately discarded. Only audio captured after
+        // a keyboard mic tap is written to a recording file.
     }
 
     private func stopReadinessAudio(deactivateSession: Bool) {
