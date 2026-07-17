@@ -43,6 +43,30 @@ final class CloudClientTests: XCTestCase {
         XCTAssertEqual(result, "This is correct.")
     }
 
+    func testCorrectionClientStopsAtConfiguredDeadline() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [HangingURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let endpoint = URL(string: "https://example.test/correct")!
+        let client = OpenRouterCorrectionClient(
+            session: session,
+            endpoint: endpoint,
+            requestTimeout: .milliseconds(50)
+        )
+
+        do {
+            _ = try await client.correct(
+                text: "this needs correction",
+                clientID: UUID(uuidString: "83001D6E-7DAA-4BB5-AC9A-07F70129AD11")!,
+                modelID: "test/model",
+                instruction: "Correct it."
+            )
+            XCTFail("Expected correction to time out")
+        } catch let error as CloudCorrectionError {
+            XCTAssertEqual(error, .timedOut)
+        }
+    }
+
     func testTranscriptionClientSendsRawAudioAndParsesTranscript() async throws {
         let session = makeSession()
         let endpoint = URL(string: "https://example.test/transcribe")!

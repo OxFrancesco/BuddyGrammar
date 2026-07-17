@@ -12,7 +12,7 @@ Every `POST` requires `X-BuddyGrammar-Client-ID`, a stable per-install identifie
   ```json
   {
     "text": "this need fixing",
-    "modelID": "openai/gpt-5.6-luna",
+    "modelID": "google/gemini-3.1-flash-lite",
     "instruction": "Correct grammar and punctuation only."
   }
   ```

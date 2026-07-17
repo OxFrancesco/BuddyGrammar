@@ -83,8 +83,11 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
             String.self,
             forKey: .correctionInstruction
         ) ?? BuddyGrammarConfiguration.standardCorrectionInstruction
-        correctionInstruction = decodedInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
-            == BuddyGrammarConfiguration.legacyStandardCorrectionInstruction
+        let trimmedInstruction = decodedInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        correctionInstruction = [
+            BuddyGrammarConfiguration.legacyStandardCorrectionInstruction,
+            BuddyGrammarConfiguration.previousStandardCorrectionInstruction,
+        ].contains(trimmedInstruction)
             ? BuddyGrammarConfiguration.standardCorrectionInstruction
             : decodedInstruction
 

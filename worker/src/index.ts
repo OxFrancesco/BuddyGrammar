@@ -38,21 +38,25 @@ const MAX_TEXT_CHARACTERS = 10_000;
 const MAX_INSTRUCTION_CHARACTERS = 2_000;
 const MAX_AUDIO_BYTES = 12 * 1024 * 1024;
 const MAX_HANDWRITING_BYTES = 1024 * 1024;
-const OPENROUTER_TIMEOUT_MS = 25_000;
+const OPENROUTER_TIMEOUT_MS = 8_000;
 const ELEVENLABS_TIMEOUT_MS = 20_000;
-const DEFAULT_MODEL = "openai/gpt-5.6-luna";
+const DEFAULT_MODEL = "google/gemini-3.1-flash-lite";
 const MODEL_REASONING_EFFORT: Record<string, string> = {
   // Grammar correction is a deterministic copyedit; minimal effort keeps
   // dictation latency down. Raise to "low"/"medium" if quality regresses.
   // gpt-5.4-nano returns empty completions when a reasoning override is
   // sent, so it deliberately has no entry here.
   "openai/gpt-5.6-luna": "minimal",
+  "google/gemini-3.1-flash-lite": "minimal",
 };
 // Keyboard corrections are user-facing and latency-sensitive, so disable
 // load balancing and always pick the lowest-latency provider — but only
 // for models where that provider is known to behave (gpt-5.4-nano's
 // fastest provider returns empty completions).
-const LATENCY_SORTED_MODELS = new Set(["openai/gpt-5.6-luna"]);
+const LATENCY_SORTED_MODELS = new Set([
+  "google/gemini-3.1-flash-lite",
+  "openai/gpt-5.6-luna",
+]);
 
 function providerPreferences(modelID: string): Record<string, unknown> {
   return {
@@ -66,7 +70,7 @@ function reasoningOptions(modelID: string): Record<string, unknown> {
   const effort = MODEL_REASONING_EFFORT[modelID];
   if (!effort) return {};
   return {
-    verbosity: "low",
+    ...(modelID.startsWith("openai/") ? { verbosity: "low" } : {}),
     reasoning: { effort, exclude: true },
   };
 }
@@ -195,6 +199,10 @@ async function correct(
     throw new RequestProblem(400, "invalid_json", "The request body must be valid JSON.");
   }
   const body = validateCorrectionRequest(input, env);
+  const maximumResponseTokens = Math.min(
+    4_096,
+    Math.max(128, Math.ceil(body.text.length / 2) + 64),
+  );
 
   const upstream = await dependencies.fetch(OPENROUTER_URL, {
     method: "POST",
@@ -205,8 +213,8 @@ async function correct(
     },
     body: JSON.stringify({
       model: body.modelID,
-      temperature: 0,
-      max_tokens: 4_096,
+      ...(body.modelID.startsWith("google/gemini-3") ? {} : { temperature: 0 }),
+      max_tokens: maximumResponseTokens,
       ...reasoningOptions(body.modelID),
       messages: [
         { role: "system", content: TEXT_TRANSFORMATION_SYSTEM_PROMPT },

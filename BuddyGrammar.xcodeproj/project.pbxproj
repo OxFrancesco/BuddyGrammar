@@ -72,6 +72,7 @@
 		BDFB82EF1ADBB4095AD163B8 /* HotkeyRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E2A8E0743E33B2844ED3BC /* HotkeyRecorderView.swift */; };
 		BFA322A6BF2B2CE41E215B36 /* MLXLMTransformers in Frameworks */ = {isa = PBXBuildFile; productRef = C5E6982152F9F3D4CFDCB060 /* MLXLMTransformers */; };
 		BFEEEEF4C8216517B988BC05 /* IOSAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32B1A95A454172DBF19DE5DC /* IOSAppModel.swift */; };
+		C0D3F0010000000000000001 /* DictationTextPolisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D3F0010000000000000002 /* DictationTextPolisher.swift */; };
 		C35E648355B14E3E72E6945B /* KeyboardLabModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75A57C3F088BD0C6D1C349C9 /* KeyboardLabModel.swift */; };
 		C57558F1909DBA8252C90311 /* ClipboardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFEA136271E55DAC4050C406 /* ClipboardService.swift */; };
 		C754A367DE67EFFE54972655 /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C16CA3F46F9C78C0728BA3F0 /* NotesView.swift */; };
@@ -168,6 +169,7 @@
 		2989CD27D097BBE591F008C2 /* MenuBarContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContentView.swift; sourceTree = "<group>"; };
 		3160C56650E7901F8C3AFD52 /* SelectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionService.swift; sourceTree = "<group>"; };
 		32B1A95A454172DBF19DE5DC /* IOSAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSAppModel.swift; sourceTree = "<group>"; };
+		C0D3F0010000000000000002 /* DictationTextPolisher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationTextPolisher.swift; sourceTree = "<group>"; };
 		34F4782181AFDD77CEA437F0 /* VoiceInputCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInputCoordinatorTests.swift; sourceTree = "<group>"; };
 		35DEAED4FF77067FD4CF0D45 /* AppUpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateService.swift; sourceTree = "<group>"; };
 		375ED585ECC5B01AD88D6133 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -374,6 +376,7 @@
 				4C1DB190A239C3075EE02380 /* AppRootView.swift */,
 				C32585AD0A94B1CFB35B9A38 /* BuddyGrammarIOSApp.swift */,
 				D17F86F45D600DE12B86DCAF /* DynamicIslandDictationController.swift */,
+				C0D3F0010000000000000002 /* DictationTextPolisher.swift */,
 				32B1A95A454172DBF19DE5DC /* IOSAppModel.swift */,
 				8C8F013ADFEFF7083FF6A934 /* IOSAudioRecorder.swift */,
 			);
@@ -851,6 +854,7 @@
 				9A498D4B1369CF4D579C3408 /* BuddyGrammarIOSApp.swift in Sources */,
 				363BB05575F5AC7164B29864 /* DictationView.swift in Sources */,
 				B77F6D154DDCF3559081CBAF /* DynamicIslandDictationController.swift in Sources */,
+				C0D3F0010000000000000001 /* DictationTextPolisher.swift in Sources */,
 				7772B7356D1D6C69AFD8EA2C /* HomeView.swift in Sources */,
 				BFEEEEF4C8216517B988BC05 /* IOSAppModel.swift in Sources */,
 				3ED5E97B27EBD5D59545D792 /* IOSAudioRecorder.swift in Sources */,
@@ -1078,7 +1082,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = G2442WAF29;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -1279,7 +1283,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = G2442WAF29;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

@@ -2,8 +2,8 @@ package com.francescooddo.buddygrammar.core
 
 object AppConfig {
     const val API_BASE_URL = "https://buddygrammar-api.oddofrancesco000.workers.dev"
-    const val DEFAULT_MODEL = "openai/gpt-5.6-luna"
-    val MANAGED_MODEL_IDS = setOf("openai/gpt-5.4-nano", DEFAULT_MODEL)
+    const val DEFAULT_MODEL = "google/gemini-3.1-flash-lite"
+    val MANAGED_MODEL_IDS = setOf("openai/gpt-5.4-nano", "openai/gpt-5.6-luna", DEFAULT_MODEL)
     const val PENDING_TRANSCRIPT_LIFETIME_MS = 24L * 60L * 60L * 1_000L
 
     const val LEGACY_CORRECTION_INSTRUCTION = """

@@ -1,6 +1,6 @@
 # BuddyWrite
 
-BuddyWrite is a native macOS menu bar utility that rewrites selected text or transcribed local dictation through OpenRouter using `openai/gpt-5.4-nano`.
+BuddyWrite is a native macOS menu bar utility that rewrites selected text or transcribed local dictation through OpenRouter using `google/gemini-3.1-flash-lite` by default.
 
 ## Features
 

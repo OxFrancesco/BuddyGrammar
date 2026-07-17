@@ -70,7 +70,30 @@ final class SharedPreferencesTests: XCTestCase {
             BuddyGrammarConfiguration.standardCorrectionInstruction
         )
         XCTAssertTrue(
-            settings.correctionInstruction.localizedCaseInsensitiveContains("adjacent-key")
+            settings.correctionInstruction.localizedCaseInsensitiveContains("obvious typing errors")
+        )
+    }
+
+    func testPreviousStandardPromptMigratesToShortLatencyOptimizedPrompt() throws {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "openRouterModelID": "openai/gpt-5.6-luna",
+            "usesAutomaticModelUpdates": true,
+            "correctionInstruction": BuddyGrammarConfiguration.previousStandardCorrectionInstruction,
+            "autoCorrectDictation": true,
+            "hasAcceptedCloudProcessing": true,
+            "hasCompletedOnboarding": true,
+        ])
+        defaults.set(data, forKey: "BuddyGrammar.iOS.settings")
+
+        let settings = SharedPreferences(defaults: defaults).loadSettings()
+
+        XCTAssertEqual(
+            settings.correctionInstruction,
+            BuddyGrammarConfiguration.standardCorrectionInstruction
+        )
+        XCTAssertEqual(
+            settings.activeOpenRouterModelID,
+            "google/gemini-3.1-flash-lite"
         )
     }
 

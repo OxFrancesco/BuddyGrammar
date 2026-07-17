@@ -61,7 +61,7 @@ final class IOSAppModel {
     private let adaptiveStore: AdaptiveLearningStore?
     private let audioRecorder: IOSAudioRecorder
     private let transcriptionClient: ElevenLabsTranscriptionClient
-    private let correctionClient: OpenRouterCorrectionClient
+    private let textPolisher: DictationTextPolisher
     private let dynamicIslandController: DynamicIslandDictationController
     private var keyboardStopMonitorTask: Task<Void, Never>?
     private var backgroundTaskIdentifier: UIBackgroundTaskIdentifier = .invalid
@@ -79,7 +79,7 @@ final class IOSAppModel {
         self.adaptiveStore = adaptiveStore ?? AdaptiveLearningStore()
         self.audioRecorder = audioRecorder
         self.transcriptionClient = transcriptionClient
-        self.correctionClient = correctionClient
+        self.textPolisher = DictationTextPolisher(cloudClient: correctionClient)
         self.dynamicIslandController = DynamicIslandDictationController(
             preferences: sharedPreferences
         )
@@ -282,6 +282,13 @@ final class IOSAppModel {
         do {
             let startedAt = try await audioRecorder.start()
             dictationPhase = .recording(startedAt: startedAt)
+            if settings.autoCorrectDictation {
+                let canUseOnDevice = keyboardSessionID == nil
+                    && UIApplication.shared.applicationState == .active
+                Task { [textPolisher] in
+                    await textPolisher.warmUp(canUseOnDevice: canUseOnDevice)
+                }
+            }
             await dynamicIslandController.prepareForRecording(startedAt: startedAt)
             detectedLanguageCode = nil
             self.keyboardDictationSessionID = keyboardSessionID
@@ -359,11 +366,14 @@ final class IOSAppModel {
             if settings.autoCorrectDictation {
                 dictationPhase = .correcting
                 do {
-                    finalText = try await correctionClient.correct(
+                    finalText = try await textPolisher.polish(
                         text: finalText,
                         clientID: clientID,
                         modelID: settings.activeOpenRouterModelID,
-                        instruction: settings.correctionInstruction
+                        instruction: settings.correctionInstruction,
+                        languageCode: transcript.languageCode,
+                        canUseOnDevice: keyboardSessionID == nil
+                            && UIApplication.shared.applicationState == .active
                     )
                 } catch {
                     correctionFailure = error

@@ -4,6 +4,7 @@ public enum CloudCorrectionError: LocalizedError, Equatable, Sendable {
     case emptyInput
     case rejectedOutput
     case invalidResponse
+    case timedOut
     case server(statusCode: Int, message: String)
 
     public var errorDescription: String? {
@@ -14,6 +15,8 @@ public enum CloudCorrectionError: LocalizedError, Equatable, Sendable {
             "The correction service returned text that could not be applied safely."
         case .invalidResponse:
             "The correction service returned an unreadable response."
+        case .timedOut:
+            "Polishing took too long, so the original transcript was kept."
         case .server(_, let message):
             message
         }
@@ -23,13 +26,16 @@ public enum CloudCorrectionError: LocalizedError, Equatable, Sendable {
 public actor OpenRouterCorrectionClient {
     private let session: URLSession
     private let endpoint: URL
+    private let requestTimeout: Duration
 
     public init(
         session: URLSession = .shared,
-        endpoint: URL = BuddyGrammarConfiguration.apiBaseURL.appending(path: "v1/correct")
+        endpoint: URL = BuddyGrammarConfiguration.apiBaseURL.appending(path: "v1/correct"),
+        requestTimeout: Duration = .seconds(8)
     ) {
         self.session = session
         self.endpoint = endpoint
+        self.requestTimeout = requestTimeout
     }
 
     /// Opens the TLS connection to the API ahead of time so the first
@@ -58,14 +64,35 @@ public actor OpenRouterCorrectionClient {
             instruction: instruction
         )
 
-        var request = URLRequest(url: endpoint, timeoutInterval: 20)
+        var request = URLRequest(url: endpoint, timeoutInterval: 8)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(clientID.uuidString, forHTTPHeaderField: "X-BuddyGrammar-Client-ID")
         request.httpBody = try JSONEncoder().encode(payload)
 
-        let (data, response) = try await session.data(for: request)
+        let dataAndResponse: (Data, URLResponse)
+        do {
+            dataAndResponse = try await withThrowingTaskGroup(
+                of: (Data, URLResponse).self
+            ) { group in
+                group.addTask { [session, request] in
+                    try await session.data(for: request)
+                }
+                group.addTask { [requestTimeout] in
+                    try await Task.sleep(for: requestTimeout)
+                    throw CloudCorrectionError.timedOut
+                }
+                defer { group.cancelAll() }
+                guard let firstResult = try await group.next() else {
+                    throw CloudCorrectionError.invalidResponse
+                }
+                return firstResult
+            }
+        } catch let error as URLError where error.code == .timedOut {
+            throw CloudCorrectionError.timedOut
+        }
+        let (data, response) = dataAndResponse
         guard let httpResponse = response as? HTTPURLResponse else {
             throw CloudCorrectionError.invalidResponse
         }

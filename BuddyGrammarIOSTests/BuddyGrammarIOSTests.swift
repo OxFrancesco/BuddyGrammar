@@ -31,5 +31,9 @@ final class BuddyGrammarIOSTests: XCTestCase {
         XCTAssertEqual(settings.correctionUndoDuration, 3)
         XCTAssertTrue(settings.adaptiveTypingEnabled)
         XCTAssertTrue(settings.personalizedPracticeEnabled)
+        XCTAssertEqual(
+            settings.activeOpenRouterModelID,
+            "google/gemini-3.1-flash-lite"
+        )
     }
 }
