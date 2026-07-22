@@ -1,13 +1,7 @@
 import BuddyGrammarKit
 import Foundation
 import Observation
-import OSLog
 import UIKit
-
-let keyboardDictationLog = Logger(
-    subsystem: "com.francescooddo.BuddyGrammar.Keyboard",
-    category: "keyboard.dictation"
-)
 
 enum KeyboardLayoutMode: Equatable {
     case letters
@@ -31,48 +25,63 @@ enum KeyboardStatus: Equatable {
     case correcting
     case corrected
     case correctionUndone
+    case automaticCorrectionReverted(String)
+    case correctionProposalReady
+    case correctionProposalDismissed
+    case swipeAbstained(SwipeAbstentionReason?)
+    case addedToDictionary(String)
+    case correctionSuggestionSuppressed
     case transcriptInserted
-    case startingDictation
-    case openingDictation
-    case dictationRecording
-    case dictationProcessing
+    case appleDictationGuidance
+    case settingsGuidance
     case fullAccessRequired
     case cloudConsentRequired
     case noText
     case noPendingTranscript
     case staleContext
+    case capabilityDenied(EditorCapabilityDenialReason)
     case error(String)
 
     var message: String {
         switch self {
         case .ready:
-            "Tap ★ to fix the text, or select part of it first."
+            "Buddy writing tools are ready."
         case .correcting:
             "Correcting…"
         case .corrected:
             "Correction applied."
         case .correctionUndone:
             "Correction undone."
+        case .automaticCorrectionReverted(let original):
+            "Restored \(original)."
+        case .correctionProposalReady:
+            "Review the Buddy change before applying it."
+        case .correctionProposalDismissed:
+            "Buddy change dismissed."
+        case .swipeAbstained:
+            "Swipe was uncertain, so nothing was inserted."
+        case .addedToDictionary(let word):
+            "Added \(word) to your dictionary."
+        case .correctionSuggestionSuppressed:
+            "That exact correction will not be suggested again."
         case .transcriptInserted:
-            "Dictation inserted."
-        case .startingDictation:
-            "Starting from Dynamic Island…"
-        case .openingDictation:
-            "Opening BuddyGrammar… Swipe back when the microphone starts."
-        case .dictationRecording:
-            "Listening… Tap the red stop button when finished."
-        case .dictationProcessing:
-            "Transcribing and polishing your words…"
+            "Saved transcript inserted."
+        case .appleDictationGuidance:
+            "For Apple Dictation, switch to the system keyboard and tap its microphone."
+        case .settingsGuidance:
+            "Open BuddyGrammar from the Home Screen to change keyboard settings."
         case .fullAccessRequired:
-            "Typing works. Enable Full Access for ★ and dictation."
+            "Typing works. Enable Full Access for Buddy actions."
         case .cloudConsentRequired:
-            "Accept cloud processing in the BuddyGrammar app to use ★."
+            "Accept cloud processing in BuddyGrammar to use Buddy writing tools."
         case .noText:
             "Type some text first."
         case .noPendingTranscript:
-            "No dictation is waiting. Record one in BuddyGrammar first."
+            "No saved transcript is waiting. Create one in BuddyGrammar first."
         case .staleContext:
             "The text changed, so the correction was not applied."
+        case .capabilityDenied(let reason):
+            reason.keyboardMessage
         case .error(let message):
             message
         }
@@ -81,22 +90,18 @@ enum KeyboardStatus: Equatable {
     var isError: Bool {
         switch self {
         case .fullAccessRequired, .cloudConsentRequired,
-             .noText, .noPendingTranscript, .staleContext, .error:
+             .noText, .noPendingTranscript, .staleContext,
+             .capabilityDenied, .error:
             true
         case .ready, .correcting, .corrected, .correctionUndone,
-             .transcriptInserted, .openingDictation,
-             .startingDictation,
-             .dictationRecording, .dictationProcessing:
+             .automaticCorrectionReverted, .transcriptInserted,
+             .correctionProposalReady, .correctionProposalDismissed,
+             .swipeAbstained, .addedToDictionary,
+             .correctionSuggestionSuppressed,
+             .appleDictationGuidance, .settingsGuidance:
             false
         }
     }
-}
-
-enum KeyboardDictationPhase: Equatable {
-    case idle
-    case launching
-    case recording
-    case processing
 }
 
 enum DocumentCorrectionTarget: Equatable, Sendable {
@@ -136,18 +141,61 @@ struct KeyboardSuggestion: Identifiable, Equatable {
     let display: String
     let deleteCount: Int
     let insertion: String
+    let originalText: String?
+    let automaticReplacement: AutomaticSuggestionReplacement?
+    let mutationReceipt: KeyboardSuggestionMutationReceipt
+
+    var capturedFieldEpoch: Int? { mutationReceipt.fieldEpoch }
+    var capturedFieldIdentifier: String? { mutationReceipt.fieldIdentifier }
+    var capturedLanguageCode: String? { mutationReceipt.languageCode }
+
+    init(
+        id: String,
+        kind: Kind,
+        display: String,
+        deleteCount: Int,
+        insertion: String,
+        originalText: String? = nil,
+        automaticReplacement: AutomaticSuggestionReplacement? = nil,
+        mutationReceipt: KeyboardSuggestionMutationReceipt
+    ) {
+        self.id = id
+        self.kind = kind
+        self.display = display
+        self.deleteCount = deleteCount
+        self.insertion = insertion
+        self.originalText = originalText
+        self.automaticReplacement = automaticReplacement
+        self.mutationReceipt = mutationReceipt
+    }
+}
+
+enum KeyboardCorrectionScope: Equatable {
+    case selection
+    case currentSentence
+
+    var label: String {
+        switch self {
+        case .selection: "Selection"
+        case .currentSentence: "Current sentence"
+        }
+    }
 }
 
 @MainActor
 protocol KeyboardModelDelegate: AnyObject {
     var keyboardHasFullAccess: Bool { get }
     var contextBeforeInput: String? { get }
+    var contextAfterInput: String? { get }
     var keyboardLanguage: String { get }
-    var allowsAutomaticTextCorrection: Bool { get }
-    var allowsPersonalizedLearning: Bool { get }
+    var editorReturnIntent: String? { get }
+    var editorFieldIdentifier: String { get }
+    var editorFieldTraits: EditorFieldTraits { get }
 
     func insertText(_ text: String)
     func deleteBackward()
+    func moveCursor(byUTF16Offset offset: Int)
+    func playInputClick()
     func captureCorrectionSnapshot() -> DocumentCorrectionSnapshot?
     func applyCorrection(
         _ replacement: String,
@@ -155,10 +203,91 @@ protocol KeyboardModelDelegate: AnyObject {
     ) -> AppliedCorrection?
     func canUndoCorrection(_ correction: AppliedCorrection) -> Bool
     func undoCorrection(_ correction: AppliedCorrection) -> Bool
-    func openHostApplication(
-        _ url: URL,
-        completion: @escaping @MainActor @Sendable (Bool) -> Void
-    )
+}
+
+@MainActor
+private final class KeyboardInputCorrectionEditorAdapter: CorrectionCompositionEditor {
+    private weak var delegate: (any KeyboardModelDelegate)?
+    private let contextAccess: EditorFeatureAccess
+    private let expectedContextBeforeReplacement: String?
+
+    init(
+        delegate: any KeyboardModelDelegate,
+        contextAccess: EditorFeatureAccess,
+        expectedContextBeforeReplacement: String? = nil
+    ) {
+        self.delegate = delegate
+        self.contextAccess = contextAccess
+        self.expectedContextBeforeReplacement = expectedContextBeforeReplacement
+    }
+
+    var correctionCompositionText: String {
+        EditorContextAccessGate.read(capability: contextAccess) {
+            delegate?.contextBeforeInput
+        } ?? ""
+    }
+
+    func replaceCorrectionCompositionSuffix(
+        _ expectedSuffix: String,
+        with replacement: String
+    ) -> Bool {
+        guard let delegate,
+              let observedContext = EditorContextAccessGate.read(
+                  capability: contextAccess,
+                  from: {
+                  delegate.contextBeforeInput
+                  }
+              ),
+              observedContext.hasSuffix(expectedSuffix),
+              expectedContextBeforeReplacement == nil
+                  || observedContext == expectedContextBeforeReplacement else {
+            return false
+        }
+        for _ in expectedSuffix { delegate.deleteBackward() }
+        delegate.insertText(replacement)
+        return true
+    }
+
+    func deleteCorrectionCompositionBackward() -> Bool {
+        guard let delegate else { return false }
+        delegate.deleteBackward()
+        return true
+    }
+}
+
+@MainActor
+private final class AppliedCorrectionEditorAdapter: CorrectionCompositionEditor {
+    private weak var delegate: (any KeyboardModelDelegate)?
+    private let correction: AppliedCorrection
+    private let contextAccess: EditorFeatureAccess
+
+    init(
+        delegate: any KeyboardModelDelegate,
+        correction: AppliedCorrection,
+        contextAccess: EditorFeatureAccess
+    ) {
+        self.delegate = delegate
+        self.correction = correction
+        self.contextAccess = contextAccess
+    }
+
+    var correctionCompositionText: String {
+        guard contextAccess.isAllowed,
+              delegate?.canUndoCorrection(correction) == true else { return "" }
+        return correction.replacementText
+    }
+
+    func replaceCorrectionCompositionSuffix(
+        _ expectedSuffix: String,
+        with replacement: String
+    ) -> Bool {
+        guard contextAccess.isAllowed,
+              expectedSuffix == correction.replacementText,
+              replacement == correction.originalText else { return false }
+        return delegate?.undoCorrection(correction) ?? false
+    }
+
+    func deleteCorrectionCompositionBackward() -> Bool { false }
 }
 
 @MainActor
@@ -234,9 +363,28 @@ private struct DeferredCorrectionLearning {
     let resultingContext: String?
 }
 
+private struct LocalAutomaticCorrection {
+    let originalText: String
+    let replacementText: String
+    let precedingContext: String
+    let languageCode: String?
+    let source: AutomaticCorrectionSource
+}
+
+private struct PendingCorrectionProposal {
+    let proposal: ReviewableCorrectionProposal
+    let snapshot: DocumentCorrectionSnapshot
+    let scope: KeyboardCorrectionScope
+    let languageCode: String?
+    let undoDuration: TimeInterval
+}
+
 @MainActor
 @Observable
 final class KeyboardModel {
+    private static let selectedLanguageDefaultsKey =
+        "BuddyGrammarKeyboard.selectedLanguage.v1"
+
     var layoutMode: KeyboardLayoutMode = .letters
     var shiftState: KeyboardShiftState = .uppercase
     private(set) var status: KeyboardStatus = .fullAccessRequired
@@ -244,23 +392,46 @@ final class KeyboardModel {
     private(set) var hasFullAccess = false
     private(set) var suggestions: [KeyboardSuggestion] = []
     private(set) var canUndoCorrection = false
-    private(set) var dictationPhase: KeyboardDictationPhase = .idle
     private(set) var hasPendingTranscript = false
+    private(set) var automaticCorrectionOriginalText: String?
+    private(set) var correctionProposal: ReviewableCorrectionProposal?
+    private(set) var correctionProposalScope: KeyboardCorrectionScope?
+    private(set) var keyboardPresentation: KeyboardCatalog.Presentation?
+    private(set) var keyboardReturnLabel = "return"
+    private(set) var keyboardAutoCapitalization: EditorAutoCapitalizationMode = .sentences
+    private(set) var selectedKeyboardLanguageIdentifier: String?
+    private(set) var editorFieldEpoch = 0
+    private(set) var keyboardInteractionConfiguration = KeyboardInteractionRouter.Configuration()
+    private(set) var editorCapabilities = EditorCapabilityPolicy.evaluate(
+        traits: EditorFieldTraits(kind: .unknown),
+        environment: EditorCapabilityEnvironment(
+            cloudTransportAvailable: false,
+            hasCloudProcessingConsent: false,
+            platformVoiceAvailable: false,
+            editorCanMoveCursor: true,
+            sharedContainerAvailable: false
+        )
+    )
 
     @ObservationIgnored private weak var delegate: KeyboardModelDelegate?
     @ObservationIgnored private let correctionClient: OpenRouterCorrectionClient
     @ObservationIgnored private let handwritingClient: HandwritingRecognitionClient
     @ObservationIgnored private let preferences: SharedPreferences?
     @ObservationIgnored private let adaptiveStore: AdaptiveLearningStore?
+    @ObservationIgnored private let keyboardCatalog: KeyboardCatalog?
+    @ObservationIgnored private let languageDefaults: UserDefaults
     @ObservationIgnored private let completionSource = WordCompletionSource()
     @ObservationIgnored private var correctionTask: Task<Void, Never>?
     @ObservationIgnored private var correctionRequestID: UUID?
     @ObservationIgnored private var statusDismissTask: Task<Void, Never>?
     @ObservationIgnored private var undoDismissTask: Task<Void, Never>?
-    @ObservationIgnored private var dictationMonitorTask: Task<Void, Never>?
     @ObservationIgnored private var baselineStatus: KeyboardStatus = .fullAccessRequired
     @ObservationIgnored private var pendingCorrectionUndo: AppliedCorrection?
     @ObservationIgnored private var deferredCorrectionLearning: DeferredCorrectionLearning?
+    @ObservationIgnored private var correctionCompositionSession =
+        CorrectionCompositionSession()
+    @ObservationIgnored private var automaticCorrectionExpiryTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingCorrectionProposal: PendingCorrectionProposal?
     @ObservationIgnored private var supplementalReplacements: [String: String] = [:]
     @ObservationIgnored private var cachedSwipeEngine: SwipeTypingEngine?
     @ObservationIgnored private var didWarmUpConnection = false
@@ -269,29 +440,52 @@ final class KeyboardModel {
     @ObservationIgnored private var typingIntelligence: TypingIntelligence
     @ObservationIgnored private let tapWordDecoder = TapWordDecoder()
     @ObservationIgnored private var currentWordTaps: [TapWordLatticeTap] = []
+    @ObservationIgnored private var currentWordTapTargetStartedAtProvenBoundary = false
     @ObservationIgnored private var activePracticeSession: ActivePracticeSession?
     @ObservationIgnored private var lastTypingDecision: TypingDecision?
     @ObservationIgnored private var pendingRejectedDecision: TypingDecision?
     @ObservationIgnored private var adaptiveProfileIsDirty = false
     @ObservationIgnored private var observationsSinceAdaptiveSave = 0
+    @ObservationIgnored private var userEnabledCapsLock = false
+    @ObservationIgnored private var observedLanguageResetGeneration: UInt64?
+    @ObservationIgnored private var observedTypingResetGeneration: UInt64?
+    @ObservationIgnored private var languagePersonalizationWasAvailable: Bool?
+    @ObservationIgnored private var typingPersonalizationWasAvailable: Bool?
 
     init(
         correctionClient: OpenRouterCorrectionClient = OpenRouterCorrectionClient(),
         handwritingClient: HandwritingRecognitionClient = HandwritingRecognitionClient(),
         preferences: SharedPreferences? = SharedPreferences(),
         adaptiveStore: AdaptiveLearningStore? = AdaptiveLearningStore(),
-        textIntelligence: TextIntelligence? = nil
+        textIntelligence: TextIntelligence? = nil,
+        languageDefaults: UserDefaults = .standard
     ) {
         self.correctionClient = correctionClient
         self.handwritingClient = handwritingClient
         self.preferences = preferences
         self.adaptiveStore = adaptiveStore
-        self.textIntelligence = textIntelligence ?? TextIntelligence(
-            personalLanguageModel: PersonalLanguageModel(
-                defaults: UserDefaults(
-                    suiteName: BuddyGrammarConfiguration.appGroupIdentifier
-                ) ?? .standard
+        self.languageDefaults = languageDefaults
+        let keyboardCatalog = try? KeyboardCatalog.bundled()
+        self.keyboardCatalog = keyboardCatalog
+        if let storedLanguage = languageDefaults.string(
+            forKey: Self.selectedLanguageDefaultsKey
+        ), keyboardCatalog?.languages.contains(where: { $0.id == storedLanguage }) == true {
+            self.selectedKeyboardLanguageIdentifier = storedLanguage
+        }
+        if let gestures = keyboardCatalog?.gestures {
+            let deleteRepeatInterval =
+                TimeInterval(gestures.deleteRepeat.intervalMilliseconds) / 1_000
+            self.keyboardInteractionConfiguration = KeyboardInteractionRouter.Configuration(
+                cursorActivationDelay: TimeInterval(gestures.spaceCursor.activationMilliseconds) / 1_000,
+                cursorStep: Double(gestures.spaceCursor.pointsPerGrapheme),
+                deleteRepeatDelay: TimeInterval(gestures.deleteRepeat.initialDelayMilliseconds) / 1_000,
+                deleteRepeatInterval: deleteRepeatInterval,
+                minimumDeleteRepeatInterval: deleteRepeatInterval
             )
+        }
+        self.textIntelligence = textIntelligence ?? TextIntelligence(
+            personalLanguageModel: preferences?.makePersonalLanguageModel()
+                ?? PersonalLanguageModel(defaults: nil)
         )
         self.typingIntelligence = TypingIntelligence(
             profile: adaptiveStore?.loadTypingProfile() ?? TypingProfile(),
@@ -301,21 +495,26 @@ final class KeyboardModel {
 
     func connect(delegate: KeyboardModelDelegate) {
         self.delegate = delegate
+        editorFieldEpoch &+= 1
+        currentWordTaps.removeAll(keepingCapacity: true)
+        currentWordTapTargetStartedAtProvenBoundary = false
+        correctionCompositionSession.synchronizeField(
+            identifier: delegate.editorFieldIdentifier
+        )
         activate()
     }
 
     func activate() {
-        refreshAdaptiveState()
         refreshAvailability()
+        refreshAdaptiveState()
         refreshPendingTranscriptAvailability()
         refreshSuggestions()
-        refreshKeyboardDictationSession()
-        startDictationMonitor()
         warmUpCorrectionConnectionIfNeeded()
     }
 
     private func warmUpCorrectionConnectionIfNeeded() {
-        guard hasFullAccess, !didWarmUpConnection else { return }
+        guard editorCapabilities.cloudCorrection.isAllowed,
+              !didWarmUpConnection else { return }
         didWarmUpConnection = true
         Task { [correctionClient] in
             await correctionClient.warmUpConnection()
@@ -323,12 +522,13 @@ final class KeyboardModel {
     }
 
     func refreshAvailability() {
-        hasFullAccess = delegate?.keyboardHasFullAccess ?? false
+        refreshEditorCapabilities()
 
-        guard hasFullAccess else {
+        guard editorCapabilities.cloudCorrection.isAllowed else {
             cancelCorrection()
-            clearCorrectionUndo()
-            baselineStatus = .fullAccessRequired
+            clearCorrectionProposal()
+            clearCorrectionUndo(acceptLearning: false)
+            baselineStatus = availabilityStatus()
             present(baselineStatus)
             return
         }
@@ -340,12 +540,177 @@ final class KeyboardModel {
         }
     }
 
+    private func refreshEditorCapabilities() {
+        hasFullAccess = delegate?.keyboardHasFullAccess ?? false
+        let settings = preferences?.loadSettings() ?? .default
+        let traits = delegate?.editorFieldTraits ?? EditorFieldTraits(kind: .unknown)
+        editorCapabilities = EditorCapabilityPolicy.evaluate(
+            traits: traits,
+            environment: EditorCapabilityEnvironment(
+                cloudTransportAvailable: hasFullAccess,
+                hasCloudProcessingConsent: settings.hasAcceptedCloudProcessing,
+                // Third-party extensions cannot start Apple-owned Dictation.
+                platformVoiceAvailable: false,
+                editorCanMoveCursor: true,
+                sharedContainerAvailable: hasFullAccess && preferences != nil,
+                editorCanReadContext: true,
+                // This extension uses explicit suffix replacement, not native
+                // composing spans, so it reports that primitive conservatively.
+                editorCanUseComposition: false
+            )
+        )
+        synchronizeLearningResetState()
+        refreshKeyboardPresentation(for: traits)
+        configureTypingPolicy()
+    }
+
+    private func refreshKeyboardPresentation(for traits: EditorFieldTraits) {
+        guard let keyboardCatalog else { return }
+        let presentation = keyboardCatalog.presentation(
+            for: editorCapabilities.presentationFieldKind.catalogFieldKind,
+            localeIdentifier: activeKeyboardLanguageCode
+        )
+        let changed = keyboardPresentation != presentation
+        keyboardPresentation = presentation
+        keyboardAutoCapitalization = presentation.resolvedAutoCapitalization(
+            hostMode: traits.autoCapitalization
+        )
+        keyboardReturnLabel = presentation.returnLabel(
+            overridingIntent: delegate?.editorReturnIntent
+        )
+        if changed {
+            userEnabledCapsLock = false
+            if [.letters, .numbers, .symbols].contains(layoutMode) {
+                layoutMode = presentation.usesNumericFieldLayout ? .numbers : .letters
+            }
+            refreshAutomaticShiftState()
+        }
+        enforceToolLayoutCapabilities()
+    }
+
+    var keyboardLetterRows: [[String]] {
+        if let rows = keyboardPresentation?.layout.letterRows {
+            return rows
+        }
+        return [
+            "qwertyuiop".map { String($0) },
+            "asdfghjkl".map { String($0) },
+            "zxcvbnm".map { String($0) },
+        ]
+    }
+
+    var keyboardNumberRows: [[String]] {
+        keyboardPresentation?.layout.numberRows ?? []
+    }
+
+    var keyboardSymbolRows: [[String]] {
+        keyboardPresentation?.layout.symbolRows ?? []
+    }
+
+    var keyboardNumericRows: [[String]] {
+        keyboardPresentation?.numericKeyRows
+            ?? [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["0"]]
+    }
+
+    var keyboardInlineKeys: [KeyboardCatalog.InlineKey] {
+        keyboardPresentation?.contextualInlineKeys ?? []
+    }
+
+    var keyboardSpaceLabel: String {
+        keyboardPresentation?.profile.spaceLabel ?? "space"
+    }
+
+    var keyboardLanguageButtonLabel: String {
+        (keyboardPresentation?.language.id
+            ?? LanguageSupport.primaryCode(for: activeKeyboardLanguageCode))
+            .uppercased()
+    }
+
+    var keyboardLanguageAccessibilityLabel: String {
+        guard let keyboardCatalog else { return "Change keyboard language" }
+        let current = keyboardPresentation?.language
+            ?? keyboardCatalog.language(for: activeKeyboardLanguageCode)
+        let next = keyboardCatalog.nextLanguage(after: current.id)
+        return keyboardCatalog.languageSwitchAccessibilityLabel(
+            from: current,
+            to: next,
+            displayLocaleIdentifier: Locale.preferredLanguages.first
+        )
+    }
+
+    func toggleKeyboardLanguage() {
+        guard let keyboardCatalog else { return }
+        let current = keyboardPresentation?.language
+            ?? keyboardCatalog.language(for: activeKeyboardLanguageCode)
+        let next = keyboardCatalog.nextLanguage(after: current.id)
+        selectedKeyboardLanguageIdentifier = next.id
+        languageDefaults.set(next.id, forKey: Self.selectedLanguageDefaultsKey)
+        cancelCorrection()
+        clearCorrectionProposal()
+        currentWordTaps.removeAll(keepingCapacity: true)
+        observedTextSuffix.clear()
+        cachedSwipeEngine = nil
+        refreshKeyboardPresentation(
+            for: delegate?.editorFieldTraits ?? EditorFieldTraits(kind: .unknown)
+        )
+        configureTypingPolicy()
+        refreshSuggestions()
+    }
+
+    private var activeKeyboardLanguageCode: String {
+        selectedKeyboardLanguageIdentifier
+            ?? delegate?.keyboardLanguage
+            ?? Locale.preferredLanguages.first
+            ?? LanguageSupport.defaultPrimaryCode
+    }
+
+    var handwritingLanguageCode: String { activeKeyboardLanguageCode }
+
+    var usesNumericFieldLayout: Bool {
+        keyboardPresentation?.usesNumericFieldLayout == true
+    }
+
+    func alternates(for key: String) -> [String] {
+        keyboardPresentation?.language.alternates[key.lowercased()] ?? []
+    }
+
+    @discardableResult
+    private func requireCapability(_ access: EditorFeatureAccess) -> Bool {
+        guard case .denied(let reason) = access else { return true }
+        present(.capabilityDenied(reason))
+        return false
+    }
+
+    private func intelligenceContextBeforeInput() -> String? {
+        EditorContextAccessGate.read(capability: editorCapabilities.readContext) {
+            delegate?.contextBeforeInput
+        }
+    }
+
+    private func intelligenceContextAfterInput() -> String? {
+        EditorContextAccessGate.read(capability: editorCapabilities.readContext) {
+            delegate?.contextAfterInput
+        }
+    }
+
+    private func enforceToolLayoutCapabilities() {
+        let access: EditorFeatureAccess? = switch layoutMode {
+        case .handwriting: editorCapabilities.localHandwriting
+        case .latex: editorCapabilities.literalTools
+        case .emoji: editorCapabilities.directLocalInsertion
+        case .letters, .numbers, .symbols: nil
+        }
+        guard access?.isAllowed == false else { return }
+        layoutMode = keyboardPresentation?.usesNumericFieldLayout == true ? .numbers : .letters
+    }
+
     func insertCharacter(_ character: String) {
         lastTypingDecision = nil
         pendingRejectedDecision = nil
         cancelCorrectionForLocalEdit()
+        var automaticCorrection: LocalAutomaticCorrection?
         if Self.autocorrectionBoundaryCharacters.contains(character) {
-            commitCurrentWord()
+            automaticCorrection = commitCurrentWord()
             currentWordTaps.removeAll(keepingCapacity: true)
         } else {
             observedTextSuffix.clear()
@@ -356,12 +721,25 @@ final class KeyboardModel {
         let output = shiftState.isShifted && layoutMode == .letters
             ? character.uppercased()
             : character
-        delegate?.insertText(output)
-
-        if layoutMode == .letters, shiftState == .uppercase {
-            shiftState = .lowercase
+        if Self.autocorrectionBoundaryCharacters.contains(character),
+           editorCapabilities.readContext.isAllowed {
+            let whitespaceToDelete = RecognizedTextFormatter.whitespaceToDeleteBefore(
+                output,
+                contextBeforeInput: intelligenceContextBeforeInput()
+            )
+            for _ in 0..<whitespaceToDelete {
+                delegate?.deleteBackward()
+            }
         }
-        refreshSuggestions()
+        delegate?.insertText(output)
+        if let automaticCorrection {
+            beginAutomaticCorrectionReceipt(
+                automaticCorrection,
+                boundary: output
+            )
+        }
+
+        refreshAfterEditorMutation(ownedInsertion: output)
     }
 
     /// Resolves a physical touch without changing the visible keyboard. The
@@ -371,7 +749,17 @@ final class KeyboardModel {
         literalKey: Character,
         timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime
     ) {
+        synchronizeLearningResetState()
         configureTypingPolicy()
+        guard editorCapabilities.suggestions.isAllowed,
+              editorCapabilities.readContext.isAllowed else {
+            insertLiteralCharacter(String(literalKey))
+            return
+        }
+        guard let context = intelligenceContextBeforeInput() else {
+            insertLiteralCharacter(String(literalKey))
+            return
+        }
         let normalizedLiteral = Character(String(literalKey).lowercased())
         let tap = TouchSample(
             x: keySpacePoint.x,
@@ -394,12 +782,11 @@ final class KeyboardModel {
         }
         pendingRejectedDecision = nil
 
-        let context = delegate?.contextBeforeInput ?? ""
         let decision = typingIntelligence.resolve(
             tap: tap,
             context: TypingContext(
                 rawText: context,
-                languageCode: delegate?.keyboardLanguage
+                languageCode: activeKeyboardLanguageCode
             )
         )
 
@@ -414,7 +801,10 @@ final class KeyboardModel {
             markAdaptiveProfileDirty()
         }
 
-        currentWordTaps.append(TapWordLatticeTap(decision: decision))
+        recordCurrentWordTap(
+            TapWordLatticeTap(decision: decision),
+            startsAtProvenBoundary: TypingContextAnalyzer.rawTrailingWord(in: context) == nil
+        )
         insertCharacter(String(decision.key))
         lastTypingDecision = decision
     }
@@ -424,15 +814,20 @@ final class KeyboardModel {
     func insertLiteralCharacter(_ character: String) {
         lastTypingDecision = nil
         pendingRejectedDecision = nil
-        if let key = character.first,
+        if editorCapabilities.suggestions.isAllowed,
+           editorCapabilities.readContext.isAllowed,
+           let context = intelligenceContextBeforeInput(),
+           let key = character.first,
            character.count == 1,
            key.isLetter {
-            currentWordTaps.append(
+            recordCurrentWordTap(
                 TapWordLatticeTap(
                     literalKey: key,
                     resolvedKey: key,
                     candidates: [TypingCandidate(key: key, confidence: 1)]
-                )
+                ),
+                startsAtProvenBoundary: TypingContextAnalyzer
+                    .rawTrailingWord(in: context) == nil
             )
         }
         insertCharacter(character)
@@ -442,26 +837,41 @@ final class KeyboardModel {
         lastTypingDecision = nil
         pendingRejectedDecision = nil
         cancelCorrectionForLocalEdit()
-        commitCurrentWord()
+        let automaticCorrection = commitCurrentWord()
         currentWordTaps.removeAll(keepingCapacity: true)
         delegate?.insertText(" ")
-        refreshSuggestions()
+        if let automaticCorrection {
+            beginAutomaticCorrectionReceipt(automaticCorrection, boundary: " ")
+        }
+        refreshAfterEditorMutation(ownedInsertion: " ")
     }
 
     func insertReturn() {
         lastTypingDecision = nil
         pendingRejectedDecision = nil
         cancelCorrectionForLocalEdit()
-        commitCurrentWord()
+        let automaticCorrection = commitCurrentWord()
         currentWordTaps.removeAll(keepingCapacity: true)
         delegate?.insertText("\n")
-        if layoutMode == .letters, shiftState == .lowercase {
-            shiftState = .uppercase
+        if let automaticCorrection {
+            beginAutomaticCorrectionReceipt(automaticCorrection, boundary: "\n")
         }
-        refreshSuggestions()
+        refreshAfterEditorMutation(ownedInsertion: "\n")
     }
 
     func deleteBackward() {
+        if correctionCompositionSession.snapshot.receiptMode == .automatic {
+            cancelCorrection()
+            clearCorrectionUndo(acceptLearning: false)
+            if revertAutomaticCorrectionIfPossible(mode: .immediateBackspace) {
+                lastTypingDecision = nil
+                pendingRejectedDecision = nil
+                currentWordTaps.removeAll(keepingCapacity: true)
+                observedTextSuffix.clear()
+                refreshAfterEditorMutation()
+                return
+            }
+        }
         if let decision = lastTypingDecision,
            ProcessInfo.processInfo.systemUptime - decision.receipt.tap.timestamp <= 3 {
             pendingRejectedDecision = decision
@@ -473,22 +883,109 @@ final class KeyboardModel {
             currentWordTaps.removeLast()
         }
         delegate?.deleteBackward()
+        refreshAfterEditorMutation()
+    }
+
+    func deleteWordBackward() {
+        guard let delegate else { return }
+        cancelCorrectionForLocalEdit()
+        lastTypingDecision = nil
+        pendingRejectedDecision = nil
+        currentWordTaps.removeAll(keepingCapacity: true)
+        observedTextSuffix.clear()
+        guard editorCapabilities.readContext.isAllowed else {
+            delegate.deleteBackward()
+            refreshAfterEditorMutation()
+            return
+        }
+        guard let contextBeforeInput = intelligenceContextBeforeInput() else {
+            // A host may temporarily withhold its context even though text is
+            // present. Keep the visible action useful without guessing across
+            // an editor boundary.
+            delegate.deleteBackward()
+            refreshAfterEditorMutation()
+            return
+        }
+        let deletionCount = KeyboardDeletionPolicy.deletionCount(
+            contextBeforeInput: contextBeforeInput,
+            // UITextDocumentProxy exposes a bounded prefix, not a completeness
+            // guarantee. A run that reaches its leading edge may therefore be
+            // only the tail of a longer word or whitespace run.
+            leadingEdgeMayBeTruncated: true
+        )
+        guard deletionCount > 0 else { return }
+        for _ in 0..<deletionCount {
+            delegate.deleteBackward()
+        }
+        refreshAfterEditorMutation()
+    }
+
+    func moveCursor(byCharacterOffset offset: Int) {
+        guard offset != 0 else { return }
+        refreshEditorCapabilities()
+        guard requireCapability(editorCapabilities.cursorMovement) else { return }
+        cancelCorrectionForLocalEdit()
+        lastTypingDecision = nil
+        pendingRejectedDecision = nil
+        currentWordTaps.removeAll(keepingCapacity: true)
+        observedTextSuffix.clear()
+        let editorOffset = if editorCapabilities.readContext.isAllowed {
+            KeyboardCursorOffsetPolicy.utf16Offset(
+                forGraphemeDelta: offset,
+                contextBeforeInput: intelligenceContextBeforeInput(),
+                contextAfterInput: intelligenceContextAfterInput()
+            )
+        } else {
+            // Context-denied fields must remain literal and private. Retain the
+            // platform's one-unit fallback without reading surrounding text.
+            offset
+        }
+        guard editorOffset != 0 else { return }
+        delegate?.moveCursor(byUTF16Offset: editorOffset)
         refreshSuggestions()
     }
 
+    /// Public extension-owned feedback seam. Local-input surfaces such as the
+    /// emoji search keyboard can request the same system-respecting click even
+    /// when they do not insert through the host text proxy.
+    func playInputClick() {
+        delegate?.playInputClick()
+    }
+
     func toggleShift() {
+        userEnabledCapsLock = false
         shiftState = shiftState == .lowercase ? .uppercase : .lowercase
     }
 
     func activateCapsLock() {
+        userEnabledCapsLock = true
         shiftState = .capsLock
     }
 
     func setLayout(_ mode: KeyboardLayoutMode) {
+        refreshEditorCapabilities()
+        let requestedCapability: EditorFeatureAccess? = switch mode {
+        case .handwriting: editorCapabilities.localHandwriting
+        case .latex: editorCapabilities.literalTools
+        case .emoji: editorCapabilities.directLocalInsertion
+        case .letters, .numbers, .symbols: nil
+        }
+        if let requestedCapability,
+           !requireCapability(requestedCapability) {
+            enforceToolLayoutCapabilities()
+            return
+        }
         cancelCorrectionForLocalEdit()
         currentWordTaps.removeAll(keepingCapacity: true)
-        layoutMode = mode
-        refreshSuggestions()
+        let isReturningFromTool = [.latex, .emoji, .handwriting].contains(layoutMode)
+        layoutMode = mode == .letters && isReturningFromTool && usesNumericFieldLayout
+            ? .numbers
+            : mode
+        refreshAfterEditorMutation()
+    }
+
+    func returnToPrimaryLayout() {
+        setLayout(usesNumericFieldLayout ? .numbers : .letters)
     }
 
     func toggleLayout() {
@@ -500,71 +997,255 @@ final class KeyboardModel {
     }
 
     func insertSuggestion(_ suggestion: KeyboardSuggestion) {
+        refreshEditorCapabilities()
+        guard editorCapabilities.suggestions.isAllowed,
+              editorCapabilities.readContext.isAllowed,
+              let delegate,
+              let context = intelligenceContextBeforeInput() else {
+            suggestions = []
+            return
+        }
+        guard suggestion.deleteCount == suggestion.mutationReceipt.deleteCount,
+              suggestion.mutationReceipt.matches(
+                  fieldEpoch: editorFieldEpoch,
+                  fieldIdentifier: delegate.editorFieldIdentifier,
+                  languageCode: activeKeyboardLanguageCode,
+                  contextBeforeInput: context
+              ) else {
+            present(.staleContext)
+            refreshSuggestions()
+            return
+        }
+        guard suggestion.kind != .correction
+                || suggestion.automaticReplacement != nil else {
+            present(.staleContext)
+            refreshSuggestions()
+            return
+        }
+        if let replacement = suggestion.automaticReplacement {
+            guard replacement.matches(
+                      contextBeforeInput: context,
+                      deleteCount: suggestion.deleteCount,
+                      insertion: suggestion.insertion
+                  ) else {
+                present(.staleContext)
+                refreshSuggestions()
+                return
+            }
+        }
+        if let replacement = suggestion.automaticReplacement {
+            cancelCorrectionForLocalEdit()
+            observedTextSuffix.clear()
+            currentWordTaps.removeAll(keepingCapacity: true)
+            correctionCompositionSession.synchronizeField(
+                identifier: delegate.editorFieldIdentifier
+            )
+            let correction = LocalAutomaticCorrection(
+                originalText: replacement.originalText,
+                replacementText: replacement.replacementText,
+                precedingContext: replacement.precedingContext,
+                languageCode: activeKeyboardLanguageCode,
+                source: replacement.source
+            )
+            let now = ProcessInfo.processInfo.systemUptime * 1_000
+            let effect = correctionCompositionSession.applyAutomatic(
+                in: KeyboardInputCorrectionEditorAdapter(
+                    delegate: delegate,
+                    contextAccess: editorCapabilities.readContext,
+                    expectedContextBeforeReplacement: replacement.expectedContextBeforeInput
+                ),
+                originalText: replacement.originalText,
+                replacementText: replacement.replacementText,
+                boundary: replacement.boundary,
+                precedingContext: replacement.precedingContext,
+                languageCode: activeKeyboardLanguageCode,
+                source: replacement.source,
+                atMilliseconds: now
+            )
+            guard effect.didMutateEditor else {
+                present(.staleContext)
+                refreshSuggestions()
+                return
+            }
+            activateAutomaticCorrectionReceipt(
+                correction,
+                effect: effect,
+                atMilliseconds: now
+            )
+            observedTextSuffix.observe(
+                committedText: replacement.insertion,
+                contextBeforeInput: replacement.precedingContext + replacement.insertion
+            )
+            refreshAfterEditorMutation(ownedInsertion: replacement.insertion)
+            return
+        }
+
+        guard let immediateContext = intelligenceContextBeforeInput(),
+              suggestion.mutationReceipt.matches(
+                  fieldEpoch: editorFieldEpoch,
+                  fieldIdentifier: delegate.editorFieldIdentifier,
+                  languageCode: activeKeyboardLanguageCode,
+                  contextBeforeInput: immediateContext
+              ) else {
+            present(.staleContext)
+            refreshSuggestions()
+            return
+        }
         cancelCorrectionForLocalEdit()
         observedTextSuffix.clear()
         currentWordTaps.removeAll(keepingCapacity: true)
-        let context = delegate?.contextBeforeInput ?? ""
+        guard let finalContext = intelligenceContextBeforeInput(),
+              suggestion.mutationReceipt.matches(
+                  fieldEpoch: editorFieldEpoch,
+                  fieldIdentifier: delegate.editorFieldIdentifier,
+                  languageCode: activeKeyboardLanguageCode,
+                  contextBeforeInput: finalContext
+              ) else {
+            present(.staleContext)
+            refreshSuggestions()
+            return
+        }
         let prefix = String(context.dropLast(suggestion.deleteCount))
         for _ in 0..<suggestion.deleteCount {
-            delegate?.deleteBackward()
+            delegate.deleteBackward()
         }
-        delegate?.insertText(suggestion.insertion)
+        delegate.insertText(suggestion.insertion)
         if suggestion.kind != .emoji {
             observePersonalCommittedText(
                 suggestion.insertion,
                 precededBy: prefix,
-                languageCode: delegate?.keyboardLanguage
+                languageCode: activeKeyboardLanguageCode
             )
             observedTextSuffix.observe(
                 committedText: suggestion.insertion,
                 contextBeforeInput: prefix + suggestion.insertion
             )
         }
-        if layoutMode == .letters, shiftState == .uppercase {
-            shiftState = .lowercase
+        refreshAfterEditorMutation(ownedInsertion: suggestion.insertion)
+    }
+
+    func addToDictionary(from suggestion: KeyboardSuggestion) {
+        refreshEditorCapabilities()
+        guard requireCapability(editorCapabilities.suggestions),
+              requireCapability(editorCapabilities.personalizedLearning),
+              requireCapability(editorCapabilities.readContext),
+              languagePersonalizationIsAvailable else {
+            if !languagePersonalizationIsAvailable {
+                present(.capabilityDenied(.sharedContainerUnavailable))
+            }
+            refreshSuggestions()
+            return
         }
+        guard let target = ownedCorrectionPreferenceTarget(for: suggestion) else {
+            present(.staleContext)
+            refreshSuggestions()
+            return
+        }
+        _ = textIntelligence.addToDictionary(
+            target.replacement.originalText,
+            languageCode: target.languageCode
+        )
+        present(.addedToDictionary(target.replacement.originalText))
         refreshSuggestions()
+    }
+
+    func neverSuggestCorrection(_ suggestion: KeyboardSuggestion) {
+        refreshEditorCapabilities()
+        guard requireCapability(editorCapabilities.suggestions),
+              requireCapability(editorCapabilities.personalizedLearning),
+              requireCapability(editorCapabilities.readContext),
+              languagePersonalizationIsAvailable else {
+            if !languagePersonalizationIsAvailable {
+                present(.capabilityDenied(.sharedContainerUnavailable))
+            }
+            refreshSuggestions()
+            return
+        }
+        guard let target = ownedCorrectionPreferenceTarget(for: suggestion) else {
+            present(.staleContext)
+            refreshSuggestions()
+            return
+        }
+        _ = textIntelligence.neverSuggestCorrection(
+            typed: target.replacement.originalText,
+            suggestion: target.replacement.replacementText,
+            languageCode: target.languageCode
+        )
+        present(.correctionSuggestionSuppressed)
+        refreshSuggestions()
+    }
+
+    var allowsCorrectionPreferenceActions: Bool {
+        languagePersonalizationIsAvailable
+            && editorCapabilities.suggestions.isAllowed
+            && editorCapabilities.personalizedLearning.isAllowed
+            && editorCapabilities.readContext.isAllowed
+    }
+
+    private func ownedCorrectionPreferenceTarget(
+        for suggestion: KeyboardSuggestion
+    ) -> (replacement: AutomaticSuggestionReplacement, languageCode: String)? {
+        guard suggestion.kind == .correction,
+              let replacement = suggestion.automaticReplacement,
+              suggestion.originalText == replacement.originalText,
+              suggestion.display == replacement.replacementText,
+              suggestion.capturedFieldEpoch == editorFieldEpoch,
+              let delegate,
+              suggestion.capturedFieldIdentifier == delegate.editorFieldIdentifier,
+              let languageCode = suggestion.capturedLanguageCode,
+              languageCode == activeKeyboardLanguageCode,
+              let contextBeforeInput = intelligenceContextBeforeInput(),
+              suggestion.mutationReceipt.matches(
+                  fieldEpoch: editorFieldEpoch,
+                  fieldIdentifier: delegate.editorFieldIdentifier,
+                  languageCode: languageCode,
+                  contextBeforeInput: contextBeforeInput
+              ),
+              replacement.matches(
+                  contextBeforeInput: contextBeforeInput,
+                  deleteCount: suggestion.deleteCount,
+                  insertion: suggestion.insertion
+              ) else {
+            return nil
+        }
+        return (replacement, languageCode)
     }
 
     func insertEmoji(_ emoji: String) {
+        refreshEditorCapabilities()
+        guard requireCapability(editorCapabilities.directLocalInsertion),
+              let delegate else { return }
         cancelCorrectionForLocalEdit()
         observedTextSuffix.clear()
         currentWordTaps.removeAll(keepingCapacity: true)
-        delegate?.insertText(emoji)
-        refreshSuggestions()
+        delegate.insertText(emoji)
+        refreshAfterEditorMutation(ownedInsertion: emoji)
     }
 
-    func insertRecognizedText(_ text: String) {
+    @discardableResult
+    func insertRecognizedText(_ text: String, capturedFieldEpoch: Int) -> Bool {
+        refreshEditorCapabilities()
+        guard capturedFieldEpoch == editorFieldEpoch,
+              requireCapability(editorCapabilities.localHandwriting) else {
+            return false
+        }
         cancelCorrectionForLocalEdit()
-        let context = delegate?.contextBeforeInput
+        let context = intelligenceContextBeforeInput()
         let formatted = HandwritingTextFormatter.textForInsertion(
             text,
             contextBeforeInput: context,
-            languageCode: delegate?.keyboardLanguage
+            languageCode: activeKeyboardLanguageCode
         )
-        commitRecognizedText(formatted, context: context)
-        refreshSuggestions()
+        return commitRecognizedText(formatted, context: context)
     }
 
-    private func insertDictatedText(
-        _ text: String,
-        languageCode: String? = nil
-    ) {
-        cancelCorrectionForLocalEdit()
-        let context = delegate?.contextBeforeInput
-        commitRecognizedText(
-            text,
-            context: context,
-            languageCode: languageCode
-        )
-        refreshSuggestions()
-    }
-
+    @discardableResult
     private func commitRecognizedText(
         _ text: String,
         context: String?,
         languageCode: String? = nil
-    ) {
+    ) -> Bool {
+        guard let delegate else { return false }
         observedTextSuffix.clear()
         currentWordTaps.removeAll(keepingCapacity: true)
         let whitespaceToDelete = RecognizedTextFormatter.whitespaceToDeleteBefore(
@@ -572,7 +1253,7 @@ final class KeyboardModel {
             contextBeforeInput: context
         )
         for _ in 0..<whitespaceToDelete {
-            delegate?.deleteBackward()
+            delegate.deleteBackward()
         }
         let retainedContext = context.map {
             String($0.dropLast(whitespaceToDelete))
@@ -581,17 +1262,19 @@ final class KeyboardModel {
             text,
             contextBeforeInput: retainedContext
         )
-        guard !insertion.isEmpty else { return }
-        delegate?.insertText(insertion)
+        guard !insertion.isEmpty else { return false }
+        delegate.insertText(insertion)
         observePersonalCommittedText(
             insertion,
             precededBy: retainedContext,
-            languageCode: languageCode ?? delegate?.keyboardLanguage
+            languageCode: languageCode ?? activeKeyboardLanguageCode
         )
         observedTextSuffix.observe(
             committedText: insertion,
             contextBeforeInput: (retainedContext ?? "") + insertion
         )
+        refreshAfterEditorMutation(ownedInsertion: insertion)
+        return true
     }
 
     func updateSupplementaryLexicon(_ lexicon: UILexicon) {
@@ -602,19 +1285,38 @@ final class KeyboardModel {
         cachedSwipeEngine = nil
     }
 
-    func commitSwipe(path: [CGPoint]) {
-        guard layoutMode == .letters, path.count >= 2 else { return }
-        let context = delegate?.contextBeforeInput
-        let candidates = swipeEngine().candidates(
-            forKeySpacePath: path,
-            limit: 3,
-            previousWord: lastWord(in: context)
-        )
-        guard let best = candidates.first else { return }
+    func commitSwipe(samples: [SwipePathSample]) {
+        refreshEditorCapabilities()
+        guard layoutMode == .letters,
+              samples.count >= 2 else {
+            suggestions = []
+            return
+        }
+        guard requireCapability(editorCapabilities.swipeTyping) else {
+            suggestions = []
+            return
+        }
+        cancelCorrection()
+        clearCorrectionProposal()
+        let context = intelligenceContextBeforeInput()
+        let recognition = KeyboardLatencyRecorder.production.measure(.swipeDecode) {
+            swipeEngine().recognize(
+                samples: samples,
+                limit: 3,
+                previousWord: lastWord(in: context),
+                languageCode: activeKeyboardLanguageCode
+            )
+        }
+        guard let best = recognition.acceptedCandidate else {
+            suggestions = []
+            present(.swipeAbstained(recognition.abstentionReason))
+            return
+        }
 
+        playInputClick()
         cancelCorrectionForLocalEdit()
         currentWordTaps.removeAll(keepingCapacity: true)
-        let word = applyingShift(to: best)
+        let word = applyingShift(to: best.word)
         commitRecognizedText(word, context: context)
         if shiftState == .uppercase {
             shiftState = .lowercase
@@ -624,15 +1326,33 @@ final class KeyboardModel {
         // dictionary intelligence. Structured and no-suggestion fields must
         // stay free of candidates even after a direct swipe gesture.
         if activePracticeSession == nil,
-           delegate?.allowsAutomaticTextCorrection == true {
-            suggestions = candidates.dropFirst().map { alternate in
-                let display = applyingShift(to: alternate, matching: word)
+           editorCapabilities.suggestions.isAllowed,
+           let committedContext = intelligenceContextBeforeInput(),
+           let acceptedWord = TypingContextAnalyzer.rawTrailingWord(in: committedContext),
+           let receipt = suggestionMutationReceipt(
+               contextBeforeInput: committedContext,
+               deleteCount: acceptedWord.count,
+               targetOwnership: .keyboardOwned
+           ) {
+            let precedingContext = String(committedContext.dropLast(acceptedWord.count))
+            suggestions = recognition.candidates.dropFirst().compactMap { alternate in
+                let display = applyingShift(to: alternate.word, matching: word)
+                guard let replacement = AutomaticSuggestionReplacement(
+                    originalText: acceptedWord,
+                    replacementText: display,
+                    boundary: "",
+                    precedingContext: precedingContext,
+                    source: .swipe
+                ) else { return nil }
                 return KeyboardSuggestion(
-                    id: "swipe-\(alternate)",
-                    kind: .completion,
+                    id: "swipe-\(alternate.word)",
+                    kind: .correction,
                     display: display,
-                    deleteCount: word.count,
-                    insertion: display
+                    deleteCount: acceptedWord.count,
+                    insertion: display,
+                    originalText: acceptedWord,
+                    automaticReplacement: replacement,
+                    mutationReceipt: receipt
                 )
             }
         } else {
@@ -640,11 +1360,32 @@ final class KeyboardModel {
         }
     }
 
+    /// Compatibility for callers that cannot yet provide timing. Production
+    /// pointer routing uses the timed overload above.
+    func commitSwipe(path: [CGPoint]) {
+        commitSwipe(
+            samples: path.enumerated().map { index, point in
+                SwipePathSample(
+                    point: point,
+                    timestampMilliseconds: Double(index * 16)
+                )
+            }
+        )
+    }
+
     private func lastWord(in context: String?) -> String? {
-        context?
-            .split(whereSeparator: { !$0.isLetter && $0 != "'" })
-            .last
-            .map(String.init)
+        context.flatMap { TextWordTokenizer.words(in: $0).last }
+    }
+
+    private func recordCurrentWordTap(
+        _ tap: TapWordLatticeTap,
+        startsAtProvenBoundary: Bool
+    ) {
+        guard currentWordTaps.count < TapWordDecoder.maximumTaps else { return }
+        if currentWordTaps.isEmpty {
+            currentWordTapTargetStartedAtProvenBoundary = startsAtProvenBoundary
+        }
+        currentWordTaps.append(tap)
     }
 
     private func swipeEngine() -> SwipeTypingEngine {
@@ -667,11 +1408,94 @@ final class KeyboardModel {
         }
     }
 
+    private var languagePersonalizationIsAvailable: Bool {
+        hasFullAccess && preferences != nil
+    }
+
+    private var typingPersonalizationIsAvailable: Bool {
+        languagePersonalizationIsAvailable && adaptiveStore != nil
+    }
+
+    private func discardPendingPersonalLearningState() {
+        automaticCorrectionExpiryTask?.cancel()
+        automaticCorrectionExpiryTask = nil
+        automaticCorrectionOriginalText = nil
+        deferredCorrectionLearning = nil
+        pendingCorrectionUndo = nil
+        canUndoCorrection = false
+        if correctionCompositionSession.snapshot.receiptMode != nil {
+            correctionCompositionSession.externalEditObserved()
+        }
+        currentWordTaps.removeAll(keepingCapacity: true)
+        observedTextSuffix.clear()
+    }
+
+    /// Reconciles both live learning families with App Group reset epochs.
+    /// Losing access drops only memory; returning access or a newer epoch
+    /// reloads a generation-owned durable snapshot.
+    private func synchronizeLearningResetState() {
+        let languageAvailable = languagePersonalizationIsAvailable
+        let generations = languageAvailable
+            ? preferences?.loadLearningResetGenerations()
+            : nil
+
+        if languageAvailable, let languageGeneration = generations?.language {
+            let generationChanged = observedLanguageResetGeneration.map {
+                $0 != languageGeneration
+            } == true
+            if languagePersonalizationWasAvailable == false || generationChanged {
+                discardPendingPersonalLearningState()
+                textIntelligence.reloadPersonalization()
+            }
+            observedLanguageResetGeneration = languageGeneration
+        } else {
+            if languagePersonalizationWasAvailable != false {
+                discardPendingPersonalLearningState()
+                textIntelligence.discardInMemoryPersonalization()
+            }
+            observedLanguageResetGeneration = nil
+        }
+        languagePersonalizationWasAvailable = languageAvailable
+
+        let typingAvailable = typingPersonalizationIsAvailable
+        if typingAvailable,
+           let typingGeneration = generations?.typing,
+           let adaptiveStore {
+            if typingPersonalizationWasAvailable == false
+                || observedTypingResetGeneration.map({ $0 != typingGeneration }) == true {
+                typingIntelligence = TypingIntelligence(
+                    profile: adaptiveStore.loadTypingProfile(),
+                    policy: .literal
+                )
+                adaptiveProfileIsDirty = false
+                observationsSinceAdaptiveSave = 0
+                lastTypingDecision = nil
+                pendingRejectedDecision = nil
+            }
+            observedTypingResetGeneration = typingGeneration
+        } else {
+            if typingPersonalizationWasAvailable != false {
+                typingIntelligence = TypingIntelligence(policy: .literal)
+                adaptiveProfileIsDirty = false
+                observationsSinceAdaptiveSave = 0
+                lastTypingDecision = nil
+                pendingRejectedDecision = nil
+            }
+            observedTypingResetGeneration = nil
+        }
+        typingPersonalizationWasAvailable = typingAvailable
+    }
+
     private func refreshAdaptiveState() {
-        activePracticeSession = adaptiveStore?.loadActivePracticeSession()
+        synchronizeLearningResetState()
+        activePracticeSession = typingPersonalizationIsAvailable
+            ? adaptiveStore?.loadActivePracticeSession()
+            : nil
         if !adaptiveProfileIsDirty {
             typingIntelligence = TypingIntelligence(
-                profile: adaptiveStore?.loadTypingProfile() ?? typingIntelligence.snapshot,
+                profile: typingPersonalizationIsAvailable
+                    ? adaptiveStore?.loadTypingProfile() ?? TypingProfile()
+                    : TypingProfile(),
                 policy: typingPolicy()
             )
         } else {
@@ -690,14 +1514,19 @@ final class KeyboardModel {
 
     private func typingPolicy() -> TypingPolicy {
         let settings = preferences?.loadSettings() ?? .default
+        guard editorCapabilities.automaticCorrection.isAllowed else {
+            return .literal
+        }
         if activePracticeSession != nil {
             return settings.adaptiveTypingEnabled ? .practice : .literal
         }
-        guard settings.adaptiveTypingEnabled,
-              delegate?.allowsAutomaticTextCorrection == true else {
+        guard settings.adaptiveTypingEnabled else {
             return .literal
         }
-        return delegate?.allowsPersonalizedLearning == true
+        guard typingPersonalizationIsAvailable else {
+            return .generic
+        }
+        return editorCapabilities.personalizedLearning.isAllowed
             ? .personalizedLearning
             : .personalizedReadOnly
     }
@@ -716,6 +1545,8 @@ final class KeyboardModel {
     }
 
     private func markAdaptiveProfileDirty() {
+        synchronizeLearningResetState()
+        guard typingPersonalizationIsAvailable else { return }
         adaptiveProfileIsDirty = true
         observationsSinceAdaptiveSave += 1
         if observationsSinceAdaptiveSave >= 8 {
@@ -724,11 +1555,25 @@ final class KeyboardModel {
     }
 
     private func persistAdaptiveProfileIfNeeded(force: Bool = false) {
+        synchronizeLearningResetState()
         guard adaptiveProfileIsDirty, force || observationsSinceAdaptiveSave >= 8 else {
             return
         }
+        guard typingPersonalizationIsAvailable,
+              let observedTypingResetGeneration else {
+            adaptiveProfileIsDirty = false
+            observationsSinceAdaptiveSave = 0
+            return
+        }
         do {
-            try adaptiveStore?.saveTypingProfile(typingIntelligence.snapshot)
+            let didSave = try adaptiveStore?.saveTypingProfile(
+                typingIntelligence.snapshot,
+                expectedResetGeneration: observedTypingResetGeneration
+            ) ?? false
+            guard didSave else {
+                synchronizeLearningResetState()
+                return
+            }
             adaptiveProfileIsDirty = false
             observationsSinceAdaptiveSave = 0
         } catch {
@@ -738,7 +1583,8 @@ final class KeyboardModel {
 
     private var allowsPersonalLanguageLearning: Bool {
         activePracticeSession == nil
-            && delegate?.allowsPersonalizedLearning == true
+            && languagePersonalizationIsAvailable
+            && editorCapabilities.personalizedLearning.isAllowed
     }
 
     private func observePersonalCommittedText(
@@ -746,6 +1592,7 @@ final class KeyboardModel {
         precededBy context: String?,
         languageCode: String?
     ) {
+        synchronizeLearningResetState()
         guard allowsPersonalLanguageLearning else { return }
         textIntelligence.observeCommittedText(
             text,
@@ -755,14 +1602,14 @@ final class KeyboardModel {
     }
 
     func recognizeHandwriting(_ imageData: Data) async throws -> String? {
-        guard delegate?.keyboardHasFullAccess == true,
+        refreshEditorCapabilities()
+        guard requireCapability(editorCapabilities.cloudHandwriting),
               let preferences else {
             return nil
         }
         let settings = preferences.loadSettings()
-        guard settings.hasAcceptedCloudProcessing else { return nil }
 
-        let languageCode = delegate?.keyboardLanguage
+        let languageCode = activeKeyboardLanguageCode
             .split(separator: "-")
             .first
             .map(String.init)
@@ -774,18 +1621,30 @@ final class KeyboardModel {
         )
     }
 
+    func canPublishHandwritingCandidate(
+        capturedFieldEpoch: Int,
+        requiresCloud: Bool
+    ) -> Bool {
+        refreshEditorCapabilities()
+        guard capturedFieldEpoch == editorFieldEpoch,
+              editorCapabilities.localHandwriting.isAllowed else { return false }
+        return !requiresCloud || editorCapabilities.cloudHandwriting.isAllowed
+    }
+
     func refreshSuggestions() {
+        synchronizeLearningResetState()
         guard activePracticeSession == nil,
-              delegate?.allowsAutomaticTextCorrection == true else {
+              editorCapabilities.suggestions.isAllowed,
+              editorCapabilities.readContext.isAllowed,
+              let context = intelligenceContextBeforeInput() else {
             suggestions = []
             return
         }
-        let context = delegate?.contextBeforeInput
         let analysis = TypingContextAnalyzer.analyze(context)
-        let emojiSuggestion = emojiSuggestion(for: analysis)
+        let emojiSuggestion = emojiSuggestion(for: analysis, context: context)
         let textLimit = emojiSuggestion == nil ? 3 : 2
-        var next = localTextSuggestions(for: context, limit: textLimit).map {
-            keyboardSuggestion(from: $0)
+        var next = localTextSuggestions(for: context, limit: textLimit).compactMap {
+            keyboardSuggestion(from: $0, context: context)
         }
         if let latticeSuggestion = latticeSuggestion(for: context),
            !next.contains(where: {
@@ -800,33 +1659,58 @@ final class KeyboardModel {
     }
 
     private func latticeSuggestion(for context: String?) -> KeyboardSuggestion? {
-        guard case .typingWord(let visibleWord) = TypingContextAnalyzer
-            .analyze(context).mode,
-              currentWordTaps.count == visibleWord.count else {
+        guard let rawVisibleWord = TypingContextAnalyzer.rawTrailingWord(in: context),
+              case .typingWord(let visibleWord) = TypingContextAnalyzer
+                  .analyze(context).mode,
+              currentWordTaps.count == TapWordDecoder.expectedTapCount(
+                  for: visibleWord
+              ),
+              textIntelligence.usageCount(
+                  for: visibleWord,
+                  languageCode: activeKeyboardLanguageCode
+              ) < 3 else {
             return nil
         }
-        let precedingContext = String((context ?? "").dropLast(visibleWord.count))
+        let precedingContext = String((context ?? "").dropLast(rawVisibleWord.count))
         let result = tapWordDecoder.decode(
             currentWordTaps,
             previousWord: lastWord(in: precedingContext),
-            languageCode: delegate?.keyboardLanguage,
+            languageCode: activeKeyboardLanguageCode,
             limit: 5
         )
-        guard let best = result.candidates.first,
-              best.confidence >= 0.38,
-              result.margin >= 0.08 else {
+        guard let best = TapWordAcceptancePolicy.suggestion.acceptedCandidate(
+            from: result
+        ) else {
             return nil
         }
-        let candidate = matchingCapitalization(of: best.word, to: visibleWord)
-        guard candidate.caseInsensitiveCompare(visibleWord) != .orderedSame else {
+        let candidate = matchingCapitalization(of: best.word, to: rawVisibleWord)
+        guard candidate.caseInsensitiveCompare(visibleWord) != .orderedSame,
+              !textIntelligence.isCorrectionSuppressed(
+                  typed: visibleWord,
+                  suggestion: candidate,
+                  languageCode: activeKeyboardLanguageCode
+              ) else {
             return nil
         }
+        guard let replacement = AutomaticSuggestionReplacement(
+            originalText: rawVisibleWord,
+            replacementText: candidate,
+            boundary: " ",
+            precedingContext: precedingContext,
+            source: .tapLattice
+        ), let receipt = suggestionMutationReceipt(
+            contextBeforeInput: context ?? "",
+            deleteCount: rawVisibleWord.count
+        ) else { return nil }
         return KeyboardSuggestion(
             id: "tap-lattice-\(candidate)",
             kind: .correction,
             display: candidate,
-            deleteCount: visibleWord.count,
-            insertion: candidate + " "
+            deleteCount: rawVisibleWord.count,
+            insertion: candidate + " ",
+            originalText: rawVisibleWord,
+            automaticReplacement: replacement,
+            mutationReceipt: receipt
         )
     }
 
@@ -834,7 +1718,7 @@ final class KeyboardModel {
         for context: String?,
         limit: Int
     ) -> [TextSuggestion] {
-        let languageCode = delegate?.keyboardLanguage
+        let languageCode = activeKeyboardLanguageCode
         guard case .typingWord(let partial) = TypingContextAnalyzer.analyze(context).mode else {
             return textIntelligence.suggestions(
                 for: context,
@@ -843,8 +1727,7 @@ final class KeyboardModel {
             )
         }
 
-        let checkerLanguage = languageCode?
-            .replacingOccurrences(of: "-", with: "_") ?? "en_US"
+        let checkerLanguage = languageCode.replacingOccurrences(of: "-", with: "_")
         return textIntelligence.suggestions(
             for: context,
             shortcutReplacement: completionSource.shortcutReplacement(
@@ -865,7 +1748,10 @@ final class KeyboardModel {
         )
     }
 
-    private func keyboardSuggestion(from suggestion: TextSuggestion) -> KeyboardSuggestion {
+    private func keyboardSuggestion(
+        from suggestion: TextSuggestion,
+        context: String
+    ) -> KeyboardSuggestion? {
         let kind: KeyboardSuggestion.Kind
         let idPrefix: String
         switch suggestion.kind {
@@ -880,89 +1766,199 @@ final class KeyboardModel {
             idPrefix = "prediction"
         }
 
+        let rawOriginal = kind == .correction
+            ? TypingContextAnalyzer.rawTrailingWord(in: context)
+            : nil
+        let deleteCount = rawOriginal?.count ?? suggestion.replacementLength
+        let insertion = suggestion.text + " "
+        let precedingContext = String(context.dropLast(deleteCount))
+        let automaticReplacement: AutomaticSuggestionReplacement?
+        if let rawOriginal,
+           let source = suggestion.automaticCorrectionSource {
+            automaticReplacement = AutomaticSuggestionReplacement(
+                originalText: rawOriginal,
+                replacementText: suggestion.text,
+                boundary: " ",
+                precedingContext: precedingContext,
+                source: source
+            )
+        } else {
+            automaticReplacement = nil
+        }
+
+        guard let receipt = suggestionMutationReceipt(
+            contextBeforeInput: context,
+            deleteCount: deleteCount
+        ) else { return nil }
         return KeyboardSuggestion(
             id: "\(idPrefix)-\(suggestion.text)",
             kind: kind,
             display: suggestion.text,
-            deleteCount: suggestion.replacementLength,
-            insertion: suggestion.text + " "
+            deleteCount: deleteCount,
+            insertion: insertion,
+            originalText: rawOriginal,
+            automaticReplacement: automaticReplacement,
+            mutationReceipt: receipt
         )
     }
 
     private func emojiSuggestion(
-        for analysis: TypingContextAnalysis
+        for analysis: TypingContextAnalysis,
+        context: String
     ) -> KeyboardSuggestion? {
         switch analysis.mode {
         case .typingWord(let partial):
             guard let emoji = SuggestionEmojiMap.emoji(for: partial) else { return nil }
+            guard let receipt = suggestionMutationReceipt(
+                contextBeforeInput: context,
+                deleteCount: partial.count
+            ) else { return nil }
             return KeyboardSuggestion(
                 id: "emoji-\(emoji)",
                 kind: .emoji,
                 display: emoji,
                 deleteCount: partial.count,
-                insertion: emoji
+                insertion: emoji,
+                mutationReceipt: receipt
             )
         case .betweenWords(let lastWord):
             guard let lastWord,
-                  let emoji = SuggestionEmojiMap.emoji(for: lastWord) else {
+                  let emoji = SuggestionEmojiMap.emoji(for: lastWord),
+                  let replacementTarget = TypingContextAnalyzer
+                      .rawTrailingWordAndHorizontalWhitespace(in: context) else {
                 return nil
             }
+            let deleteCount = replacementTarget.count
+            guard let receipt = suggestionMutationReceipt(
+                contextBeforeInput: context,
+                deleteCount: deleteCount
+            ) else { return nil }
             return KeyboardSuggestion(
                 id: "emoji-\(emoji)",
                 kind: .emoji,
                 display: emoji,
-                deleteCount: lastWord.count + 1,
-                insertion: emoji + " "
+                deleteCount: deleteCount,
+                insertion: emoji + " ",
+                mutationReceipt: receipt
             )
         case .empty:
             return nil
         }
     }
 
+    private func suggestionMutationReceipt(
+        contextBeforeInput: String,
+        deleteCount: Int,
+        targetOwnership: KeyboardSuggestionTargetOwnership = .contextDerived
+    ) -> KeyboardSuggestionMutationReceipt? {
+        guard let delegate,
+              deleteCount >= 0,
+              deleteCount <= contextBeforeInput.count else { return nil }
+        let deletedSuffix = String(contextBeforeInput.suffix(deleteCount))
+        let resolvedTargetOwnership: KeyboardSuggestionTargetOwnership
+        if targetOwnership == .keyboardOwned
+            || (
+                deleteCount > 0
+                    && currentWordTapTargetStartedAtProvenBoundary
+                    && TapWordDecoder.hasExactKeyboardOwnership(
+                        currentWordTaps,
+                        visibleWord: deletedSuffix
+                    )
+            ) {
+            resolvedTargetOwnership = .keyboardOwned
+        } else {
+            resolvedTargetOwnership = .contextDerived
+        }
+        return KeyboardSuggestionMutationReceipt(
+            fieldEpoch: editorFieldEpoch,
+            fieldIdentifier: delegate.editorFieldIdentifier,
+            languageCode: activeKeyboardLanguageCode,
+            contextBeforeInput: contextBeforeInput,
+            deleteCount: deleteCount,
+            targetOwnership: resolvedTargetOwnership
+        )
+    }
+
     /// Corrects (when enabled) and learns the word being finished before its
     /// boundary is inserted, so both actions share the same ranking seam.
-    private func commitCurrentWord() {
-        let context = delegate?.contextBeforeInput
+    private func commitCurrentWord() -> LocalAutomaticCorrection? {
+        guard editorCapabilities.automaticCorrection.isAllowed
+                || editorCapabilities.personalizedLearning.isAllowed else {
+            observedTextSuffix.clear()
+            return nil
+        }
+        guard let context = intelligenceContextBeforeInput() else { return nil }
         if observedTextSuffix.consumeIfUnchanged(contextBeforeInput: context) {
-            return
+            return nil
         }
-        guard case .typingWord(let word) = TypingContextAnalyzer.analyze(context).mode else {
-            return
+        guard let rawWord = TypingContextAnalyzer.rawTrailingWord(in: context),
+              case .typingWord(let word) = TypingContextAnalyzer.analyze(context).mode else {
+            return nil
         }
-        let prefix = String((context ?? "").dropLast(word.count))
-        var committedWord = word
+        let hasExactKeyboardOwnership =
+            currentWordTapTargetStartedAtProvenBoundary
+            && TapWordDecoder.hasExactKeyboardOwnership(
+                currentWordTaps,
+                visibleWord: rawWord
+            )
+        guard KeyboardWordTargetOwnershipPolicy.isCompleteTarget(
+            contextBeforeInput: context,
+            target: rawWord,
+            hasExactKeyboardOwnership: hasExactKeyboardOwnership
+        ) else {
+            return nil
+        }
+        let prefix = String(context.dropLast(rawWord.count))
 
         let settings = preferences?.loadSettings() ?? .default
-        var appliedCorrection = false
         if activePracticeSession == nil,
            settings.automaticallyCorrectWords,
-           delegate?.allowsAutomaticTextCorrection == true {
+           editorCapabilities.automaticCorrection.isAllowed {
             if let correction = latticeCorrection(
                 for: word,
                 precedingContext: prefix,
-                languageCode: delegate?.keyboardLanguage
+                languageCode: activeKeyboardLanguageCode
             ) {
-                replaceCurrentWord(word, with: correction)
-                committedWord = correction
-                appliedCorrection = true
+                guard replaceCurrentWord(
+                    rawWord,
+                    with: correction,
+                    expectedContextBeforeInput: context
+                ) else { return nil }
+                return LocalAutomaticCorrection(
+                    originalText: rawWord,
+                    replacementText: correction,
+                    precedingContext: prefix,
+                    languageCode: activeKeyboardLanguageCode,
+                    source: .tapLattice
+                )
             }
         }
 
         if activePracticeSession == nil,
-           !appliedCorrection,
            settings.automaticallyCorrectWords,
-           delegate?.allowsAutomaticTextCorrection == true,
+           editorCapabilities.automaticCorrection.isAllowed,
            let correction = localTextSuggestions(for: context, limit: 3)
                .first(where: { $0.kind == .correction }) {
-            replaceCurrentWord(word, with: correction.text)
-            committedWord = correction.text
+            guard replaceCurrentWord(
+                rawWord,
+                with: correction.text,
+                expectedContextBeforeInput: context
+            ) else { return nil }
+            return LocalAutomaticCorrection(
+                originalText: rawWord,
+                replacementText: correction.text,
+                precedingContext: prefix,
+                languageCode: activeKeyboardLanguageCode,
+                source: correction.automaticCorrectionSource ?? .spelling
+            )
         }
 
         observePersonalCommittedText(
-            committedWord,
+            rawWord,
             precededBy: prefix,
-            languageCode: delegate?.keyboardLanguage
+            languageCode: activeKeyboardLanguageCode
         )
+        return nil
     }
 
     private func latticeCorrection(
@@ -970,33 +1966,213 @@ final class KeyboardModel {
         precedingContext: String,
         languageCode: String?
     ) -> String? {
-        guard currentWordTaps.count == visibleWord.count else { return nil }
+        guard currentWordTaps.count == TapWordDecoder.expectedTapCount(
+            for: visibleWord
+        ),
+              textIntelligence.usageCount(
+                  for: visibleWord,
+                  languageCode: languageCode
+              ) < 3 else { return nil }
         let result = tapWordDecoder.decode(
             currentWordTaps,
             previousWord: lastWord(in: precedingContext),
             languageCode: languageCode,
             limit: 5
         )
-        guard let best = result.candidates.first,
-              best.confidence >= 0.50,
-              result.margin >= 0.18 else {
+        guard let best = TapWordAcceptancePolicy.automatic.acceptedCandidate(
+            from: result
+        ) else {
             return nil
         }
         let candidate = matchingCapitalization(
             of: best.word,
             to: visibleWord
         )
-        guard candidate.caseInsensitiveCompare(visibleWord) != .orderedSame else {
+        guard candidate.caseInsensitiveCompare(visibleWord) != .orderedSame,
+              !textIntelligence.isCorrectionSuppressed(
+                  typed: visibleWord,
+                  suggestion: candidate,
+                  languageCode: languageCode
+              ) else {
             return nil
         }
         return candidate
     }
 
-    private func replaceCurrentWord(_ original: String, with replacement: String) {
-        for _ in original {
-            delegate?.deleteBackward()
+    private func replaceCurrentWord(
+        _ original: String,
+        with replacement: String,
+        expectedContextBeforeInput: String
+    ) -> Bool {
+        guard let delegate,
+              intelligenceContextBeforeInput() == expectedContextBeforeInput,
+              expectedContextBeforeInput.hasSuffix(original) else {
+            return false
         }
-        delegate?.insertText(replacement)
+        for _ in original {
+            delegate.deleteBackward()
+        }
+        delegate.insertText(replacement)
+        return true
+    }
+
+    private func beginAutomaticCorrectionReceipt(
+        _ correction: LocalAutomaticCorrection,
+        boundary: String
+    ) {
+        guard let delegate else {
+            observePersonalCommittedText(
+                correction.replacementText,
+                precededBy: correction.precedingContext,
+                languageCode: correction.languageCode
+            )
+            return
+        }
+        correctionCompositionSession.synchronizeField(
+            identifier: delegate.editorFieldIdentifier
+        )
+        let editor = KeyboardInputCorrectionEditorAdapter(
+            delegate: delegate,
+            contextAccess: editorCapabilities.readContext
+        )
+        let now = ProcessInfo.processInfo.systemUptime * 1_000
+        let effect = correctionCompositionSession.recordAutomaticApplication(
+            in: editor,
+            originalText: correction.originalText,
+            replacementText: correction.replacementText,
+            boundary: boundary,
+            precedingContext: correction.precedingContext,
+            languageCode: correction.languageCode,
+            source: correction.source,
+            atMilliseconds: now
+        )
+        activateAutomaticCorrectionReceipt(
+            correction,
+            effect: effect,
+            atMilliseconds: now
+        )
+    }
+
+    private func activateAutomaticCorrectionReceipt(
+        _ correction: LocalAutomaticCorrection,
+        effect: CorrectionCompositionEffect,
+        atMilliseconds now: Double
+    ) {
+        guard !effect.ignored,
+              let receiptID = correctionCompositionSession.snapshot.receiptID else {
+            observePersonalCommittedText(
+                correction.replacementText,
+                precededBy: correction.precedingContext,
+                languageCode: correction.languageCode
+            )
+            return
+        }
+        automaticCorrectionOriginalText =
+            correctionCompositionSession.snapshot.originalText
+        automaticCorrectionExpiryTask?.cancel()
+        automaticCorrectionExpiryTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(3))
+            } catch {
+                return
+            }
+            guard let self,
+                  correctionCompositionSession.snapshot.receiptID == receiptID,
+                  let currentDelegate = self.delegate else { return }
+            let expiryEffect = correctionCompositionSession.advanceTime(
+                toMilliseconds: now + 3_000,
+                in: KeyboardInputCorrectionEditorAdapter(
+                    delegate: currentDelegate,
+                    contextAccess: editorCapabilities.readContext
+                )
+            )
+            automaticCorrectionOriginalText = nil
+            automaticCorrectionExpiryTask = nil
+            acceptCompositionLearning(expiryEffect)
+        }
+    }
+
+    @discardableResult
+    private func revertAutomaticCorrectionIfPossible(
+        mode: AutomaticCorrectionRevertMode
+    ) -> Bool {
+        guard correctionCompositionSession.snapshot.receiptMode == .automatic,
+              let delegate else {
+            clearAutomaticCorrectionReceipt(acceptLearning: false)
+            return false
+        }
+        let editor = KeyboardInputCorrectionEditorAdapter(
+            delegate: delegate,
+            contextAccess: editorCapabilities.readContext
+        )
+        let effect = switch mode {
+        case .immediateBackspace:
+            correctionCompositionSession.backspace(in: editor)
+        case .visibleUndo:
+            correctionCompositionSession.visibleRevert(in: editor)
+        }
+        automaticCorrectionOriginalText = nil
+        automaticCorrectionExpiryTask?.cancel()
+        automaticCorrectionExpiryTask = nil
+        if allowsPersonalLanguageLearning, let rejection = effect.rejection {
+            textIntelligence.rejectCommittedWord(
+                rejection.rejectedText,
+                precededBy: lastWord(in: rejection.precedingContext),
+                languageCode: rejection.languageCode
+            )
+            observePersonalCommittedText(
+                rejection.restoredText,
+                precededBy: rejection.precedingContext,
+                languageCode: rejection.languageCode
+            )
+        }
+        if let restoredText = effect.rejection?.restoredText {
+            present(.automaticCorrectionReverted(restoredText))
+        }
+        return effect.didMutateEditor
+    }
+
+    func undoAutomaticCorrection() {
+        cancelCorrection()
+        clearCorrectionUndo(acceptLearning: false)
+        guard revertAutomaticCorrectionIfPossible(mode: .visibleUndo) else {
+            present(.staleContext)
+            return
+        }
+        lastTypingDecision = nil
+        pendingRejectedDecision = nil
+        currentWordTaps.removeAll(keepingCapacity: true)
+        observedTextSuffix.clear()
+        refreshAfterEditorMutation()
+    }
+
+    private func clearAutomaticCorrectionReceipt(acceptLearning: Bool) {
+        automaticCorrectionExpiryTask?.cancel()
+        automaticCorrectionExpiryTask = nil
+        automaticCorrectionOriginalText = nil
+        guard correctionCompositionSession.snapshot.receiptMode == .automatic else { return }
+        guard let delegate else {
+            correctionCompositionSession.externalEditObserved()
+            return
+        }
+        let effect = correctionCompositionSession.finishActiveReceipt(
+            in: KeyboardInputCorrectionEditorAdapter(
+                delegate: delegate,
+                contextAccess: editorCapabilities.readContext
+            ),
+            acceptLearning: acceptLearning
+        )
+        acceptCompositionLearning(effect)
+    }
+
+    private func acceptCompositionLearning(_ effect: CorrectionCompositionEffect) {
+        guard allowsPersonalLanguageLearning,
+              let learning = effect.acceptedLearning else { return }
+        observePersonalCommittedText(
+            learning.text,
+            precededBy: learning.precedingContext,
+            languageCode: learning.languageCode
+        )
     }
 
     private func matchingCapitalization(of candidate: String, to source: String) -> String {
@@ -1011,17 +2187,53 @@ final class KeyboardModel {
     }
 
     func documentContextDidChange() {
-        if let pendingCorrectionUndo,
-           delegate?.canUndoCorrection(pendingCorrectionUndo) != true {
-            clearCorrectionUndo()
+        editorFieldEpoch &+= 1
+        if let delegate {
+            correctionCompositionSession.synchronizeField(
+                identifier: delegate.editorFieldIdentifier
+            )
         }
+        let invalidatedProposal = pendingCorrectionProposal != nil
+        if invalidatedProposal {
+            clearCorrectionProposal()
+        }
+        let previousCapabilities = editorCapabilities
+        refreshEditorCapabilities()
+        refreshAutomaticShiftState()
+        if previousCapabilities != editorCapabilities {
+            baselineStatus = availabilityStatus()
+        }
+        if correctionCompositionSession.snapshot.receiptMode == .automatic,
+           let delegate {
+            let invalidated = correctionCompositionSession.invalidateIfEditorChanged(
+                KeyboardInputCorrectionEditorAdapter(
+                    delegate: delegate,
+                    contextAccess: editorCapabilities.readContext
+                )
+            )
+            if invalidated {
+                automaticCorrectionOriginalText = nil
+                automaticCorrectionExpiryTask?.cancel()
+                automaticCorrectionExpiryTask = nil
+            }
+        }
+        if correctionCompositionSession.snapshot.receiptMode == .automatic,
+           delegate == nil {
+                clearAutomaticCorrectionReceipt(acceptLearning: false)
+        }
+        if let pendingCorrectionUndo,
+           !editorCapabilities.readContext.isAllowed
+            || delegate?.canUndoCorrection(pendingCorrectionUndo) != true {
+            clearCorrectionUndo(acceptLearning: false)
+        }
+        let context = intelligenceContextBeforeInput()
         observedTextSuffix.retainIfUnchanged(
-            contextBeforeInput: delegate?.contextBeforeInput
+            contextBeforeInput: context
         )
         let currentWordLength: Int
         if case .typingWord(let word) = TypingContextAnalyzer
-            .analyze(delegate?.contextBeforeInput).mode {
-            currentWordLength = word.count
+            .analyze(context).mode {
+            currentWordLength = TapWordDecoder.expectedTapCount(for: word) ?? 0
         } else {
             currentWordLength = 0
         }
@@ -1029,60 +2241,58 @@ final class KeyboardModel {
             currentWordTaps.removeAll(keepingCapacity: true)
         }
         refreshSuggestions()
+        refreshPendingTranscriptAvailability()
+        if invalidatedProposal {
+            present(.staleContext)
+        }
         guard correctionTask != nil else { return }
         cancelCorrection()
         setQuietly(baselineStatus)
     }
 
     func deactivate() {
+        editorFieldEpoch &+= 1
         cancelCorrection()
+        clearCorrectionProposal()
         clearCorrectionUndo()
+        clearAutomaticCorrectionReceipt(acceptLearning: false)
         persistAdaptiveProfileIfNeeded(force: true)
         lastTypingDecision = nil
         pendingRejectedDecision = nil
         currentWordTaps.removeAll(keepingCapacity: true)
         textIntelligence.persist()
-        dictationMonitorTask?.cancel()
-        dictationMonitorTask = nil
         setQuietly(baselineStatus)
     }
 
-    func toggleDictation() {
-        refreshKeyboardDictationSession()
-
-        switch dictationPhase {
-        case .idle:
-            beginKeyboardDictation()
-        case .recording:
-            requestKeyboardDictationStop()
-        case .launching:
-            // Allow the user to cancel a dictation that never started.
-            cancelKeyboardDictation()
-        case .processing:
-            break
-        }
+    func showAppleDictationGuidance() {
+        present(.appleDictationGuidance)
     }
 
-    func correctCurrentText() {
-        cancelCorrection()
-        clearCorrectionUndo()
+    func showSettingsGuidance() {
+        present(.settingsGuidance)
+    }
+
+    func correctCurrentText(intent: BuddyRewriteIntent = .fix) {
         refreshAvailability()
+        cancelCorrection()
+        clearCorrectionProposal()
+        clearAutomaticCorrectionReceipt(acceptLearning: true)
+        clearCorrectionUndo()
 
-        guard hasFullAccess else {
-            present(.fullAccessRequired)
-            return
-        }
-
+        guard requireCapability(editorCapabilities.cloudCorrection),
+              requireCapability(editorCapabilities.readContext) else { return }
         let settings = preferences?.loadSettings() ?? .default
-        guard settings.hasAcceptedCloudProcessing else {
-            present(.cloudConsentRequired)
-            return
-        }
 
         guard let snapshot = delegate?.captureCorrectionSnapshot() else {
             present(.noText)
             return
         }
+        if let delegate {
+            correctionCompositionSession.synchronizeField(
+                identifier: delegate.editorFieldIdentifier
+            )
+        }
+        let correctionAsyncStamp = correctionCompositionSession.captureAsyncStamp()
 
         guard let clientID = preferences?.installationIdentifier() else {
             present(.error("BuddyGrammar could not open its shared container."))
@@ -1090,7 +2300,7 @@ final class KeyboardModel {
         }
 
         let requestID = UUID()
-        let languageCode = delegate?.keyboardLanguage
+        let languageCode = activeKeyboardLanguageCode
         correctionRequestID = requestID
         present(.correcting)
 
@@ -1101,38 +2311,38 @@ final class KeyboardModel {
                     text: snapshot.candidate.requestText,
                     clientID: clientID,
                     modelID: settings.activeOpenRouterModelID,
-                    instruction: settings.correctionInstruction
+                    instruction: intent.instruction(
+                        appendingTo: settings.correctionInstruction
+                    )
                 )
                 try Task.checkCancellation()
-                guard correctionRequestID == requestID else { return }
+                guard correctionRequestID == requestID,
+                      correctionCompositionSession.isFresh(correctionAsyncStamp) else {
+                    return
+                }
 
                 let replacement = snapshot.candidate.replacement(with: corrected)
-                let appliedCorrection = delegate?.applyCorrection(replacement, to: snapshot)
+                let scope: KeyboardCorrectionScope = switch snapshot.target {
+                case .selection: .selection
+                case .currentSentence: .currentSentence
+                }
+                let proposal = ReviewableCorrectionProposal(
+                    intent: intent,
+                    originalText: snapshot.candidate.capturedText,
+                    proposedText: replacement
+                )
+                pendingCorrectionProposal = PendingCorrectionProposal(
+                    proposal: proposal,
+                    snapshot: snapshot,
+                    scope: scope,
+                    languageCode: languageCode,
+                    undoDuration: settings.correctionUndoDuration
+                )
+                correctionProposal = proposal
+                correctionProposalScope = scope
                 correctionTask = nil
                 correctionRequestID = nil
-                if let appliedCorrection {
-                    observedTextSuffix.clear()
-                    let learningContext: String?
-                    switch snapshot.target {
-                    case .selection:
-                        learningContext = snapshot.contextBeforeInput
-                    case .currentSentence:
-                        learningContext = nil
-                    }
-                    beginCorrectionUndo(
-                        appliedCorrection,
-                        duration: settings.correctionUndoDuration,
-                        learning: DeferredCorrectionLearning(
-                            text: replacement,
-                            precedingContext: learningContext,
-                            languageCode: languageCode,
-                            resultingContext: appliedCorrection.contextBeforeInput
-                        )
-                    )
-                    present(.corrected)
-                } else {
-                    present(.staleContext)
-                }
+                present(.correctionProposalReady)
             } catch is CancellationError {
                 // Cancellation is expected whenever the document changes.
             } catch {
@@ -1144,23 +2354,91 @@ final class KeyboardModel {
         }
     }
 
-    func undoLastCorrection() {
-        guard let pendingCorrectionUndo else { return }
-        clearCorrectionUndo(acceptLearning: false)
+    func acceptCorrectionProposal() {
+        refreshEditorCapabilities()
+        guard requireCapability(editorCapabilities.cloudCorrection),
+              requireCapability(editorCapabilities.readContext) else {
+            clearCorrectionProposal()
+            return
+        }
+        guard let pendingCorrectionProposal else { return }
+        clearCorrectionProposal()
+        guard pendingCorrectionProposal.proposal.hasChanges else {
+            present(.correctionProposalDismissed)
+            return
+        }
+
+        let appliedCorrection = delegate?.applyCorrection(
+            pendingCorrectionProposal.proposal.proposedText,
+            to: pendingCorrectionProposal.snapshot
+        )
+        guard let appliedCorrection else {
+            present(.staleContext)
+            return
+        }
+
         observedTextSuffix.clear()
-        let didUndo = delegate?.undoCorrection(pendingCorrectionUndo) ?? false
+        let learningContext: String?
+        switch pendingCorrectionProposal.snapshot.target {
+        case .selection:
+            learningContext = pendingCorrectionProposal.snapshot.contextBeforeInput
+        case .currentSentence:
+            learningContext = nil
+        }
+        beginCorrectionUndo(
+            appliedCorrection,
+            duration: pendingCorrectionProposal.undoDuration,
+            learning: DeferredCorrectionLearning(
+                text: pendingCorrectionProposal.proposal.proposedText,
+                precedingContext: learningContext,
+                languageCode: pendingCorrectionProposal.languageCode,
+                resultingContext: appliedCorrection.contextBeforeInput
+            )
+        )
+        present(.corrected)
+        refreshAfterEditorMutation()
+    }
+
+    func dismissCorrectionProposal() {
+        guard pendingCorrectionProposal != nil else { return }
+        clearCorrectionProposal()
+        present(.correctionProposalDismissed)
+    }
+
+    func undoLastCorrection() {
+        refreshEditorCapabilities()
+        guard requireCapability(editorCapabilities.readContext) else {
+            clearCorrectionUndo(acceptLearning: false)
+            return
+        }
+        guard let pendingCorrectionUndo, let delegate else { return }
+        let effect = correctionCompositionSession.visibleRevert(
+            in: AppliedCorrectionEditorAdapter(
+                delegate: delegate,
+                correction: pendingCorrectionUndo,
+                contextAccess: editorCapabilities.readContext
+            )
+        )
+        undoDismissTask?.cancel()
+        undoDismissTask = nil
+        deferredCorrectionLearning = nil
+        self.pendingCorrectionUndo = nil
+        canUndoCorrection = false
+        observedTextSuffix.clear()
+        let didUndo = effect.didMutateEditor
         present(didUndo ? .correctionUndone : .staleContext)
-        refreshSuggestions()
+        if didUndo {
+            refreshAfterEditorMutation()
+        } else {
+            refreshSuggestions()
+        }
     }
 
     func insertPendingTranscript() {
-        cancelCorrectionForLocalEdit()
         refreshAvailability()
 
-        guard hasFullAccess else {
-            present(.fullAccessRequired)
-            return
-        }
+        guard requireCapability(editorCapabilities.transcriptInsertion) else { return }
+        cancelCorrectionForLocalEdit()
 
         guard let preferences else {
             present(.error("BuddyGrammar could not open its shared container."))
@@ -1174,16 +2452,18 @@ final class KeyboardModel {
             return
         }
 
-        let context = delegate?.contextBeforeInput
-        commitRecognizedText(
+        let context = intelligenceContextBeforeInput()
+        guard commitRecognizedText(
             transcript.text,
             context: context,
             languageCode: transcript.languageCode
-        )
+        ) else {
+            present(.staleContext)
+            return
+        }
         preferences.clearPendingTranscript()
         hasPendingTranscript = false
         present(.transcriptInserted)
-        refreshSuggestions()
     }
 
     private func capitalized(_ word: String) -> String {
@@ -1191,172 +2471,11 @@ final class KeyboardModel {
         return String(first).uppercased() + word.dropFirst()
     }
 
-    private func beginKeyboardDictation() {
-        refreshAvailability()
-        guard hasFullAccess else {
-            present(.fullAccessRequired)
-            return
-        }
-        guard let preferences else {
-            present(.error("BuddyGrammar could not open its shared container."))
-            return
-        }
-        let settings = preferences.loadSettings()
-        guard settings.hasAcceptedCloudProcessing else {
-            present(.cloudConsentRequired)
-            return
-        }
-
-        do {
-            let session = try preferences.beginKeyboardDictationSession()
-            if preferences.isCompanionAlive() {
-                keyboardDictationLog.notice("Signaling Dynamic Island dictation session \(session.id, privacy: .public)")
-                updateDictationPhase(.launching, status: .startingDictation)
-                DictationCompanionNotifier.post(.startRequested)
-                scheduleDictationHandoffFallback(sessionID: session.id)
-            } else {
-                keyboardDictationLog.notice("Opening BuddyGrammar for dictation session \(session.id, privacy: .public)")
-                updateDictationPhase(.launching, status: .openingDictation)
-                openDictationDeepLink(sessionID: session.id)
-            }
-        } catch {
-            keyboardDictationLog.error("Failed to begin dictation session: \(error, privacy: .public)")
-            present(.error("BuddyGrammar could not start voice dictation."))
-        }
-    }
-
-    private func scheduleDictationHandoffFallback(sessionID: UUID) {
-        Task { [weak self] in
-            try? await Task.sleep(for: .seconds(3))
-            guard !Task.isCancelled,
-                  let self,
-                  let session = preferences?.loadKeyboardDictationSession(),
-                  session.id == sessionID,
-                  session.phase == .launching else { return }
-            keyboardDictationLog.warning("Dynamic Island did not answer; opening BuddyGrammar")
-            updateDictationPhase(.launching, status: .openingDictation)
-            openDictationDeepLink(sessionID: sessionID)
-        }
-    }
-
-    private func openDictationDeepLink(sessionID: UUID) {
-        guard let url = KeyboardDictationHandoff.url(for: sessionID),
-              let delegate else {
-            failDictationHandoff(sessionID: sessionID)
-            return
-        }
-        delegate.openHostApplication(url) { [weak self] didOpen in
-            guard let self, !didOpen,
-                  let session = preferences?.loadKeyboardDictationSession(),
-                  session.id == sessionID,
-                  session.phase == .launching else {
-                return
-            }
-            keyboardDictationLog.error("iOS rejected the BuddyGrammar dictation handoff")
-            failDictationHandoff(sessionID: sessionID)
-        }
-    }
-
-    private func failDictationHandoff(sessionID: UUID) {
-        preferences?.clearKeyboardDictationSession(id: sessionID)
-        dictationPhase = .idle
-        present(.error("Open BuddyGrammar once, then try the microphone again."))
-    }
-
-    private func cancelKeyboardDictation() {
-        keyboardDictationLog.notice("User canceled launching dictation")
-        if let session = preferences?.loadKeyboardDictationSession() {
-            preferences?.clearKeyboardDictationSession(id: session.id)
-        }
-        dictationPhase = .idle
-        present(baselineStatus)
-    }
-
-    private func requestKeyboardDictationStop() {
-        guard let preferences,
-              let session = preferences.loadKeyboardDictationSession() else {
-            updateDictationPhase(.idle, status: baselineStatus)
-            return
-        }
-        do {
-            guard try preferences.requestKeyboardDictationStop(id: session.id) != nil else {
-                refreshKeyboardDictationSession()
-                return
-            }
-            DictationCompanionNotifier.post(.stopRequested)
-            updateDictationPhase(.processing, status: .dictationProcessing)
-        } catch {
-            present(.error("BuddyGrammar could not stop voice dictation."))
-        }
-    }
-
-    private func startDictationMonitor() {
-        dictationMonitorTask?.cancel()
-        dictationMonitorTask = Task { [weak self] in
-            while !Task.isCancelled {
-                self?.refreshKeyboardDictationSession()
-                try? await Task.sleep(for: .milliseconds(250))
-            }
-        }
-    }
-
-    private func refreshKeyboardDictationSession() {
-        guard let preferences,
-              let session = preferences.loadKeyboardDictationSession() else {
-            if dictationPhase != .idle {
-                dictationPhase = .idle
-            }
-            return
-        }
-
-        switch session.phase {
-        case .launching:
-            // A session stuck in launching means the app never picked it
-            // up (or was closed); expire it so the mic button recovers.
-            if Date.now.timeIntervalSince(session.updatedAt) > 15 {
-                keyboardDictationLog.warning("Expiring stale launching session \(session.id, privacy: .public)")
-                preferences.clearKeyboardDictationSession(id: session.id)
-                dictationPhase = .idle
-                present(.error("Voice dictation didn’t start. Try again."))
-                return
-            }
-            updateDictationPhase(.launching, status: .openingDictation)
-        case .recording:
-            updateDictationPhase(.recording, status: .dictationRecording)
-        case .stopRequested, .transcribing:
-            updateDictationPhase(.processing, status: .dictationProcessing)
-        case .ready:
-            guard let transcript = session.transcript?.trimmingCharacters(
-                in: .whitespacesAndNewlines
-            ), !transcript.isEmpty else {
-                preferences.clearKeyboardDictationSession(id: session.id)
-                dictationPhase = .idle
-                present(.error("Voice dictation returned no text."))
-                return
-            }
-            preferences.clearKeyboardDictationSession(id: session.id)
-            preferences.clearPendingTranscript()
-            hasPendingTranscript = false
-            dictationPhase = .idle
-            insertDictatedText(transcript, languageCode: session.languageCode)
-            present(.transcriptInserted)
-        case .failed:
-            preferences.clearKeyboardDictationSession(id: session.id)
-            dictationPhase = .idle
-            present(.error(session.errorMessage ?? "Voice dictation failed."))
-        }
-    }
-
-    private func updateDictationPhase(
-        _ phase: KeyboardDictationPhase,
-        status: KeyboardStatus
-    ) {
-        guard dictationPhase != phase else { return }
-        dictationPhase = phase
-        present(status)
-    }
-
     private func refreshPendingTranscriptAvailability() {
+        guard editorCapabilities.transcriptInsertion.isAllowed else {
+            hasPendingTranscript = false
+            return
+        }
         hasPendingTranscript = preferences?.loadPendingTranscript().map {
             !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         } ?? false
@@ -1367,6 +2486,22 @@ final class KeyboardModel {
         duration: TimeInterval,
         learning: DeferredCorrectionLearning
     ) {
+        guard let delegate else { return }
+        let effect = correctionCompositionSession.recordExplicitApplication(
+            in: AppliedCorrectionEditorAdapter(
+                delegate: delegate,
+                correction: correction,
+                contextAccess: editorCapabilities.readContext
+            ),
+            originalText: correction.originalText,
+            replacementText: correction.replacementText,
+            source: "buddyFix",
+            precedingContext: learning.precedingContext ?? "",
+            languageCode: learning.languageCode,
+            atMilliseconds: ProcessInfo.processInfo.systemUptime * 1_000,
+            receiptLifetimeMilliseconds: duration * 1_000
+        )
+        guard !effect.ignored else { return }
         pendingCorrectionUndo = correction
         deferredCorrectionLearning = learning
         canUndoCorrection = true
@@ -1382,17 +2517,38 @@ final class KeyboardModel {
         undoDismissTask?.cancel()
         undoDismissTask = nil
         let learning = deferredCorrectionLearning
+        let correction = pendingCorrectionUndo
+        let acceptance: CorrectionCompositionEffect
+        if correctionCompositionSession.snapshot.receiptMode == .explicit,
+           let correction,
+           let delegate {
+            acceptance = correctionCompositionSession.finishActiveReceipt(
+                in: AppliedCorrectionEditorAdapter(
+                    delegate: delegate,
+                    correction: correction,
+                    contextAccess: editorCapabilities.readContext
+                ),
+                acceptLearning: acceptLearning
+            )
+        } else {
+            if correctionCompositionSession.snapshot.receiptMode == .explicit {
+                correctionCompositionSession.externalEditObserved()
+            }
+            acceptance = CorrectionCompositionEffect()
+        }
         deferredCorrectionLearning = nil
         pendingCorrectionUndo = nil
         canUndoCorrection = false
 
-        guard acceptLearning, let learning else { return }
+        guard acceptLearning,
+              acceptance.acceptedLearning != nil,
+              let learning else { return }
         observePersonalCommittedText(
             learning.text,
             precededBy: learning.precedingContext,
             languageCode: learning.languageCode
         )
-        if delegate?.contextBeforeInput == learning.resultingContext {
+        if intelligenceContextBeforeInput() == learning.resultingContext {
             observedTextSuffix.observe(
                 committedText: learning.text,
                 contextBeforeInput: learning.resultingContext
@@ -1420,6 +2576,8 @@ final class KeyboardModel {
     }
 
     private func cancelCorrectionForLocalEdit() {
+        clearAutomaticCorrectionReceipt(acceptLearning: true)
+        clearCorrectionProposal()
         clearCorrectionUndo()
         let hadCorrection = correctionTask != nil
         cancelCorrection()
@@ -1436,20 +2594,86 @@ final class KeyboardModel {
         correctionRequestID = nil
     }
 
+    private func clearCorrectionProposal() {
+        pendingCorrectionProposal = nil
+        correctionProposal = nil
+        correctionProposalScope = nil
+    }
+
     private func availabilityStatus() -> KeyboardStatus {
-        let fullAccess = delegate?.keyboardHasFullAccess ?? false
-        hasFullAccess = fullAccess
-        guard fullAccess else { return .fullAccessRequired }
-
-        let settings = preferences?.loadSettings() ?? .default
-        guard settings.hasAcceptedCloudProcessing else {
+        switch editorCapabilities.cloudCorrection {
+        case .allowed:
+            return .ready
+        case .denied(.cloudTransportUnavailable):
+            return .fullAccessRequired
+        case .denied(.cloudProcessingConsentRequired):
             return .cloudConsentRequired
+        case .denied(let reason):
+            return .capabilityDenied(reason)
         }
+    }
 
-        return .ready
+    private func refreshAutomaticShiftState(ownedInsertion: String? = nil) {
+        guard layoutMode == .letters, !userEnabledCapsLock else { return }
+        let contextualShift = KeyboardAutomaticShiftPolicy.shouldShift(
+            mode: keyboardAutoCapitalization,
+            contextBeforeInput: intelligenceContextBeforeInput()
+        )
+        let shouldShift = contextualShift ?? ownedInsertion.flatMap {
+            KeyboardAutomaticShiftPolicy.shouldShiftAfterOwnedInsertion(
+                mode: keyboardAutoCapitalization,
+                wasShifted: shiftState.isShifted,
+                insertedText: $0
+            )
+        }
+        guard let shouldShift else { return }
+        switch keyboardAutoCapitalization {
+        case .none:
+            shiftState = .lowercase
+        case .allCharacters:
+            shiftState = .capsLock
+        case .words, .sentences:
+            shiftState = shouldShift ? .uppercase : .lowercase
+        }
+    }
+
+    private func refreshAfterEditorMutation(ownedInsertion: String? = nil) {
+        refreshAutomaticShiftState(ownedInsertion: ownedInsertion)
+        refreshSuggestions()
     }
 
     private static let autocorrectionBoundaryCharacters: Set<String> = [
         ".", ",", "?", "!", ";", ":",
     ]
+}
+
+private extension EditorCapabilityDenialReason {
+    var keyboardMessage: String {
+        switch self {
+        case .sensitiveField:
+            "Buddy actions are unavailable in secure fields."
+        case .structuredField:
+            "Buddy actions are unavailable in this structured field."
+        case .codeField:
+            "Buddy actions are unavailable in code fields."
+        case .suggestionsDisabled:
+            "This field has disabled suggestions and automatic correction."
+        case .personalizedLearningDisabled:
+            "This field does not allow personalized learning."
+        case .cloudTransportUnavailable:
+            "Typing works. Enable Full Access for Buddy actions."
+        case .cloudProcessingConsentRequired:
+            "Accept cloud processing in BuddyGrammar to use this action."
+        case .platformVoiceUnavailable:
+            "Use the system keyboard for Apple Dictation."
+        case .cursorMovementUnavailable:
+            "This field does not allow cursor movement."
+        case .sharedContainerUnavailable:
+            "Enable Full Access to insert a saved transcript."
+        case .contextReadUnavailable:
+            "This editor does not expose surrounding text to keyboard intelligence."
+        case .compositionUnavailable:
+            "This editor does not allow composing text."
+        }
+    }
 }

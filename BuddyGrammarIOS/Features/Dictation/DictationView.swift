@@ -74,14 +74,6 @@ struct DictationView: View {
                 }
                 .font(.subheadline.weight(.semibold))
                 .accessibilityIdentifier("dictation.cancel")
-
-                if model.isKeyboardDictationActive {
-                    Text("Return to where you were typing and tap the red stop key when you finish speaking.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .accessibilityIdentifier("dictation.keyboardInstructions")
-                }
             }
         }
         .frame(maxWidth: .infinity)

@@ -1,5 +1,15 @@
 import Foundation
 
+public struct LearningResetGenerations: Equatable, Sendable {
+    public let language: UInt64
+    public let typing: UInt64
+
+    public init(language: UInt64 = 0, typing: UInt64 = 0) {
+        self.language = language
+        self.typing = typing
+    }
+}
+
 public final class SharedPreferences: @unchecked Sendable {
     private enum Key {
         static let settings = "BuddyGrammar.iOS.settings"
@@ -8,7 +18,13 @@ public final class SharedPreferences: @unchecked Sendable {
         static let keyboardDictationSession = "BuddyGrammar.iOS.keyboardDictationSession"
         static let installationIdentifier = "BuddyGrammar.iOS.installationIdentifier"
         static let companionHeartbeat = "BuddyGrammar.iOS.companionHeartbeat"
+        static let languageLearningResetGeneration =
+            "BuddyGrammar.iOS.learningReset.language.v1"
+        static let typingLearningResetGeneration =
+            "BuddyGrammar.iOS.learningReset.typing.v1"
     }
+
+    private static let resetGenerationLock = NSLock()
 
     private let defaults: UserDefaults
     private let encoder: JSONEncoder
@@ -69,108 +85,11 @@ public final class SharedPreferences: @unchecked Sendable {
         defaults.removeObject(forKey: Key.savedDictation)
     }
 
-    @discardableResult
-    public func beginKeyboardDictationSession(
-        id: UUID = UUID(),
-        now: Date = .now
-    ) throws -> KeyboardDictationSession {
-        let session = KeyboardDictationSession(
-            id: id,
-            createdAt: now,
-            updatedAt: now,
-            phase: .launching
-        )
-        try save(session, forKey: Key.keyboardDictationSession)
-        return session
-    }
-
-    public func loadKeyboardDictationSession(
-        now: Date = .now
-    ) -> KeyboardDictationSession? {
-        guard let session = load(
-            KeyboardDictationSession.self,
-            forKey: Key.keyboardDictationSession
-        ) else {
-            return nil
-        }
-        guard now.timeIntervalSince(session.updatedAt)
-            <= BuddyGrammarConfiguration.keyboardDictationSessionLifetime else {
-            clearKeyboardDictationSession(id: session.id)
-            return nil
-        }
-        return session
-    }
-
-    @discardableResult
-    public func updateKeyboardDictationSession(
-        id: UUID,
-        phase: KeyboardDictationSession.Phase,
-        transcript: String? = nil,
-        languageCode: String? = nil,
-        errorMessage: String? = nil,
-        now: Date = .now
-    ) throws -> KeyboardDictationSession? {
-        guard let session = loadKeyboardDictationSession(now: now),
-              session.id == id else {
-            return nil
-        }
-        let updated = session.updating(
-            phase: phase,
-            transcript: transcript,
-            languageCode: languageCode,
-            errorMessage: errorMessage,
-            at: now
-        )
-        try save(updated, forKey: Key.keyboardDictationSession)
-        return updated
-    }
-
-    @discardableResult
-    public func requestKeyboardDictationStop(
-        id: UUID,
-        now: Date = .now
-    ) throws -> KeyboardDictationSession? {
-        guard let session = loadKeyboardDictationSession(now: now),
-              session.id == id,
-              session.phase == .recording else {
-            return nil
-        }
-        return try updateKeyboardDictationSession(
-            id: id,
-            phase: .stopRequested,
-            now: now
-        )
-    }
-
-    public func clearKeyboardDictationSession(id: UUID? = nil) {
-        if let id,
-           let session = load(
-               KeyboardDictationSession.self,
-               forKey: Key.keyboardDictationSession
-           ),
-           session.id != id {
-            return
-        }
+    /// Removes App Group artifacts left by prerelease builds that attempted
+    /// to coordinate microphone capture between the keyboard and containing app.
+    public func clearLegacyKeyboardDictationArtifacts() {
         defaults.removeObject(forKey: Key.keyboardDictationSession)
-    }
-
-    public func recordCompanionHeartbeat(now: Date = .now) {
-        defaults.set(now.timeIntervalSinceReferenceDate, forKey: Key.companionHeartbeat)
-    }
-
-    public func clearCompanionHeartbeat() {
         defaults.removeObject(forKey: Key.companionHeartbeat)
-    }
-
-    public func isCompanionAlive(
-        now: Date = .now,
-        tolerance: TimeInterval = BuddyGrammarConfiguration.companionHeartbeatTolerance
-    ) -> Bool {
-        let storedValue = defaults.double(forKey: Key.companionHeartbeat)
-        guard storedValue > 0 else { return false }
-        let heartbeat = Date(timeIntervalSinceReferenceDate: storedValue)
-        let age = now.timeIntervalSince(heartbeat)
-        return age >= -tolerance && age <= tolerance
     }
 
     public func installationIdentifier() -> UUID {
@@ -182,6 +101,69 @@ public final class SharedPreferences: @unchecked Sendable {
         let identifier = UUID()
         defaults.set(identifier.uuidString, forKey: Key.installationIdentifier)
         return identifier
+    }
+
+    public func loadLearningResetGenerations() -> LearningResetGenerations {
+        LearningResetGenerations(
+            language: Self.loadResetGeneration(
+                from: defaults,
+                forKey: Key.languageLearningResetGeneration
+            ),
+            typing: Self.loadResetGeneration(
+                from: defaults,
+                forKey: Key.typingLearningResetGeneration
+            )
+        )
+    }
+
+    @discardableResult
+    public func advanceLanguageLearningResetGeneration() -> UInt64 {
+        advanceResetGeneration(forKey: Key.languageLearningResetGeneration)
+    }
+
+    @discardableResult
+    public func advanceTypingLearningResetGeneration() -> UInt64 {
+        advanceResetGeneration(forKey: Key.typingLearningResetGeneration)
+    }
+
+    /// Creates the language model against the same App Group suite and reset
+    /// generation as these preferences. Callers without shared preferences
+    /// should construct an in-memory-only model with `defaults: nil` instead.
+    public func makePersonalLanguageModel() -> PersonalLanguageModel {
+        let defaults = defaults
+        return PersonalLanguageModel(
+            defaults: defaults,
+            resetGeneration: {
+                Self.loadResetGeneration(
+                    from: defaults,
+                    forKey: Key.languageLearningResetGeneration
+                )
+            }
+        )
+    }
+
+    /// Advances the epoch before deleting the durable model. A live keyboard
+    /// therefore rejects stale in-memory writes even if reset and persistence
+    /// overlap across the containing app and extension processes.
+    public func resetPersonalLanguageLearning() {
+        advanceLanguageLearningResetGeneration()
+        makePersonalLanguageModel().reset()
+    }
+
+    private func advanceResetGeneration(forKey key: String) -> UInt64 {
+        Self.resetGenerationLock.lock()
+        defer { Self.resetGenerationLock.unlock() }
+        let current = Self.loadResetGeneration(from: defaults, forKey: key)
+        let next = current == .max ? 1 : current + 1
+        defaults.set(NSNumber(value: next), forKey: key)
+        return next
+    }
+
+    private static func loadResetGeneration(
+        from defaults: UserDefaults,
+        forKey key: String
+    ) -> UInt64 {
+        (defaults.object(forKey: key) as? NSNumber)?.uint64Value ?? 0
     }
 
     private func load<Value: Decodable>(_ type: Value.Type, forKey key: String) -> Value? {

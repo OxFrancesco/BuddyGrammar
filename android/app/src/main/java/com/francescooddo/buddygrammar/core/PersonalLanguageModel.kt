@@ -113,6 +113,49 @@ class PersonalLanguageModel private constructor(
         }
     }
 
+    /** Adds an explicitly accepted word without inventing contextual usage. */
+    fun addToDictionary(
+        word: String,
+        languageTag: String = LanguageSupport.DEFAULT_LANGUAGE_TAG,
+    ): Boolean {
+        applyTimeDecayIfNeeded()
+        val normalized = normalize(word) ?: return false
+        val model = modelFor(languageTag)
+        if (model.explicitWords.size >= MAX_EXPLICIT_WORDS) return false
+        if (!model.explicitWords.add(normalized)) return false
+        unsavedChanges += 1
+        return true
+    }
+
+    /** Suppresses one exact correction pair without blacklisting its result globally. */
+    fun suppressCorrection(
+        typed: String,
+        suggestion: String,
+        languageTag: String = LanguageSupport.DEFAULT_LANGUAGE_TAG,
+    ): Boolean {
+        applyTimeDecayIfNeeded()
+        val normalizedTyped = normalize(typed) ?: return false
+        val normalizedSuggestion = normalize(suggestion) ?: return false
+        if (normalizedTyped == normalizedSuggestion) return false
+        val model = modelFor(languageTag)
+        if (model.suppressedCorrections.size >= MAX_SUPPRESSED_CORRECTIONS) return false
+        if (!model.suppressedCorrections.add(normalizedTyped to normalizedSuggestion)) return false
+        unsavedChanges += 1
+        return true
+    }
+
+    fun isCorrectionSuppressed(
+        typed: String,
+        suggestion: String,
+        languageTag: String = LanguageSupport.DEFAULT_LANGUAGE_TAG,
+    ): Boolean {
+        val normalizedTyped = normalize(typed) ?: return false
+        val normalizedSuggestion = normalize(suggestion) ?: return false
+        return languageModels[LanguageSupport.scope(languageTag)]
+            ?.suppressedCorrections
+            ?.contains(normalizedTyped to normalizedSuggestion) == true
+    }
+
     /**
      * Learns every word in committed text while resetting context at sentence
      * boundaries. [contextBeforeText] lets pasted, dictated, or recognized text
@@ -184,12 +227,17 @@ class PersonalLanguageModel private constructor(
         if (limit <= 0) return emptyList()
         val normalized = normalize(prefix) ?: return emptyList()
         val model = languageModels[LanguageSupport.scope(languageTag)] ?: return emptyList()
-        return model.unigrams
+        val explicit = model.explicitWords
+            .asSequence()
+            .filter { it.length > normalized.length && it.startsWith(normalized) }
+            .sorted()
+            .toList()
+        val learned = model.unigrams
             .filter { it.key.length > normalized.length && it.key.startsWith(normalized) && it.value >= 3 }
             .entries
             .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
-            .take(limit)
             .map { it.key }
+        return (explicit + learned).distinct().take(limit)
     }
 
     fun usageCount(
@@ -198,7 +246,8 @@ class PersonalLanguageModel private constructor(
     ): Int {
         applyTimeDecayIfNeeded()
         val model = languageModels[LanguageSupport.scope(languageTag)] ?: return 0
-        return normalize(word)?.let { model.unigrams[it] } ?: 0
+        val normalized = normalize(word) ?: return 0
+        return maxOf(model.unigrams[normalized] ?: 0, if (normalized in model.explicitWords) 3 else 0)
     }
 
     fun persist() {
@@ -345,6 +394,20 @@ class PersonalLanguageModel private constructor(
                     )
                 }
             }
+            for (word in model.explicitWords.sorted()) {
+                appendLine(if (scoped) "sx $language $word" else "x $word")
+            }
+            for ((typed, suggestion) in model.suppressedCorrections.sortedWith(
+                compareBy<Pair<String, String>> { it.first }.thenBy { it.second },
+            )) {
+                appendLine(
+                    if (scoped) {
+                        "sr $language $typed $suggestion"
+                    } else {
+                        "r $typed $suggestion"
+                    },
+                )
+            }
         }
     }
 
@@ -384,16 +447,39 @@ class PersonalLanguageModel private constructor(
                         modelFor(parts[1]).trigrams
                             .getOrPut(context) { mutableMapOf() }[parts[4]] = it
                     }
+                parts.size == 2 && parts[0] == "x" ->
+                    normalize(parts[1])?.let {
+                        modelFor(LanguageSupport.DEFAULT_LANGUAGE_TAG).explicitWords.add(it)
+                    }
+                parts.size == 3 && parts[0] == "sx" ->
+                    normalize(parts[2])?.let { modelFor(parts[1]).explicitWords.add(it) }
+                parts.size == 3 && parts[0] == "r" -> {
+                    val typed = normalize(parts[1])
+                    val suggestion = normalize(parts[2])
+                    if (typed != null && suggestion != null && typed != suggestion) {
+                        modelFor(LanguageSupport.DEFAULT_LANGUAGE_TAG)
+                            .suppressedCorrections.add(typed to suggestion)
+                    }
+                }
+                parts.size == 4 && parts[0] == "sr" -> {
+                    val typed = normalize(parts[2])
+                    val suggestion = normalize(parts[3])
+                    if (typed != null && suggestion != null && typed != suggestion) {
+                        modelFor(parts[1]).suppressedCorrections.add(typed to suggestion)
+                    }
+                }
             }
         }
     }
 
     private fun normalize(word: String): String? {
-        val trimmed = word.lowercase()
+        val trimmed = WordTokenNormalizer.normalizedWord(word) ?: return null
         val isWord = trimmed.isNotEmpty() &&
             trimmed.length <= MAX_WORD_LENGTH &&
             trimmed.any { it.isLetter() } &&
-            trimmed.all { it.isLetter() || it == '\'' }
+            trimmed.all {
+                it.isLetter() || it == WordTokenNormalizer.CANONICAL_APOSTROPHE
+            }
         return if (isWord) trimmed else null
     }
 
@@ -403,6 +489,8 @@ class PersonalLanguageModel private constructor(
         val unigrams: MutableMap<String, Int> = mutableMapOf(),
         val bigrams: MutableMap<String, MutableMap<String, Int>> = mutableMapOf(),
         val trigrams: MutableMap<TwoWordContext, MutableMap<String, Int>> = mutableMapOf(),
+        val explicitWords: MutableSet<String> = mutableSetOf(),
+        val suppressedCorrections: MutableSet<Pair<String, String>> = mutableSetOf(),
     )
 
     private data class Token(val value: String, val isBoundary: Boolean)
@@ -431,10 +519,12 @@ class PersonalLanguageModel private constructor(
         const val MAX_CONTINUATIONS = 6
         const val SAVE_INTERVAL = 20
         const val MAX_WORD_LENGTH = 24
+        const val MAX_EXPLICIT_WORDS = 1_000
+        const val MAX_SUPPRESSED_CORRECTIONS = 1_000
         const val DAY_MILLIS = 24L * 60L * 60L * 1_000L
         const val DECAY_INTERVAL_MILLIS = 30L * DAY_MILLIS
         const val MAX_DECAY_INTERVALS = 12L
         val SENTENCE_BOUNDARIES = setOf('.', '!', '?', '\n', '…')
-        val TOKEN_PATTERN = Regex("[\\p{L}]+(?:'[\\p{L}]+)*|[.!?…\\n]+")
+        val TOKEN_PATTERN = Regex("[\\p{L}]+(?:['’][\\p{L}]+)*(?:['’])?|[.!?…\\n]+")
     }
 }

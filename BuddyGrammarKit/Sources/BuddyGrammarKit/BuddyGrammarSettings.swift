@@ -15,6 +15,7 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
         case enablesQuickDictation
         case quickDictationDuration
         case quickDictationExpiresAt
+        case copiesCompletedDictationToClipboard
     }
 
     public var openRouterModelID: String
@@ -30,6 +31,7 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
     public var enablesQuickDictation: Bool
     public var quickDictationDuration: QuickDictationDuration
     public var quickDictationExpiresAt: Date?
+    public var copiesCompletedDictationToClipboard: Bool
 
     public init(
         openRouterModelID: String = BuddyGrammarConfiguration.defaultOpenRouterModelID,
@@ -44,7 +46,8 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
         hasCompletedOnboarding: Bool = false,
         enablesQuickDictation: Bool = false,
         quickDictationDuration: QuickDictationDuration = .fiveMinutes,
-        quickDictationExpiresAt: Date? = nil
+        quickDictationExpiresAt: Date? = nil,
+        copiesCompletedDictationToClipboard: Bool = false
     ) {
         let usesAutomaticModelUpdates = usesAutomaticModelUpdates
             ?? BuddyGrammarConfiguration.managedOpenRouterModelIDs.contains(openRouterModelID)
@@ -63,6 +66,7 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
         self.enablesQuickDictation = enablesQuickDictation
         self.quickDictationDuration = quickDictationDuration
         self.quickDictationExpiresAt = quickDictationExpiresAt
+        self.copiesCompletedDictationToClipboard = copiesCompletedDictationToClipboard
     }
 
     public init(from decoder: Decoder) throws {
@@ -133,6 +137,10 @@ public struct BuddyGrammarSettings: Codable, Equatable, Sendable {
             Date.self,
             forKey: .quickDictationExpiresAt
         )
+        copiesCompletedDictationToClipboard = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .copiesCompletedDictationToClipboard
+        ) ?? false
     }
 
     public static func clampedUndoDuration(_ duration: TimeInterval) -> TimeInterval {

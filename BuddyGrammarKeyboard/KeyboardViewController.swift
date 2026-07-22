@@ -20,15 +20,21 @@ final class KeyboardControllerBridge {
     var needsInputModeSwitchKey: Bool {
         controller?.needsInputModeSwitchKey ?? false
     }
+
+    func playInputClick() {
+        UIDevice.current.playInputClick()
+    }
 }
 
 @MainActor
-final class KeyboardViewController: UIInputViewController {
+final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedback {
     private let model = KeyboardModel()
     private lazy var controllerBridge = KeyboardControllerBridge(controller: self)
     private var hostingController: UIHostingController<KeyboardRootView>?
     private var heightConstraint: NSLayoutConstraint?
     private var documentGeneration: UInt64 = 0
+
+    var enableInputClicksWhenVisible: Bool { true }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -127,54 +133,121 @@ extension KeyboardViewController: KeyboardModelDelegate {
         textDocumentProxy.documentContextBeforeInput
     }
 
+    var contextAfterInput: String? {
+        textDocumentProxy.documentContextAfterInput
+    }
+
     var keyboardLanguage: String {
         primaryLanguage ?? Locale.preferredLanguages.first ?? "en-US"
     }
 
-    var allowsAutomaticTextCorrection: Bool {
+    var editorReturnIntent: String? {
+        switch textDocumentProxy.returnKeyType ?? .default {
+        case .default:
+            return nil
+        case .go, .join, .route:
+            return "go"
+        case .google, .search, .yahoo:
+            return "search"
+        case .next, .continue:
+            return "next"
+        case .send:
+            return "send"
+        case .done, .emergencyCall:
+            return "done"
+        @unknown default:
+            return nil
+        }
+    }
+
+    var editorFieldIdentifier: String {
+        (textDocumentProxy.documentIdentifier as UUID).uuidString
+    }
+
+    var editorFieldTraits: EditorFieldTraits {
         let proxy = textDocumentProxy
-        guard proxy.autocorrectionType != .no,
-              proxy.spellCheckingType != .no,
-              proxy.isSecureTextEntry != true else {
-            return false
-        }
+        let isSecure = proxy.isSecureTextEntry == true
+        let suggestionsDisabled = proxy.autocorrectionType == .no
+            || proxy.spellCheckingType == .no
 
-        switch proxy.keyboardType {
-        case .URL, .emailAddress, .phonePad, .namePhonePad,
-             .numberPad, .decimalPad, .asciiCapableNumberPad:
-            return false
+        return EditorFieldTraits(
+            kind: Self.editorFieldKind(
+                keyboardType: proxy.keyboardType ?? .default,
+                contentType: proxy.textContentType ?? nil,
+                returnKeyType: proxy.returnKeyType ?? .default,
+                isSecure: isSecure
+            ),
+            isSecure: isSecure,
+            suggestionsDisabled: suggestionsDisabled,
+            personalizedLearningDisabled: suggestionsDisabled,
+            autoCapitalization: Self.editorAutoCapitalizationMode(
+                proxy.autocapitalizationType ?? .sentences
+            )
+        )
+    }
+
+    private static func editorAutoCapitalizationMode(
+        _ type: UITextAutocapitalizationType
+    ) -> EditorAutoCapitalizationMode {
+        switch type {
+        case .none:
+            .none
+        case .words:
+            .words
+        case .sentences:
+            .sentences
+        case .allCharacters:
+            .allCharacters
+        @unknown default:
+            .sentences
+        }
+    }
+
+    private static func editorFieldKind(
+        keyboardType: UIKeyboardType,
+        contentType: UITextContentType?,
+        returnKeyType: UIReturnKeyType,
+        isSecure: Bool
+    ) -> EditorFieldKind {
+        if isSecure { return .password }
+        if contentType == .oneTimeCode { return .oneTimeCode }
+        if contentType == .password || contentType == .newPassword { return .password }
+        if contentType == .dateTime { return .dateTime }
+        if contentType == .URL { return .url }
+        if contentType == .emailAddress { return .emailAddress }
+        if contentType == .telephoneNumber { return .phoneNumber }
+        if contentType == .creditCardNumber { return .number }
+        if contentType == .flightNumber || contentType == .shipmentTrackingNumber {
+            return .code
+        }
+        if let contentType, identityContentTypes.contains(contentType) {
+            return .personName
+        }
+        if returnKeyType == .search { return .search }
+
+        switch keyboardType {
+        case .URL:
+            return .url
+        case .emailAddress:
+            return .emailAddress
+        case .phonePad:
+            return .phoneNumber
+        case .namePhonePad:
+            return .personName
+        case .numberPad, .asciiCapableNumberPad:
+            return .number
+        case .decimalPad:
+            return .decimal
+        case .webSearch:
+            return .search
         default:
-            break
+            return .plainText
         }
-
-        guard let contentType = proxy.textContentType ?? nil else { return true }
-        return !Self.correctionSensitiveContentTypes.contains(contentType)
     }
 
-    var allowsPersonalizedLearning: Bool {
-        // iOS already replaces custom keyboards in secure fields. Mirror the
-        // stricter correction policy as defense in depth for structured,
-        // identity, contact, and credential fields.
-        allowsAutomaticTextCorrection
-    }
-
-    private static let correctionSensitiveContentTypes: [UITextContentType] = [
-        .URL,
-        .emailAddress,
-        .telephoneNumber,
-        .name,
-        .givenName,
-        .middleName,
-        .familyName,
-        .namePrefix,
-        .nameSuffix,
-        .nickname,
-        .organizationName,
-        .username,
-        .password,
-        .newPassword,
-        .oneTimeCode,
-        .creditCardNumber,
+    private static let identityContentTypes: [UITextContentType] = [
+        .name, .givenName, .middleName, .familyName, .namePrefix,
+        .nameSuffix, .nickname, .organizationName, .username,
     ]
 
     func insertText(_ text: String) {
@@ -187,38 +260,14 @@ extension KeyboardViewController: KeyboardModelDelegate {
         textDocumentProxy.deleteBackward()
     }
 
-    func openHostApplication(
-        _ url: URL,
-        completion: @escaping @MainActor @Sendable (Bool) -> Void
-    ) {
-        guard let extensionContext else {
-            completion(openHostApplicationThroughResponderChain(url))
-            return
-        }
-        extensionContext.open(url) { [weak self] didOpen in
-            Task { @MainActor in
-                guard !didOpen else {
-                    completion(true)
-                    return
-                }
-                completion(
-                    self?.openHostApplicationThroughResponderChain(url) ?? false
-                )
-            }
-        }
+    func moveCursor(byUTF16Offset offset: Int) {
+        guard offset != 0 else { return }
+        documentGeneration &+= 1
+        textDocumentProxy.adjustTextPosition(byCharacterOffset: offset)
     }
 
-    private func openHostApplicationThroughResponderChain(_ url: URL) -> Bool {
-        let selector = NSSelectorFromString("openURL:")
-        var responder: UIResponder? = self
-        while let current = responder {
-            if current.responds(to: selector), !(current is UIInputViewController) {
-                current.perform(selector, with: url)
-                return true
-            }
-            responder = current.next
-        }
-        return false
+    func playInputClick() {
+        UIDevice.current.playInputClick()
     }
 
     func captureCorrectionSnapshot() -> DocumentCorrectionSnapshot? {

@@ -1,64 +1,5 @@
+import BuddyGrammarKit
 import SwiftUI
-
-struct EmojiCategory: Identifiable, Equatable {
-    let id: String
-    let name: String
-    let icon: String
-    let emoji: [String]
-}
-
-enum EmojiCatalog {
-    static let categories: [EmojiCategory] = [
-        EmojiCategory(
-            id: "smileys",
-            name: "Smileys",
-            icon: "face.smiling",
-            emoji: "😀😃😄😁😆😅😂🤣🙂🙃😉😊😇🥰😍🤩😘😗😚😙😋😛😜🤪😝🤑🤗🤭🤫🤔🤐🤨😐😑😶😏😒🙄😬🤥😌😔😪🤤😴😷🤒🤕🤢🤮🥵🥶😵🤯🤠🥳😎🤓🧐😕😟🙁😮😯😲😳🥺😦😨😰😥😢😭😱😖😞😓😩😫🥱😤😡😠🤬".map(String.init)
-        ),
-        EmojiCategory(
-            id: "people",
-            name: "People",
-            icon: "hand.wave",
-            emoji: "👋🤚🖐️✋🖖👌🤌🤏✌️🤞🤟🤘🤙👈👉👆👇☝️👍👎✊👊🤛🤜👏🙌👐🤲🤝🙏💪🦾🦵🦶👂👃🧠🦷👀👅👄👶🧒👦👧🧑👱👨🧔👩🧓👴👵🙍🙎🙅🙆💁🙋🧏🙇🤦🤷".map(String.init)
-        ),
-        EmojiCategory(
-            id: "animals",
-            name: "Animals",
-            icon: "pawprint",
-            emoji: "🐶🐱🐭🐹🐰🦊🐻🐼🐨🐯🦁🐮🐷🐸🐵🙈🙉🙊🐒🐔🐧🐦🐤🐣🦆🦅🦉🦇🐺🐗🐴🦄🐝🐛🦋🐌🐞🐜🕷️🦂🐢🐍🦎🦖🦕🐙🦑🦐🦞🦀🐡🐠🐟🐬🐳🐋🦈🐊🐅🐆🦓🦍🐘🦒🐪🐄🐎🐖🐏🐑🐐".map(String.init)
-        ),
-        EmojiCategory(
-            id: "food",
-            name: "Food",
-            icon: "fork.knife",
-            emoji: "🍏🍎🍐🍊🍋🍌🍉🍇🍓🫐🍈🍒🍑🥭🍍🥥🥝🍅🍆🥑🥦🥬🥒🌶️🌽🥕🧄🧅🥔🍠🥐🍞🥖🥨🧀🥚🍳🥞🧇🥓🥩🍗🍖🌭🍔🍟🍕🥪🌮🌯🥗🍝🍜🍲🍛🍣🍱🥟🍤🍙🍚🍧🍨🍦🥧🧁🍰🎂🍮🍭🍬🍫🍿🍩🍪☕🍵🧃🥤🍶🍺🍻🥂🍷🍸🍹".map(String.init)
-        ),
-        EmojiCategory(
-            id: "activities",
-            name: "Activities",
-            icon: "figure.run",
-            emoji: "⚽🏀🏈⚾🥎🎾🏐🏉🥏🎱🏓🏸🏒🏑🥍🏏🥅⛳🏹🎣🤿🥊🥋🎽🛹🛼🛷⛸️🥌🎿⛷️🏂🏋️🤼🤸⛹️🤺🤾🏌️🏇🧘🏄🏊🤽🚣🧗🚵🚴🏆🥇🥈🥉🏅🎖️🎫🎟️🎪🤹🎭🩰🎨🎬🎤🎧🎼🎹🥁🎷🎺🎸🪕🎻🎲🎯🎳🎮🎰🧩".map(String.init)
-        ),
-        EmojiCategory(
-            id: "travel",
-            name: "Travel",
-            icon: "car",
-            emoji: "🚗🚕🚙🚌🚎🏎️🚓🚑🚒🚐🛻🚚🚛🚜🛴🚲🛵🏍️🚨🚔🚖🚡🚠🚃🚋🚄🚅🚈🚂🚆🚇🚊🚉✈️🛫🛬🛩️💺🛰️🚀🛸🚁🛶⛵🚤🛥️🛳️⛴️🚢⚓⛽🚧🚦🚥🗺️🗿🗽🗼🏰🏯🏟️🎡🎢🎠⛲🏖️🏝️🏜️🌋⛰️🏔️🗻🏕️⛺🏠🏡🏘️🏗️🏭🏢🏬🏥🏦🏨🏪🏫💒🏛️⛪🕌🕍🛕⛩️".map(String.init)
-        ),
-        EmojiCategory(
-            id: "objects",
-            name: "Objects",
-            icon: "lightbulb",
-            emoji: "⌚📱📲💻⌨️🖥️🖨️🖱️🕹️💽💾💿📀📼📷📸📹🎥📽️🎞️📞☎️📟📠📺📻🎙️🧭⏱️⏲️⏰⌛⏳📡🔋🔌💡🔦🕯️🧯💸💵💴💶💷💰💳💎⚖️🧰🔧🔨⚒️🛠️⛏️🔩⚙️🧱⛓️🧲💣🧨🔪🗡️⚔️🛡️🔮📿🧿💈🔭🔬💊💉🩸🧬🦠🧫🧪🌡️🧹🧺🧻🚽🚿🛁🧼🧽🛎️🔑🗝️🚪🪑🛋️🛏️🧸🖼️🛍️🛒🎁🎈🎏🎀🎊🎉".map(String.init)
-        ),
-        EmojiCategory(
-            id: "symbols",
-            name: "Symbols",
-            icon: "heart",
-            emoji: "❤️🧡💛💚💙💜🖤🤍🤎💔❣️💕💞💓💗💖💘💝💟☮️✝️☪️🕉️☸️✡️🔯🕎☯️☦️⛎♈♉♊♋♌♍♎♏♐♑♒♓🆔⚛️✅❌❓❗💯🔞📴📳🈶🈚🈸🈺🈷️✴️🆚💮🉐㊙️㊗️🈴🈵🈹🈲🅰️🅱️🆎🆑🅾️🆘⛔📛🚫💢♨️🚷🚯🚳🚱🚭".map(String.init)
-        ),
-    ]
-}
 
 @MainActor
 struct RecentEmojiStore {
@@ -87,120 +28,393 @@ struct RecentEmojiStore {
 }
 
 struct EmojiKeyboardLayer: View {
+    private static let catalog = (try? EmojiCatalog.bundled()) ?? .empty
+
     let model: KeyboardModel
     let metrics: KeyboardMetrics
 
-    @State private var selectedCategoryID = EmojiCatalog.categories[0].id
+    @State private var selectedCategoryID = EmojiKeyboardLayer.catalog.categories.first?.id ?? ""
     @State private var recents: [String] = []
+    @State private var searchText = ""
+    @State private var searchResults: [EmojiEntry] = []
+    @State private var isSearchEditing = false
 
     private let store = RecentEmojiStore()
 
-    private var selectedCategory: EmojiCategory {
-        EmojiCatalog.categories.first { $0.id == selectedCategoryID } ?? EmojiCatalog.categories[0]
+    private var isSearching: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var selectedEntries: [EmojiEntry] {
+        if selectedCategoryID == "recents" {
+            return recents.compactMap { Self.catalog.entry(for: $0) }
+        }
+        return Self.catalog.categories
+            .first(where: { $0.id == selectedCategoryID })?
+            .entries ?? []
+    }
+
+    private var visibleEntries: [EmojiEntry] {
+        isSearching ? searchResults : selectedEntries
     }
 
     var body: some View {
-        VStack(spacing: 6) {
-            categoryTabs
+        VStack(spacing: 5) {
+            EmojiSearchBar(
+                text: $searchText,
+                isEditing: $isSearchEditing,
+                playInputClick: model.playInputClick
+            )
 
-            ScrollView {
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 38, maximum: 48), spacing: 4)],
-                    spacing: 6
-                ) {
-                    if selectedCategoryID == "recents" {
-                        emojiButtons(recents)
-                    } else {
-                        emojiButtons(selectedCategory.emoji)
-                    }
-                }
-                .padding(.horizontal, 2)
+            if !isSearchEditing {
+                EmojiCategoryTabs(
+                    categories: Self.catalog.categories,
+                    showsRecents: !recents.isEmpty,
+                    selectedCategoryID: $selectedCategoryID,
+                    playInputClick: model.playInputClick
+                )
             }
+
+            EmojiGrid(
+                entries: visibleEntries,
+                searchText: isSearching ? searchText : nil,
+                onSelect: insertEmoji
+            )
             .frame(maxHeight: .infinity)
 
-            HStack(spacing: metrics.keySpacing) {
-                Button("ABC") {
-                    model.setLayout(.letters)
-                }
-                .font(.callout)
-                .buttonStyle(
-                    KeyboardFunctionButtonStyle(width: metrics.wideFunctionKeyWidth * 1.2, height: 38)
+            if isSearchEditing {
+                EmojiSearchKeyboard(
+                    text: $searchText,
+                    dismiss: { isSearchEditing = false },
+                    playInputClick: model.playInputClick
                 )
-                .accessibilityLabel("Show letters")
-                .accessibilityIdentifier("keyboard.layout")
+            }
 
-                Button(action: model.insertSpace) {
-                    Text("space")
-                        .font(.callout)
-                        .frame(maxWidth: .infinity, minHeight: 38)
+            keyboardControls
+        }
+        .onAppear(perform: restoreRecents)
+        .onChange(of: searchText) { _, newValue in
+            searchResults = Self.catalog.search(newValue, limit: 180)
+        }
+    }
+
+    private var keyboardControls: some View {
+        HStack(spacing: metrics.keySpacing) {
+            Button("ABC") {
+                model.playInputClick()
+                model.setLayout(.letters)
+            }
+            .font(.callout)
+            .buttonStyle(
+                KeyboardFunctionButtonStyle(
+                    width: metrics.wideFunctionKeyWidth * 1.2,
+                    height: 38
+                )
+            )
+            .accessibilityLabel("Show letters")
+            .accessibilityIdentifier("keyboard.layout")
+
+            Button {
+                model.playInputClick()
+                model.insertSpace()
+            } label: {
+                Text("space")
+                    .font(.callout)
+                    .frame(maxWidth: .infinity, minHeight: 38)
+            }
+            .buttonStyle(KeyboardKeyButtonStyle())
+            .accessibilityIdentifier("keyboard.space")
+
+            Button {
+                model.playInputClick()
+                model.deleteBackward()
+            } label: {
+                Image(systemName: "delete.left")
+                    .frame(width: metrics.wideFunctionKeyWidth, height: 38)
+            }
+            .buttonStyle(
+                KeyboardFunctionButtonStyle(
+                    width: metrics.wideFunctionKeyWidth,
+                    height: 38
+                )
+            )
+            .accessibilityLabel("Delete")
+            .accessibilityIdentifier("keyboard.delete")
+        }
+    }
+
+    private func restoreRecents() {
+        recents = store.load().filter { Self.catalog.entry(for: $0) != nil }
+        if !recents.isEmpty {
+            selectedCategoryID = "recents"
+        }
+    }
+
+    private func insertEmoji(_ sequence: String) {
+        model.playInputClick()
+        model.insertEmoji(sequence)
+        recents = store.record(sequence)
+    }
+}
+
+private struct EmojiSearchBar: View {
+    @Binding var text: String
+    @Binding var isEditing: Bool
+    let playInputClick: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            Button {
+                playInputClick()
+                isEditing = true
+            } label: {
+                Text(text.isEmpty ? "Search emoji" : text)
+                    .font(.callout)
+                    .foregroundStyle(text.isEmpty ? .secondary : .primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(text.isEmpty ? "Search emoji" : "Emoji search: \(text)")
+            .accessibilityHint("Shows the emoji search keyboard")
+
+            Button {
+                playInputClick()
+                text = ""
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Clear emoji search")
+            .opacity(text.isEmpty ? 0 : 1)
+            .disabled(text.isEmpty)
+        }
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, minHeight: 30)
+        .background(Color(uiColor: .systemGray6), in: .rect(cornerRadius: 8))
+        .accessibilityIdentifier("keyboard.emojiSearch")
+    }
+}
+
+/// A custom keyboard extension cannot rely on another software keyboard to
+/// edit a search field. This small local surface edits only the in-memory
+/// query and never inserts search text into the host document.
+private struct EmojiSearchKeyboard: View {
+    private static let rows = [
+        Array("qwertyuiop"),
+        Array("asdfghjkl"),
+        Array("zxcvbnm"),
+    ]
+
+    @Binding var text: String
+    let dismiss: () -> Void
+    let playInputClick: () -> Void
+
+    var body: some View {
+        VStack(spacing: 3) {
+            ForEach(Self.rows, id: \.self) { row in
+                HStack(spacing: 3) {
+                    ForEach(row, id: \.self) { character in
+                        Button {
+                            playInputClick()
+                            text.append(character)
+                        } label: {
+                            Text(String(character))
+                                .frame(maxWidth: .infinity, minHeight: 24)
+                        }
+                        .font(.caption.weight(.medium))
+                        .buttonStyle(KeyboardKeyButtonStyle())
+                        .accessibilityLabel(String(character))
+                        .accessibilityHint("Adds to emoji search")
+                    }
+                }
+                .padding(
+                    .horizontal,
+                    row == Self.rows[1] ? 10 : row == Self.rows[2] ? 22 : 0
+                )
+            }
+
+            HStack(spacing: 4) {
+                Button {
+                    if !text.isEmpty {
+                        playInputClick()
+                        text.removeLast()
+                    }
+                } label: {
+                    Image(systemName: "delete.left")
+                        .frame(maxWidth: .infinity, minHeight: 24)
                 }
                 .buttonStyle(KeyboardKeyButtonStyle())
-                .accessibilityIdentifier("keyboard.space")
+                .accessibilityLabel("Delete search character")
+                .disabled(text.isEmpty)
 
-                Button(action: model.deleteBackward) {
-                    Image(systemName: "delete.left")
-                        .frame(width: metrics.wideFunctionKeyWidth, height: 38)
+                Button {
+                    guard !text.isEmpty, text.last != " " else { return }
+                    playInputClick()
+                    text.append(" ")
+                } label: {
+                    Text("space")
+                        .frame(maxWidth: .infinity, minHeight: 24)
                 }
-                .buttonStyle(
-                    KeyboardFunctionButtonStyle(width: metrics.wideFunctionKeyWidth, height: 38)
-                )
-                .accessibilityLabel("Delete")
-                .accessibilityIdentifier("keyboard.delete")
-            }
-        }
-        .onAppear {
-            recents = store.load()
-            if !recents.isEmpty {
-                selectedCategoryID = "recents"
-            }
-        }
-    }
+                .font(.caption)
+                .buttonStyle(KeyboardKeyButtonStyle())
+                .accessibilityLabel("Search space")
 
-    private var categoryTabs: some View {
+                Button {
+                    playInputClick()
+                    dismiss()
+                } label: {
+                    Text("Done")
+                        .frame(maxWidth: .infinity, minHeight: 24)
+                }
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(KeyboardKeyButtonStyle())
+                    .accessibilityHint("Hides the emoji search keyboard")
+            }
+        }
+        .sensoryFeedback(.selection, trigger: text)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Emoji search keyboard")
+    }
+}
+
+private struct EmojiCategoryTabs: View {
+    let categories: [EmojiCategory]
+    let showsRecents: Bool
+    @Binding var selectedCategoryID: String
+    let playInputClick: () -> Void
+
+    var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
-                if !recents.isEmpty {
-                    categoryTab(id: "recents", name: "Recents", icon: "clock")
+                if showsRecents {
+                    EmojiCategoryTab(
+                        id: "recents",
+                        name: "Recents",
+                        icon: "clock",
+                        isSelected: selectedCategoryID == "recents",
+                        select: select,
+                        playInputClick: playInputClick
+                    )
                 }
-                ForEach(EmojiCatalog.categories) { category in
-                    categoryTab(id: category.id, name: category.name, icon: category.icon)
+                ForEach(categories) { category in
+                    EmojiCategoryTab(
+                        id: category.id,
+                        name: category.name,
+                        icon: category.icon,
+                        isSelected: selectedCategoryID == category.id,
+                        select: select,
+                        playInputClick: playInputClick
+                    )
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Emoji categories")
     }
 
-    private func categoryTab(id: String, name: String, icon: String) -> some View {
+    private func select(_ id: String) {
+        selectedCategoryID = id
+    }
+}
+
+private struct EmojiCategoryTab: View {
+    let id: String
+    let name: String
+    let icon: String
+    let isSelected: Bool
+    let select: (String) -> Void
+    let playInputClick: () -> Void
+
+    var body: some View {
         Button {
-            selectedCategoryID = id
+            playInputClick()
+            select(id)
         } label: {
             Image(systemName: icon)
                 .font(.footnote)
                 .frame(width: 36, height: 28)
                 .background(
-                    selectedCategoryID == id
-                        ? Color(uiColor: .systemGray3)
-                        : Color.clear
+                    isSelected ? Color(uiColor: .systemGray3) : Color.clear,
+                    in: .rect(cornerRadius: 6)
                 )
-                .clipShape(.rect(cornerRadius: 6))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(name)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier("keyboard.emojiCategory.\(id)")
     }
+}
 
-    @ViewBuilder
-    private func emojiButtons(_ emoji: [String]) -> some View {
-        ForEach(emoji, id: \.self) { symbol in
-            Button {
-                model.insertEmoji(symbol)
-                recents = store.record(symbol)
-            } label: {
-                Text(symbol)
-                    .font(.title2)
-                    .frame(maxWidth: .infinity, minHeight: 36)
+private struct EmojiGrid: View {
+    private static let columns = [
+        GridItem(.adaptive(minimum: 38, maximum: 48), spacing: 4),
+    ]
+
+    let entries: [EmojiEntry]
+    let searchText: String?
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        if entries.isEmpty {
+            VStack(spacing: 4) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Text(searchText == nil ? "No emoji available" : "No emoji found")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(symbol)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityElement(children: .combine)
+        } else {
+            ScrollView {
+                LazyVGrid(columns: Self.columns, spacing: 6) {
+                    ForEach(entries) { entry in
+                        EmojiKey(entry: entry, onSelect: onSelect)
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+        }
+    }
+}
+
+private struct EmojiKey: View {
+    let entry: EmojiEntry
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        Button {
+            onSelect(entry.sequence)
+        } label: {
+            Text(entry.sequence)
+                .font(.title2)
+                .frame(maxWidth: .infinity, minHeight: 36)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(entry.name)
+        .accessibilityHint(
+            entry.variants.isEmpty
+                ? "Inserts this emoji"
+                : "Inserts this emoji. Touch and hold to choose a skin tone"
+        )
+        .contextMenu {
+            ForEach(entry.variants) { variant in
+                Button {
+                    onSelect(variant.sequence)
+                } label: {
+                    Text(variant.sequence)
+                    Text(variant.skinTones.joined(separator: ", "))
+                }
+                .accessibilityLabel(variant.name)
+            }
         }
     }
 }

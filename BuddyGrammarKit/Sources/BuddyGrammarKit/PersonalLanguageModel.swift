@@ -8,22 +8,34 @@ import Foundation
 /// halving so old habits decay instead of dominating forever.
 public final class PersonalLanguageModel {
     private struct Storage: Codable {
+        var resetGeneration: UInt64 = 0
         var unigrams: [String: Int] = [:]
         var bigrams: [String: [String: Int]] = [:]
         var trigrams: [String: [String: Int]] = [:]
+        var explicitWords: Set<String> = []
+        var suppressedCorrections: Set<String> = []
         var lastDecayAt: Date? = nil
 
         private enum CodingKeys: String, CodingKey {
+            case resetGeneration
             case unigrams
             case bigrams
             case trigrams
+            case explicitWords
+            case suppressedCorrections
             case lastDecayAt
         }
 
-        init() {}
+        init(resetGeneration: UInt64 = 0) {
+            self.resetGeneration = resetGeneration
+        }
 
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
+            resetGeneration = try container.decodeIfPresent(
+                UInt64.self,
+                forKey: .resetGeneration
+            ) ?? 0
             unigrams = try container.decodeIfPresent(
                 [String: Int].self,
                 forKey: .unigrams
@@ -36,6 +48,14 @@ public final class PersonalLanguageModel {
                 [String: [String: Int]].self,
                 forKey: .trigrams
             ) ?? [:]
+            explicitWords = try container.decodeIfPresent(
+                Set<String>.self,
+                forKey: .explicitWords
+            ) ?? []
+            suppressedCorrections = try container.decodeIfPresent(
+                Set<String>.self,
+                forKey: .suppressedCorrections
+            ) ?? []
             lastDecayAt = try container.decodeIfPresent(Date.self, forKey: .lastDecayAt)
         }
     }
@@ -47,25 +67,34 @@ public final class PersonalLanguageModel {
     private static let maximumContinuationsPerContext = 6
     private static let saveInterval = 20
     private static let maximumWordLength = 24
+    private static let maximumCorrectionTextLength = 128
+    private static let maximumExplicitWords = 1_000
+    private static let maximumSuppressedCorrections = 1_000
     private static let namespaceSeparator = "\u{1E}"
+    private static let correctionSeparator = "\u{1D}"
     private static let decayInterval: TimeInterval = 30 * 24 * 60 * 60
 
     private var storage: Storage
     private let defaults: UserDefaults?
     private let now: () -> Date
+    private let resetGeneration: () -> UInt64
     private var unsavedChanges = 0
 
     public init(
         defaults: UserDefaults? = .standard,
-        now: @escaping () -> Date = { .now }
+        now: @escaping () -> Date = { .now },
+        resetGeneration: @escaping () -> UInt64 = { 0 }
     ) {
         self.defaults = defaults
         self.now = now
+        self.resetGeneration = resetGeneration
+        let currentResetGeneration = resetGeneration()
         if let data = defaults?.data(forKey: Self.storageKey),
-           let decoded = try? JSONDecoder().decode(Storage.self, from: data) {
+           let decoded = try? JSONDecoder().decode(Storage.self, from: data),
+           decoded.resetGeneration == currentResetGeneration {
             storage = decoded
         } else {
-            storage = Storage()
+            storage = Storage(resetGeneration: currentResetGeneration)
         }
         if storage.lastDecayAt == nil {
             storage.lastDecayAt = now()
@@ -162,6 +191,63 @@ public final class PersonalLanguageModel {
         }
     }
 
+    /// Keeps an explicitly accepted word available without fabricating typing
+    /// observations or linking it to sentence context.
+    @discardableResult
+    public func addToDictionary(
+        _ word: String,
+        languageCode: String? = nil
+    ) -> Bool {
+        applyTimeDecayIfNeeded()
+        guard storage.explicitWords.count < Self.maximumExplicitWords,
+              let normalized = Self.normalized(word) else { return false }
+        let key = Self.namespacePrefix(for: languageCode) + normalized
+        guard storage.explicitWords.insert(key).inserted else { return false }
+        unsavedChanges += 1
+        return true
+    }
+
+    /// Suppresses one exact automatic-correction pair. The replacement remains
+    /// usable elsewhere; for example, rejecting `teh → the` never blacklists
+    /// the word “the” globally.
+    @discardableResult
+    public func suppressCorrection(
+        typed: String,
+        suggestion: String,
+        languageCode: String? = nil
+    ) -> Bool {
+        applyTimeDecayIfNeeded()
+        guard storage.suppressedCorrections.count < Self.maximumSuppressedCorrections,
+              let typed = Self.normalizedCorrectionText(typed),
+              let suggestion = Self.normalizedCorrectionText(suggestion),
+              typed != suggestion else { return false }
+        let key = Self.correctionPreferenceKey(
+            typed: typed,
+            suggestion: suggestion,
+            languageCode: languageCode
+        )
+        guard storage.suppressedCorrections.insert(key).inserted else { return false }
+        unsavedChanges += 1
+        return true
+    }
+
+    public func isCorrectionSuppressed(
+        typed: String,
+        suggestion: String,
+        languageCode: String? = nil
+    ) -> Bool {
+        synchronizeResetGenerationIfNeeded()
+        guard let typed = Self.normalizedCorrectionText(typed),
+              let suggestion = Self.normalizedCorrectionText(suggestion) else { return false }
+        return storage.suppressedCorrections.contains(
+            Self.correctionPreferenceKey(
+                typed: typed,
+                suggestion: suggestion,
+                languageCode: languageCode
+            )
+        )
+    }
+
     /// Learns every word in committed text, preserving up to two words of
     /// surrounding context while never linking predictions across sentences.
     public func learn(
@@ -244,7 +330,7 @@ public final class PersonalLanguageModel {
         guard limit > 0, let normalized = Self.normalized(prefix) else { return [] }
         let namespace = Self.namespacePrefix(for: languageCode)
         let scopedPrefix = namespace + normalized
-        return storage.unigrams
+        let learned = storage.unigrams
             .filter {
                 $0.key.hasPrefix(scopedPrefix)
                     && $0.key.count > namespace.count + normalized.count
@@ -253,6 +339,14 @@ public final class PersonalLanguageModel {
             .sorted { ($0.value, $1.key) > ($1.value, $0.key) }
             .prefix(limit)
             .map { String($0.key.dropFirst(namespace.count)) }
+        let explicit = storage.explicitWords
+            .filter {
+                $0.hasPrefix(scopedPrefix)
+                    && $0.count > namespace.count + normalized.count
+            }
+            .sorted()
+            .map { String($0.dropFirst(namespace.count)) }
+        return Array((explicit + learned).uniqued().prefix(limit))
     }
 
     public func usageCount(
@@ -261,12 +355,17 @@ public final class PersonalLanguageModel {
     ) -> Int {
         applyTimeDecayIfNeeded()
         guard let word = Self.normalized(word) else { return 0 }
-        return storage.unigrams[Self.namespacePrefix(for: languageCode) + word] ?? 0
+        let key = Self.namespacePrefix(for: languageCode) + word
+        return max(
+            storage.unigrams[key] ?? 0,
+            storage.explicitWords.contains(key) ? 3 : 0
+        )
     }
 
     // MARK: - Persistence
 
     public func persist() {
+        synchronizeResetGenerationIfNeeded()
         guard unsavedChanges > 0, let defaults else { return }
         if let data = try? JSONEncoder().encode(storage) {
             defaults.set(data, forKey: Self.storageKey)
@@ -276,10 +375,34 @@ public final class PersonalLanguageModel {
 
     /// Removes both the live aggregate and its durable on-device snapshot.
     public func reset() {
-        storage = Storage()
+        storage = Storage(resetGeneration: resetGeneration())
         storage.lastDecayAt = now()
         unsavedChanges = 0
         defaults?.removeObject(forKey: Self.storageKey)
+    }
+
+    /// Drops live personalization without deleting a valid durable snapshot.
+    /// This is used when the keyboard temporarily loses App Group access.
+    public func discardInMemoryPersonalization() {
+        storage = Storage(resetGeneration: resetGeneration())
+        storage.lastDecayAt = now()
+        unsavedChanges = 0
+    }
+
+    /// Reloads the durable snapshot after shared-container access returns.
+    /// Epoch-mismatched snapshots are ignored so a stale writer cannot revive
+    /// data from before the most recent reset.
+    public func reloadPersonalization() {
+        let currentResetGeneration = resetGeneration()
+        if let data = defaults?.data(forKey: Self.storageKey),
+           let decoded = try? JSONDecoder().decode(Storage.self, from: data),
+           decoded.resetGeneration == currentResetGeneration {
+            storage = decoded
+        } else {
+            storage = Storage(resetGeneration: currentResetGeneration)
+            storage.lastDecayAt = now()
+        }
+        unsavedChanges = 0
     }
 
     // MARK: - Internals
@@ -336,6 +459,7 @@ public final class PersonalLanguageModel {
     }
 
     private func applyTimeDecayIfNeeded() {
+        synchronizeResetGenerationIfNeeded()
         let referenceDate = now()
         guard let lastDecayAt = storage.lastDecayAt else {
             storage.lastDecayAt = referenceDate
@@ -354,6 +478,14 @@ public final class PersonalLanguageModel {
         }
         storage.lastDecayAt = referenceDate
         unsavedChanges += 1
+    }
+
+    private func synchronizeResetGenerationIfNeeded() {
+        let currentResetGeneration = resetGeneration()
+        guard storage.resetGeneration != currentResetGeneration else { return }
+        storage = Storage(resetGeneration: currentResetGeneration)
+        storage.lastDecayAt = now()
+        unsavedChanges = 0
     }
 
     private static func halved(
@@ -404,14 +536,53 @@ public final class PersonalLanguageModel {
         return namespaceSeparator + primaryLanguage + namespaceSeparator
     }
 
+    private static func correctionPreferenceKey(
+        typed: String,
+        suggestion: String,
+        languageCode: String?
+    ) -> String {
+        namespacePrefix(for: languageCode)
+            + typed
+            + correctionSeparator
+            + suggestion
+    }
+
     private static func normalized(_ word: String) -> String? {
-        let trimmed = word.lowercased()
+        let trimmed = WordTokenNormalizer.canonicalized(word.lowercased())
         guard !trimmed.isEmpty,
               trimmed.count <= maximumWordLength,
               trimmed.contains(where: \.isLetter),
-              trimmed.allSatisfy({ $0.isLetter || $0 == "'" }) else {
+              trimmed.allSatisfy({
+                  $0.isLetter || $0 == WordTokenNormalizer.canonicalApostrophe
+              }) else {
             return nil
         }
         return trimmed
+    }
+
+    /// Correction replacements can be phrases (for example a text shortcut),
+    /// so their persisted identity is deliberately broader than a dictionary
+    /// word while still excluding the separators used by the storage key.
+    private static func normalizedCorrectionText(_ text: String) -> String? {
+        let trimmed = WordTokenNormalizer.canonicalized(
+            text
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+        )
+        guard !trimmed.isEmpty,
+              trimmed.count <= maximumCorrectionTextLength,
+              trimmed.contains(where: \.isLetter),
+              !trimmed.contains(namespaceSeparator),
+              !trimmed.contains(correctionSeparator) else {
+            return nil
+        }
+        return trimmed
+    }
+}
+
+private extension Sequence where Element: Hashable {
+    func uniqued() -> [Element] {
+        var seen = Set<Element>()
+        return filter { seen.insert($0).inserted }
     }
 }

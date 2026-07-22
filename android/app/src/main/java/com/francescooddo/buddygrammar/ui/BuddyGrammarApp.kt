@@ -85,6 +85,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.francescooddo.buddygrammar.R
+import com.francescooddo.buddygrammar.BuildConfig
 import com.francescooddo.buddygrammar.core.AppConfig
 import com.francescooddo.buddygrammar.core.adaptive.PracticeKind
 import com.francescooddo.buddygrammar.core.adaptive.PracticeRecordStatus
@@ -109,6 +110,10 @@ private enum class LearningResetTarget(val title: String, val message: String) {
     LANGUAGE(
         "Reset learned words?",
         "The keyboard will forget its local vocabulary and phrase counts.",
+    ),
+    PRACTICE(
+        "Reset practice history?",
+        "Adaptive practice will forget its mastery scores and review schedule.",
     ),
     ALL(
         "Reset all learning?",
@@ -424,7 +429,7 @@ private fun HomeScreen(
         FeatureCard(
             icon = Icons.Rounded.Mic,
             title = "Speech to text",
-            body = "Record in the app, transcribe with ElevenLabs, then insert it from the keyboard mic.",
+            body = "Record in the app, transcribe with ElevenLabs, then insert it with the keyboard’s Saved dictation action.",
             action = "Start dictating",
         ) { state.navigate(AppScreen.DICTATION) }
     }
@@ -607,6 +612,11 @@ private fun SettingsScreen(state: BuddyGrammarAppState, onOpenKeyboardSettings: 
             checked = draft.autoCorrectDictation,
         ) { draft = draft.copy(autoCorrectDictation = it) }
         SettingSwitch(
+            title = "Copy completed dictation",
+            body = "Automatically place completed transcripts on the system clipboard. Off by default; the Copy button always remains available.",
+            checked = draft.copiesCompletedDictationToClipboard,
+        ) { draft = draft.copy(copiesCompletedDictationToClipboard = it) }
+        SettingSwitch(
             title = "Correct words while typing",
             body = "Fix clear keyboard typos on-device when you type punctuation, space, or return.",
             checked = draft.automaticallyCorrectWords,
@@ -697,6 +707,11 @@ private fun SettingsScreen(state: BuddyGrammarAppState, onOpenKeyboardSettings: 
             colors = ButtonDefaults.outlinedButtonColors(contentColor = BuddyRed),
         ) { Text("Reset learned words") }
         OutlinedButton(
+            onClick = { resetTarget = LearningResetTarget.PRACTICE },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = BuddyRed),
+        ) { Text("Reset practice history") }
+        OutlinedButton(
             onClick = { resetTarget = LearningResetTarget.ALL },
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = BuddyRed),
@@ -706,6 +721,9 @@ private fun SettingsScreen(state: BuddyGrammarAppState, onOpenKeyboardSettings: 
             fontSize = 13.sp,
             color = BuddyInk.copy(alpha = 0.6f),
         )
+        HorizontalDivider()
+        Text("About", fontWeight = FontWeight.Bold)
+        Text("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
     }
 
     resetTarget?.let { target ->
@@ -719,6 +737,7 @@ private fun SettingsScreen(state: BuddyGrammarAppState, onOpenKeyboardSettings: 
                         when (target) {
                             LearningResetTarget.TYPING -> state.resetTypingCalibration()
                             LearningResetTarget.LANGUAGE -> state.resetLearnedWords()
+                            LearningResetTarget.PRACTICE -> state.resetPracticeProgress()
                             LearningResetTarget.ALL -> state.resetAllLearning()
                         }
                         resetTarget = null
@@ -886,7 +905,7 @@ private fun KeyboardLabScreen(state: BuddyGrammarAppState) {
             )
             Card(colors = CardDefaults.cardColors(containerColor = BuddyLavender)) {
                 Text(
-                    "The mic key inserts the most recent dictation saved within 24 hours. Password fields disable all cloud actions.",
+                    "Saved dictation inserts the most recent app recording kept for up to 24 hours. Password fields disable cloud and speech actions.",
                     modifier = Modifier.padding(16.dp),
                     fontSize = 14.sp,
                 )
@@ -1022,12 +1041,14 @@ private fun PrivacyScreen(state: BuddyGrammarAppState) {
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            PrivacyPoint("Only on request", "Text leaves the device only when you tap ★. Audio leaves only after you finish a recording.")
-            PrivacyPoint("Protected credentials", "OpenRouter and ElevenLabs keys live on the BuddyGrammar worker and are not bundled with the app or keyboard.")
-            PrivacyPoint("On-device personalization", "The keyboard stores language-scoped vocabulary, context counts, and bounded aggregate touch offsets locally. It never keeps a readable touch history or sends these aggregates for prediction; Settings can reset them independently.")
-            PrivacyPoint("Private adaptive practice", "Practice saves only aggregate skill scores, exposure counts, accuracy, and review dates. Responses are never saved. A curated target marker is shared with the keyboard only while the practice editor is active and expires after 30 minutes.")
-            PrivacyPoint("Minimal local data", "Settings, a random installation ID, and the latest raw transcript and final text are stored locally until you clear them. The keyboard handoff copy expires after 24 hours or is removed after insertion.")
-            PrivacyPoint("Secure fields", "The keyboard blocks cloud correction and transcript insertion in password and other secure inputs.")
+            Text("Last updated July 21, 2026", color = BuddyInk.copy(alpha = 0.6f))
+            PrivacyPoint("What stays on your device", "Normal keyboard input is not sent anywhere. Learned vocabulary, bounded key-offset aggregates, and practice mastery remain local. BuddyGrammar keeps no readable touch history and includes no advertising or analytics SDKs.")
+            PrivacyPoint("Star corrections", "When you tap ★ after allowing cloud processing, the selected text or current sentence, correction instruction, and model choice are sent through the BuddyGrammar service to OpenRouter. If ML Kit cannot read handwriting, a normalized black-and-white image can use the same AI fallback. Zero-data-retention routing is requested from OpenRouter.")
+            PrivacyPoint("Speech to text", "Direct keyboard voice typing uses your device’s selected Android speech-recognition service. Depending on that service and its settings, audio may be processed on-device or streamed to its provider; BuddyGrammar receives only the returned transcript. Recordings made in the app are sent through the BuddyGrammar service to ElevenLabs and retried once after a failed request. Automatic correction then sends the transcript to OpenRouter. Temporary recording files are deleted after processing.")
+            PrivacyPoint("On-device personalization", "Language-scoped vocabulary, context counts, bounded aggregate touch offsets, and practice mastery stay on this device. Practice responses are never saved, and its curated target marker expires after 30 minutes.")
+            PrivacyPoint("Accounts, retention, and deletion", "The BuddyGrammar service forwards requested content and does not intentionally log or store it. Provider retention depends on the configured OpenRouter, ElevenLabs, and model-provider settings. Settings can revoke cloud consent and reset touch calibration, learned words, practice history, or all learning independently.")
+            PrivacyPoint("Minimal local data", "Settings, a random installation ID, and the latest raw transcript and final text are stored locally until you clear them. The keyboard handoff copy expires after 24 hours or is removed after insertion. Completed dictation reaches the system clipboard automatically only when you enable that setting; manual Copy is always explicit.")
+            PrivacyPoint("Secure fields", "The keyboard blocks cloud correction, handwriting fallback, voice typing, and transcript insertion in password and other secure inputs.")
         }
     }
 }

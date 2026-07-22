@@ -1,0 +1,263 @@
+{
+  "$schema": "./catalog.schema.json",
+  "schemaVersion": 1,
+  "catalogId": "buddygrammar.mobile-keyboard",
+  "catalogRevision": "2026.07.1",
+  "defaultLanguageId": "en",
+  "fallbackLayoutProfileId": "en-qwerty",
+  "layouts": [
+    {
+      "id": "latin-qwerty",
+      "script": "Latn",
+      "letterRows": [
+        ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+        ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+        ["z", "x", "c", "v", "b", "n", "m"]
+      ],
+      "numberRows": [
+        ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+        ["-", "/", ":", ";", "(", ")", "$", "&", "@", "\""]
+      ],
+      "symbolRows": [
+        ["[", "]", "{", "}", "#", "%", "^", "*", "+", "="],
+        ["_", "\\", "|", "~", "<", ">", "€", "£", "¥", "•"]
+      ],
+      "fieldVariants": [
+        {
+          "id": "text",
+          "fieldKinds": ["text", "multiline", "name"],
+          "primaryPlane": "letters",
+          "autoCapitalization": "sentences",
+          "suggestionMode": "full",
+          "inlineKeys": [],
+          "returnIntent": "newline"
+        },
+        {
+          "id": "literal",
+          "fieldKinds": ["literal"],
+          "primaryPlane": "letters",
+          "autoCapitalization": "never",
+          "suggestionMode": "off",
+          "inlineKeys": [],
+          "returnIntent": "newline"
+        },
+        {
+          "id": "email",
+          "fieldKinds": ["email"],
+          "primaryPlane": "letters",
+          "autoCapitalization": "never",
+          "suggestionMode": "off",
+          "inlineKeys": [
+            { "id": "at", "label": "@", "output": "@" },
+            { "id": "period", "label": ".", "output": "." }
+          ],
+          "returnIntent": "next"
+        },
+        {
+          "id": "url",
+          "fieldKinds": ["url"],
+          "primaryPlane": "letters",
+          "autoCapitalization": "never",
+          "suggestionMode": "off",
+          "inlineKeys": [
+            { "id": "slash", "label": "/", "output": "/" },
+            { "id": "period", "label": ".", "output": "." },
+            { "id": "dot-com", "label": ".com", "output": ".com" }
+          ],
+          "returnIntent": "go"
+        },
+        {
+          "id": "number",
+          "fieldKinds": ["number", "datetime"],
+          "primaryPlane": "numbers",
+          "autoCapitalization": "never",
+          "suggestionMode": "off",
+          "inlineKeys": [],
+          "returnIntent": "done"
+        },
+        {
+          "id": "decimal",
+          "fieldKinds": ["decimal"],
+          "primaryPlane": "numbers",
+          "autoCapitalization": "never",
+          "suggestionMode": "off",
+          "inlineKeys": [
+            { "id": "decimal-separator", "label": ".", "output": "." }
+          ],
+          "returnIntent": "done",
+          "usesLocaleDecimalSeparator": true
+        },
+        {
+          "id": "phone",
+          "fieldKinds": ["phone"],
+          "primaryPlane": "numbers",
+          "autoCapitalization": "never",
+          "suggestionMode": "off",
+          "inlineKeys": [
+            { "id": "plus", "label": "+", "output": "+" },
+            { "id": "hash", "label": "#", "output": "#" },
+            { "id": "asterisk", "label": "*", "output": "*" }
+          ],
+          "returnIntent": "done"
+        },
+        {
+          "id": "search",
+          "fieldKinds": ["search"],
+          "primaryPlane": "letters",
+          "autoCapitalization": "sentences",
+          "suggestionMode": "localOnly",
+          "inlineKeys": [],
+          "returnIntent": "search"
+        },
+        {
+          "id": "code",
+          "fieldKinds": ["code"],
+          "primaryPlane": "letters",
+          "autoCapitalization": "never",
+          "suggestionMode": "off",
+          "inlineKeys": [
+            { "id": "underscore", "label": "_", "output": "_" },
+            { "id": "slash", "label": "/", "output": "/" },
+            { "id": "dash", "label": "-", "output": "-" }
+          ],
+          "returnIntent": "newline"
+        },
+        {
+          "id": "secure",
+          "fieldKinds": ["oneTimeCode", "password"],
+          "primaryPlane": "letters",
+          "autoCapitalization": "never",
+          "suggestionMode": "off",
+          "inlineKeys": [],
+          "returnIntent": "done"
+        }
+      ]
+    }
+  ],
+  "layoutProfiles": [
+    {
+      "id": "en-qwerty",
+      "layoutId": "latin-qwerty",
+      "languageId": "en",
+      "spaceLabel": "space",
+      "returnLabels": {
+        "newline": "return",
+        "done": "done",
+        "go": "go",
+        "next": "next",
+        "search": "search",
+        "send": "send"
+      }
+    },
+    {
+      "id": "it-qwerty",
+      "layoutId": "latin-qwerty",
+      "languageId": "it",
+      "spaceLabel": "spazio",
+      "returnLabels": {
+        "newline": "invio",
+        "done": "fine",
+        "go": "vai",
+        "next": "avanti",
+        "search": "cerca",
+        "send": "invia"
+      }
+    }
+  ],
+  "languages": [
+    {
+      "id": "en",
+      "script": "Latn",
+      "localeAliases": ["en", "en-US", "en-GB", "en-CA", "en-AU", "en-IE"],
+      "defaultLayoutProfileId": "en-qwerty",
+      "displayNames": { "en": "English", "it": "Inglese" },
+      "punctuation": {
+        "decimalSeparator": ".",
+        "thousandsSeparator": ",",
+        "sentenceTerminators": [".", "!", "?", "…"]
+      },
+      "alternates": {
+        "a": ["á", "à", "â", "ä", "æ", "ã", "å"],
+        "c": ["ç"],
+        "e": ["é", "è", "ê", "ë"],
+        "i": ["í", "ì", "î", "ï"],
+        "n": ["ñ"],
+        "o": ["ó", "ò", "ô", "ö", "œ", "õ", "ø"],
+        "s": ["ß"],
+        "u": ["ú", "ù", "û", "ü"],
+        "y": ["ý", "ÿ"]
+      },
+      "swipe": {
+        "lexiconId": "en-core-v1",
+        "repeatedLetterStrategy": "dwell"
+      }
+    },
+    {
+      "id": "it",
+      "script": "Latn",
+      "localeAliases": ["it", "it-IT", "it-CH", "it-SM", "it-VA"],
+      "defaultLayoutProfileId": "it-qwerty",
+      "displayNames": { "en": "Italian", "it": "Italiano" },
+      "punctuation": {
+        "decimalSeparator": ",",
+        "thousandsSeparator": ".",
+        "sentenceTerminators": [".", "!", "?", "…"]
+      },
+      "alternates": {
+        "a": ["à", "á", "â", "ä"],
+        "c": ["ç"],
+        "e": ["è", "é", "ê", "ë"],
+        "i": ["ì", "í", "î", "ï"],
+        "o": ["ò", "ó", "ô", "ö"],
+        "u": ["ù", "ú", "û", "ü"]
+      },
+      "swipe": {
+        "lexiconId": "it-core-v1",
+        "repeatedLetterStrategy": "dwell"
+      }
+    }
+  ],
+  "gestures": {
+    "swipe": {
+      "minimumPointCount": 2,
+      "repeatedLetterStrategy": "dwell",
+      "minimumDwellMilliseconds": 180,
+      "minimumDwellSamples": 3,
+      "maximumDwellDriftKeyUnits": 0.42
+    },
+    "spaceCursor": {
+      "activationMilliseconds": 180,
+      "pointsPerGrapheme": 12
+    },
+    "deleteRepeat": {
+      "initialDelayMilliseconds": 360,
+      "intervalMilliseconds": 70
+    }
+  },
+  "tools": [
+    {
+      "id": "buddy.fix",
+      "processing": "cloud",
+      "textScope": "selectionOrCurrentSentence",
+      "requiredCapability": "cloud-text"
+    },
+    {
+      "id": "buddy.handwriting",
+      "processing": "local",
+      "textScope": "none",
+      "requiredCapability": "handwriting"
+    },
+    {
+      "id": "buddy.voice",
+      "processing": "platform",
+      "textScope": "none",
+      "requiredCapability": "voice"
+    },
+    {
+      "id": "buddy.latex",
+      "processing": "local",
+      "textScope": "none",
+      "requiredCapability": "literal-tools"
+    }
+  ]
+}

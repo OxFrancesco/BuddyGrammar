@@ -2,6 +2,70 @@ import XCTest
 @testable import BuddyGrammarKit
 
 final class TextIntelligenceTests: XCTestCase {
+    func testBundledCompletionsAreRankedAndLanguageScoped() {
+        let intelligence = TextIntelligence(
+            personalLanguageModel: PersonalLanguageModel(defaults: nil)
+        )
+
+        XCTAssertEqual(
+            intelligence.suggestions(
+                for: "I went hom",
+                languageCode: "en-US",
+                limit: 1
+            ).first?.text,
+            "home"
+        )
+        XCTAssertEqual(
+            intelligence.suggestions(
+                for: "voglio dar",
+                languageCode: "it-IT",
+                limit: 1
+            ).first?.text,
+            "dare"
+        )
+        XCTAssertTrue(
+            intelligence.suggestions(
+                for: "voglio hom",
+                languageCode: "it-IT",
+                limit: 3
+            ).allSatisfy { $0.text.lowercased() != "home" }
+        )
+    }
+
+    func testItalianCompletionsCanonicalizeAccentsAndApostrophes() {
+        let intelligence = TextIntelligence(
+            personalLanguageModel: PersonalLanguageModel(defaults: nil)
+        )
+
+        XCTAssertEqual(
+            intelligence.suggestions(
+                for: "perc",
+                languageCode: "it-IT",
+                limit: 1
+            ).first?.text,
+            "perché"
+        )
+        XCTAssertEqual(
+            intelligence.suggestions(
+                for: "l'h",
+                languageCode: "it-IT",
+                limit: 1
+            ).first?.text,
+            "l’ho"
+        )
+        XCTAssertEqual(
+            intelligence.suggestions(
+                for: "c’",
+                languageCode: "it-IT",
+                limit: 1
+            ).first?.text,
+            "c’è"
+        )
+        XCTAssertEqual(
+            TextWordTokenizer.words(in: "l’ho detto: c’è, però po’ dopo"),
+            ["l’ho", "detto", "c’è", "però", "po’", "dopo"]
+        )
+    }
     func testTwoWordContextDisambiguatesPersonalPredictions() {
         let model = PersonalLanguageModel(defaults: nil)
         let intelligence = TextIntelligence(personalLanguageModel: model)
@@ -53,7 +117,59 @@ final class TextIntelligenceTests: XCTestCase {
 
         XCTAssertEqual(
             suggestions.first,
-            TextSuggestion(text: "the", kind: .correction, replacementLength: 3)
+            TextSuggestion(
+                text: "the",
+                kind: .correction,
+                replacementLength: 3,
+                automaticCorrectionSource: .spelling
+            )
+        )
+    }
+
+    func testNeverSuggestSuppressesOnlyTheChosenCorrectionPair() {
+        let intelligence = TextIntelligence(
+            personalLanguageModel: PersonalLanguageModel(defaults: nil)
+        )
+        XCTAssertTrue(
+            intelligence.neverSuggestCorrection(
+                typed: "teh",
+                suggestion: "the",
+                languageCode: "en-US"
+            )
+        )
+
+        XCTAssertFalse(
+            intelligence.suggestions(
+                for: "teh",
+                spellingCandidates: ["the"],
+                languageCode: "en-GB",
+                limit: 3
+            ).contains(where: { $0.kind == .correction })
+        )
+        XCTAssertEqual(
+            intelligence.suggestions(
+                for: "teh",
+                spellingCandidates: ["ten"],
+                languageCode: "en-US",
+                limit: 1
+            ).first?.text,
+            "ten"
+        )
+    }
+
+    func testAddToDictionaryImmediatelyProtectsAcceptedSpelling() {
+        let intelligence = TextIntelligence(
+            personalLanguageModel: PersonalLanguageModel(defaults: nil)
+        )
+        XCTAssertTrue(intelligence.addToDictionary("teh", languageCode: "en-US"))
+
+        XCTAssertFalse(
+            intelligence.suggestions(
+                for: "teh",
+                spellingCandidates: ["the"],
+                languageCode: "en-US",
+                limit: 3
+            ).contains(where: { $0.kind == .correction })
         )
     }
 
@@ -73,9 +189,32 @@ final class TextIntelligenceTests: XCTestCase {
                 TextSuggestion(
                     text: "On my way!",
                     kind: .correction,
-                    replacementLength: 3
+                    replacementLength: 3,
+                    automaticCorrectionSource: .shortcut
                 )
             ]
+        )
+    }
+
+    func testNeverSuggestAlsoSuppressesTheExactShortcutPair() {
+        let intelligence = TextIntelligence(
+            personalLanguageModel: PersonalLanguageModel(defaults: nil)
+        )
+        XCTAssertTrue(
+            intelligence.neverSuggestCorrection(
+                typed: "omw",
+                suggestion: "On my way!",
+                languageCode: "en-US"
+            )
+        )
+
+        XCTAssertFalse(
+            intelligence.suggestions(
+                for: "omw",
+                shortcutReplacement: "On my way!",
+                languageCode: "en-US",
+                limit: 3
+            ).contains(where: { $0.kind == .correction })
         )
     }
 

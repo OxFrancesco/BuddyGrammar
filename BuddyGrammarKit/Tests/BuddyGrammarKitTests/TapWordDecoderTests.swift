@@ -2,6 +2,25 @@ import BuddyGrammarKit
 import XCTest
 
 final class TapWordDecoderTests: XCTestCase {
+    func testExactKeyboardOwnershipMatchesResolvedGeometryOnly() {
+        let taps = ["c", "a", "f", "f", "e"].map { key in
+            TapWordLatticeTap(
+                literalKey: Character(key),
+                resolvedKey: Character(key),
+                candidates: []
+            )
+        }
+
+        XCTAssertTrue(
+            TapWordDecoder.hasExactKeyboardOwnership(taps, visibleWord: "caffè")
+        )
+        XCTAssertFalse(
+            TapWordDecoder.hasExactKeyboardOwnership(taps, visibleWord: "caffèx")
+        )
+        XCTAssertFalse(
+            TapWordDecoder.hasExactKeyboardOwnership(taps, visibleWord: "latte")
+        )
+    }
     func testAmbiguousFinalTapDecodesHomAsHome() throws {
         let taps = [
             TapWordLatticeTap(literalKey: "h", resolvedKey: "h", candidates: [.init(key: "h", confidence: 1)]),
@@ -177,6 +196,91 @@ final class TapWordDecoderTests: XCTestCase {
         )
 
         XCTAssertEqual(first, second)
+    }
+
+    func testLanguageScopedPriorsChooseDateInEnglishAndDareInItalian() {
+        let taps = [
+            literalTaps(for: "d")[0],
+            literalTaps(for: "a")[0],
+            TapWordLatticeTap(
+                literalKey: "t",
+                resolvedKey: "t",
+                candidates: [
+                    .init(key: "t", confidence: 0.5),
+                    .init(key: "r", confidence: 0.5),
+                ]
+            ),
+            literalTaps(for: "e")[0],
+        ]
+        let decoder = TapWordDecoder()
+
+        XCTAssertEqual(
+            decoder.decode(taps, languageCode: "en-GB").candidates.first?.word,
+            "date"
+        )
+        let italian = decoder.decode(taps, languageCode: "it-CH")
+        XCTAssertEqual(italian.candidates.first?.word, "dare")
+        XCTAssertTrue(italian.candidates.contains { $0.word == "date" && $0.isLiteralPath })
+    }
+
+    func testItalianGeometryRestoresCanonicalAccentAndApostrophe() {
+        let decoder = TapWordDecoder()
+        let accented = decoder.decode(
+            literalTaps(for: "perch") + [
+                TapWordLatticeTap(
+                    literalKey: "r",
+                    resolvedKey: "r",
+                    candidates: [
+                        .init(key: "r", confidence: 0.52),
+                        .init(key: "e", confidence: 0.48),
+                    ]
+                ),
+            ],
+            languageCode: "it-IT"
+        )
+        let elision = decoder.decode(
+            literalTaps(for: "lh") + [
+                TapWordLatticeTap(
+                    literalKey: "p",
+                    resolvedKey: "p",
+                    candidates: [
+                        .init(key: "p", confidence: 0.52),
+                        .init(key: "o", confidence: 0.48),
+                    ]
+                ),
+            ],
+            languageCode: "it"
+        )
+
+        XCTAssertEqual(accented.candidates.first?.word, "perché")
+        XCTAssertTrue(accented.candidates.contains { $0.word == "perchr" && $0.isLiteralPath })
+        XCTAssertEqual(elision.candidates.first?.word, "l’ho")
+        XCTAssertTrue(elision.candidates.contains { $0.word == "lhp" && $0.isLiteralPath })
+    }
+
+    func testAutomaticPolicyAbstainsFromBalancedOutOfVocabularyLattice() {
+        let taps = literalTaps(for: "qwe") + [
+            TapWordLatticeTap(
+                literalKey: "r",
+                resolvedKey: "r",
+                candidates: [
+                    .init(key: "r", confidence: 0.5),
+                    .init(key: "t", confidence: 0.5),
+                ]
+            ),
+        ]
+        let result = TapWordDecoder().decode(taps, languageCode: "en")
+
+        XCTAssertEqual(result.candidates.first?.word, "qwer")
+        XCTAssertNil(TapWordAcceptancePolicy.automatic.acceptedCandidate(from: result))
+        XCTAssertNil(TapWordAcceptancePolicy.suggestion.acceptedCandidate(from: result))
+    }
+
+    func testStraightAndCurlyApostrophesUseLetterOnlyTapGeometry() {
+        XCTAssertEqual(TapWordDecoder.expectedTapCount(for: "l'ho"), 3)
+        XCTAssertEqual(TapWordDecoder.expectedTapCount(for: "l’ho"), 3)
+        XCTAssertEqual(TapWordDecoder.expectedTapCount(for: "perché"), 6)
+        XCTAssertNil(TapWordDecoder.expectedTapCount(for: "abc123"))
     }
 
     private func literalTaps(for word: String) -> [TapWordLatticeTap] {

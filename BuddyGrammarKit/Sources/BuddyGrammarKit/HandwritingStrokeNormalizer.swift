@@ -19,18 +19,19 @@ public enum HandwritingStrokeNormalizer {
         targetSize: CGSize,
         padding: CGFloat
     ) -> HandwritingStrokeLayout? {
-        let strokes = strokes.filter { !$0.isEmpty }
-        let points = strokes.flatMap { $0 }
-        guard let first = points.first,
+        let strokes = BoundedHandwritingInputBuffer.boundedSnapshot(of: strokes)
+        guard let first = strokes.first?.first,
               targetSize.width > 0,
               targetSize.height > 0 else {
             return nil
         }
 
-        let sourceBounds = points.dropFirst().reduce(
+        let sourceBounds = strokes.reduce(
             CGRect(origin: first, size: .zero)
-        ) { bounds, point in
-            bounds.union(CGRect(origin: point, size: .zero))
+        ) { bounds, stroke in
+            stroke.reduce(bounds) { partial, point in
+                partial.union(CGRect(origin: point, size: .zero))
+            }
         }
         let safePadding = max(0, min(padding, min(targetSize.width, targetSize.height) / 3))
         let targetBounds = CGRect(origin: .zero, size: targetSize).insetBy(

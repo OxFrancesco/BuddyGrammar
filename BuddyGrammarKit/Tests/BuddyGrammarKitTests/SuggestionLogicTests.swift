@@ -37,6 +37,25 @@ final class SuggestionLogicTests: XCTestCase {
         XCTAssertFalse(analysis.isAtSentenceStart)
     }
 
+    func testEmojiReplacementTargetIncludesAllTrailingSpacesAndTabs() {
+        let cases = [
+            (context: "Before thanks   ", target: "thanks   "),
+            (context: "Before thanks \t\t", target: "thanks \t\t"),
+        ]
+
+        for item in cases {
+            let analysis = TypingContextAnalyzer.analyze(item.context)
+            XCTAssertEqual(analysis.mode, .betweenWords(lastWord: "thanks"))
+            XCTAssertEqual(SuggestionEmojiMap.emoji(for: "thanks"), "🙏")
+            XCTAssertEqual(
+                TypingContextAnalyzer.rawTrailingWordAndHorizontalWhitespace(
+                    in: item.context
+                ),
+                item.target
+            )
+        }
+    }
+
     func testAnalyzerDetectsSentenceEnd() {
         let analysis = TypingContextAnalyzer.analyze("All done. ")
         XCTAssertEqual(analysis.mode, .betweenWords(lastWord: nil))

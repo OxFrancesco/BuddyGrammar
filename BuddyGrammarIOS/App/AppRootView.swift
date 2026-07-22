@@ -16,9 +16,6 @@ struct AppRootView: View {
         .task {
             model.refresh()
         }
-        .onOpenURL { url in
-            model.handleDeepLink(url)
-        }
         .alert(item: $model.alert) { alert in
             Alert(
                 title: Text(alert.title),

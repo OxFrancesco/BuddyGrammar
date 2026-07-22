@@ -10,11 +10,18 @@ public struct TextSuggestion: Equatable, Sendable {
     public let text: String
     public let kind: TextSuggestionKind
     public let replacementLength: Int
+    public let automaticCorrectionSource: AutomaticCorrectionSource?
 
-    public init(text: String, kind: TextSuggestionKind, replacementLength: Int) {
+    public init(
+        text: String,
+        kind: TextSuggestionKind,
+        replacementLength: Int,
+        automaticCorrectionSource: AutomaticCorrectionSource? = nil
+    ) {
         self.text = text
         self.kind = kind
         self.replacementLength = replacementLength
+        self.automaticCorrectionSource = automaticCorrectionSource
     }
 }
 
@@ -64,8 +71,56 @@ public final class TextIntelligence {
         )
     }
 
+    @discardableResult
+    public func addToDictionary(
+        _ word: String,
+        languageCode: String? = nil
+    ) -> Bool {
+        let changed = personalLanguageModel.addToDictionary(
+            word,
+            languageCode: languageCode
+        )
+        if changed { personalLanguageModel.persist() }
+        return changed
+    }
+
+    @discardableResult
+    public func neverSuggestCorrection(
+        typed: String,
+        suggestion: String,
+        languageCode: String? = nil
+    ) -> Bool {
+        let changed = personalLanguageModel.suppressCorrection(
+            typed: typed,
+            suggestion: suggestion,
+            languageCode: languageCode
+        )
+        if changed { personalLanguageModel.persist() }
+        return changed
+    }
+
+    public func isCorrectionSuppressed(
+        typed: String,
+        suggestion: String,
+        languageCode: String? = nil
+    ) -> Bool {
+        personalLanguageModel.isCorrectionSuppressed(
+            typed: typed,
+            suggestion: suggestion,
+            languageCode: languageCode
+        )
+    }
+
     public func persist() {
         personalLanguageModel.persist()
+    }
+
+    public func discardInMemoryPersonalization() {
+        personalLanguageModel.discardInMemoryPersonalization()
+    }
+
+    public func reloadPersonalization() {
+        personalLanguageModel.reloadPersonalization()
     }
 
     public func suggestions(
@@ -129,12 +184,18 @@ public final class TextIntelligence {
 
         if let shortcutReplacement,
            !shortcutReplacement.isEmpty,
-           shortcutReplacement.caseInsensitiveCompare(partial) != .orderedSame {
+           shortcutReplacement.caseInsensitiveCompare(partial) != .orderedSame,
+           !personalLanguageModel.isCorrectionSuppressed(
+               typed: partial,
+               suggestion: shortcutReplacement,
+               languageCode: languageCode
+           ) {
             append(
                 TextSuggestion(
                     text: shortcutReplacement,
                     kind: .correction,
-                    replacementLength: partial.count
+                    replacementLength: partial.count,
+                    automaticCorrectionSource: .shortcut
                 ),
                 to: &suggestions,
                 limit: limit
@@ -150,12 +211,18 @@ public final class TextIntelligence {
                for: partial,
                candidates: spellingCandidates
            ),
+           !personalLanguageModel.isCorrectionSuppressed(
+               typed: partial,
+               suggestion: correction,
+               languageCode: languageCode
+           ),
            !correction.lowercased().hasPrefix(normalizedPartial) {
             append(
                 TextSuggestion(
                     text: correction,
                     kind: .correction,
-                    replacementLength: partial.count
+                    replacementLength: partial.count,
+                    automaticCorrectionSource: .spelling
                 ),
                 to: &suggestions,
                 limit: limit
@@ -167,8 +234,12 @@ public final class TextIntelligence {
             languageCode: languageCode,
             limit: limit
         )
-        if usesEnglishPriors {
-            completions += lexicon.completions(forPrefix: partial, limit: limit + 1)
+        if lexicon.supports(languageCode: languageCode) {
+            completions += lexicon.completions(
+                forPrefix: partial,
+                languageCode: languageCode,
+                limit: limit + 1
+            )
         }
         completions += completionCandidates
         completions += spellingCandidates.filter {
@@ -255,7 +326,9 @@ public final class TextIntelligence {
 
 public enum TextWordTokenizer {
     public static func words(in text: String) -> [String] {
-        text.split(whereSeparator: { !$0.isLetter && $0 != "'" }).map(String.init)
+        text
+            .split(whereSeparator: { !WordTokenNormalizer.isWordCharacter($0) })
+            .map { WordTokenNormalizer.canonicalized(String($0)) }
     }
 
     public static func trailingSentenceWords(in text: String) -> [String] {

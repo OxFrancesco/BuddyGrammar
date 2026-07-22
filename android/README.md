@@ -1,6 +1,6 @@
 # BuddyGrammar for Android
 
-The Android app mirrors the BuddyGrammar iOS experience with a system keyboard, ★ correction, and ElevenLabs speech-to-text.
+The Android app mirrors the BuddyGrammar iOS experience with a system keyboard, ★ correction, adaptive typing, swipe typing, handwriting, and speech-to-text.
 
 ## Requirements
 
@@ -27,7 +27,15 @@ The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 4. Return to BuddyGrammar and tap **Choose BuddyGrammar now**.
 5. Open **Keyboard Lab** and focus the sample field.
 
-The keyboard provides normal letter and symbol layouts, shift, delete, globe, space, and return controls. Tap ★ to correct selected text or the current sentence around the cursor. The mic key inserts the most recent app dictation saved within 24 hours.
+The keyboard provides letter, number, symbol, LaTeX, emoji, handwriting, and voice layers plus shift, delete, globe, space, and return controls. Swipe across letters to enter a word. Tap ★ to correct selected text or the current sentence around the cursor. The waveform control inserts the most recent app dictation saved within 24 hours, while the mic key opens direct Android voice typing.
+
+ML Kit performs handwriting recognition on device. If it cannot produce a result and cloud processing is enabled, the same protected BuddyGrammar worker used by iOS provides the OpenRouter handwriting fallback.
+
+## Platform-equivalent parity
+
+- iOS Dynamic Island readiness is replaced by direct voice typing inside the Android IME.
+- iOS Vision handwriting recognition is replaced by ML Kit Digital Ink, with the same OpenRouter fallback.
+- Correction, dictation, adaptive touch learning, private practice, personal vocabulary, swipe typing, LaTeX, emoji, saved-transcript insertion, and granular learning resets are available on both platforms.
 
 ## Privacy behavior
 

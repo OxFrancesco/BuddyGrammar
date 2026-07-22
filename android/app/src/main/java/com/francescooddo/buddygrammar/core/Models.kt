@@ -9,6 +9,7 @@ data class BuddySettings(
     val correctionUndoDurationSeconds: Int = 3,
     val adaptiveTypingEnabled: Boolean = true,
     val personalizedPracticeEnabled: Boolean = true,
+    val copiesCompletedDictationToClipboard: Boolean = false,
     val hasAcceptedCloudProcessing: Boolean = false,
     val hasCompletedOnboarding: Boolean = false,
 ) {

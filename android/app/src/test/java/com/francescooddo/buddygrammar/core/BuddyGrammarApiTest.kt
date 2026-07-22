@@ -66,4 +66,29 @@ class BuddyGrammarApiTest {
         assertEquals("eng", result.languageCode)
         assertEquals(0.98, result.languageProbability ?: 0.0, 0.001)
     }
+
+    @Test
+    fun `handwriting fallback sends png with model and language headers`() = runTest {
+        var captured: HttpRequest? = null
+        val api = BuddyGrammarApi(
+            transport = HttpTransport { request ->
+                captured = request
+                HttpResult(200, "{\"text\":\"Hello\"}".toByteArray())
+            },
+            baseUrl = "https://example.test",
+        )
+        val png = byteArrayOf(0x13, 0x37)
+
+        val result = api.recognizeHandwriting(png, clientId, "test/model", "en")
+
+        assertEquals("Hello", result)
+        val request = checkNotNull(captured)
+        assertEquals("https://example.test/v1/handwriting", request.url)
+        assertEquals("image/png", request.contentType)
+        assertArrayEquals(png, request.body)
+        assertEquals(clientId.toString(), request.headers[BuddyGrammarApi.CLIENT_HEADER])
+        assertEquals("test/model", request.headers[BuddyGrammarApi.MODEL_HEADER])
+        assertEquals("en", request.headers[BuddyGrammarApi.LANGUAGE_HEADER])
+        assertFalse(request.headers.containsKey("Authorization"))
+    }
 }

@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://buddygrammar.app/schemas/keyboard-catalog/v1/catalog.schema.json",
+  "title": "BuddyGrammar keyboard catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "catalogId",
+    "catalogRevision",
+    "defaultLanguageId",
+    "fallbackLayoutProfileId",
+    "layouts",
+    "layoutProfiles",
+    "languages",
+    "gestures",
+    "tools"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "catalogId": { "type": "string", "minLength": 1 },
+    "catalogRevision": {
+      "type": "string",
+      "pattern": "^[0-9]{4}\\.[0-9]{2}\\.[0-9]+$"
+    },
+    "defaultLanguageId": { "$ref": "#/$defs/id" },
+    "fallbackLayoutProfileId": { "$ref": "#/$defs/id" },
+    "layouts": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/layout" }
+    },
+    "layoutProfiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/layoutProfile" }
+    },
+    "languages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/language" }
+    },
+    "gestures": { "$ref": "#/$defs/gestures" },
+    "tools": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/tool" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$"
+    },
+    "key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "output"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "type": "string", "minLength": 1 },
+        "output": { "type": "string", "minLength": 1 },
+        "weight": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "fieldVariant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "fieldKinds",
+        "primaryPlane",
+        "autoCapitalization",
+        "suggestionMode",
+        "inlineKeys",
+        "returnIntent"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "fieldKinds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "text",
+              "multiline",
+              "email",
+              "url",
+              "name",
+              "number",
+              "decimal",
+              "phone",
+              "datetime",
+              "search",
+              "literal",
+              "code",
+              "oneTimeCode",
+              "password"
+            ]
+          }
+        },
+        "primaryPlane": { "enum": ["letters", "numbers", "symbols"] },
+        "autoCapitalization": { "enum": ["sentences", "words", "never"] },
+        "suggestionMode": { "enum": ["full", "localOnly", "off"] },
+        "inlineKeys": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/key" }
+        },
+        "returnIntent": {
+          "enum": ["newline", "done", "go", "next", "search", "send"]
+        },
+        "usesLocaleDecimalSeparator": { "type": "boolean" }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "script", "letterRows", "fieldVariants"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "script": { "type": "string", "pattern": "^[A-Z][a-z]{3}$" },
+        "letterRows": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1, "maxLength": 1 }
+          }
+        },
+        "numberRows": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        },
+        "symbolRows": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        },
+        "fieldVariants": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/fieldVariant" }
+        }
+      }
+    },
+    "layoutProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "layoutId",
+        "languageId",
+        "spaceLabel",
+        "returnLabels"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "layoutId": { "$ref": "#/$defs/id" },
+        "languageId": { "$ref": "#/$defs/id" },
+        "spaceLabel": { "type": "string", "minLength": 1 },
+        "returnLabels": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "language": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "script",
+        "localeAliases",
+        "defaultLayoutProfileId",
+        "displayNames",
+        "punctuation",
+        "alternates",
+        "swipe"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "script": { "type": "string", "pattern": "^[A-Z][a-z]{3}$" },
+        "localeAliases": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 2 }
+        },
+        "defaultLayoutProfileId": { "$ref": "#/$defs/id" },
+        "displayNames": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "punctuation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["decimalSeparator", "thousandsSeparator", "sentenceTerminators"],
+          "properties": {
+            "decimalSeparator": { "type": "string", "minLength": 1, "maxLength": 1 },
+            "thousandsSeparator": { "type": "string", "minLength": 1, "maxLength": 1 },
+            "sentenceTerminators": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1, "maxLength": 1 }
+            }
+          }
+        },
+        "alternates": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        },
+        "swipe": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lexiconId", "repeatedLetterStrategy"],
+          "properties": {
+            "lexiconId": { "$ref": "#/$defs/id" },
+            "repeatedLetterStrategy": { "const": "dwell" }
+          }
+        }
+      }
+    },
+    "gestures": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["swipe", "spaceCursor", "deleteRepeat"],
+      "properties": {
+        "swipe": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "minimumPointCount",
+            "repeatedLetterStrategy",
+            "minimumDwellMilliseconds",
+            "minimumDwellSamples",
+            "maximumDwellDriftKeyUnits"
+          ],
+          "properties": {
+            "minimumPointCount": { "type": "integer", "minimum": 2 },
+            "repeatedLetterStrategy": { "const": "dwell" },
+            "minimumDwellMilliseconds": { "type": "integer", "minimum": 1 },
+            "minimumDwellSamples": { "type": "integer", "minimum": 2 },
+            "maximumDwellDriftKeyUnits": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "spaceCursor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["activationMilliseconds", "pointsPerGrapheme"],
+          "properties": {
+            "activationMilliseconds": { "type": "integer", "minimum": 1 },
+            "pointsPerGrapheme": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        "deleteRepeat": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["initialDelayMilliseconds", "intervalMilliseconds"],
+          "properties": {
+            "initialDelayMilliseconds": { "type": "integer", "minimum": 1 },
+            "intervalMilliseconds": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "processing", "textScope", "requiredCapability"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "processing": { "enum": ["local", "platform", "cloud"] },
+        "textScope": {
+          "enum": ["none", "selection", "currentSentence", "selectionOrCurrentSentence"]
+        },
+        "requiredCapability": { "$ref": "#/$defs/id" }
+      }
+    }
+  }
+}

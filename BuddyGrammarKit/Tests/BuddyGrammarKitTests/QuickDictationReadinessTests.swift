@@ -24,6 +24,7 @@ struct QuickDictationReadinessTests {
         #expect(settings.enablesQuickDictation == false)
         #expect(settings.quickDictationDuration == .fiveMinutes)
         #expect(settings.quickDictationExpiresAt == nil)
+        #expect(settings.copiesCompletedDictationToClipboard == false)
     }
 
     @Test("Long and unlimited readiness windows match the product choices")
@@ -43,7 +44,8 @@ struct QuickDictationReadinessTests {
         let original = BuddyGrammarSettings(
             enablesQuickDictation: true,
             quickDictationDuration: .twelveHours,
-            quickDictationExpiresAt: expiry
+            quickDictationExpiresAt: expiry,
+            copiesCompletedDictationToClipboard: true
         )
 
         let data = try JSONEncoder().encode(original)
@@ -52,5 +54,6 @@ struct QuickDictationReadinessTests {
         #expect(decoded.enablesQuickDictation)
         #expect(decoded.quickDictationDuration == .twelveHours)
         #expect(decoded.quickDictationExpiresAt == expiry)
+        #expect(decoded.copiesCompletedDictationToClipboard)
     }
 }

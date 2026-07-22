@@ -280,8 +280,12 @@ class BuddyGrammarAppState(context: Context) {
             languageCode = detectedLanguage,
         )
         pendingTranscript = PendingTranscript(value, System.currentTimeMillis(), detectedLanguage)
-        copyToClipboard(value)
-        showNotice("Saved locally, copied, and ready for the keyboard.")
+        if (settings.copiesCompletedDictationToClipboard) {
+            copyToClipboard(value)
+            showNotice("Saved locally, copied, and ready for the keyboard.")
+        } else {
+            showNotice("Saved locally and ready for the keyboard.")
+        }
     }
 
     fun clearTranscript() {
@@ -375,10 +379,21 @@ class BuddyGrammarAppState(context: Context) {
                     System.currentTimeMillis(),
                     result.languageCode,
                 )
-                copyToClipboard(finalText)
+                if (settings.copiesCompletedDictationToClipboard) {
+                    copyToClipboard(finalText)
+                }
                 showNotice(
-                    correctionWarning?.let { "Transcript saved and copied without correction: $it" }
-                        ?: "Transcript saved locally, copied, and ready for the keyboard.",
+                    correctionWarning?.let {
+                        if (settings.copiesCompletedDictationToClipboard) {
+                            "Transcript saved and copied without correction: $it"
+                        } else {
+                            "Transcript saved without correction: $it"
+                        }
+                    } ?: if (settings.copiesCompletedDictationToClipboard) {
+                        "Transcript saved locally, copied, and ready for the keyboard."
+                    } else {
+                        "Transcript saved locally and ready for the keyboard."
+                    },
                 )
             } catch (error: Throwable) {
                 showError(error.message ?: "The recording could not be processed.")

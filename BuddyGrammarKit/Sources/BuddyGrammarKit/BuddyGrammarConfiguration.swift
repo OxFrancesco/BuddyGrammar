@@ -11,9 +11,6 @@ public enum BuddyGrammarConfiguration {
     ]
     public static let defaultElevenLabsModelID = "scribe_v2"
     public static let pendingTranscriptLifetime: TimeInterval = 24 * 60 * 60
-    public static let keyboardDictationSessionLifetime: TimeInterval = 30 * 60
-    public static let companionHeartbeatInterval: TimeInterval = 2
-    public static let companionHeartbeatTolerance: TimeInterval = 8
 
     public static var apiBaseURL: URL {
         guard let url = URL(string: "https://buddygrammar-api.oddofrancesco000.workers.dev") else {

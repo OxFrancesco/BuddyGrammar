@@ -1,0 +1,279 @@
+{
+  "$schema": "../trace-suite.schema.json",
+  "schemaVersion": 1,
+  "catalogRevision": "2026.07.1",
+  "suite": "correction-receipts",
+  "cases": [
+    {
+      "id": "automatic-correction-creates-pending-receipt",
+      "description": "A confirmed editor replacement creates a receipt and defers positive learning.",
+      "input": { "initialText": "teh", "initialFieldEpoch": 1 },
+      "events": [
+        {
+          "kind": "applyAutomatic",
+          "atMilliseconds": 100,
+          "source": "spelling",
+          "original": "teh",
+          "replacement": "the",
+          "boundary": " "
+        }
+      ],
+      "expect": {
+        "text": "the ",
+        "fieldEpoch": 1,
+        "activeReceipt": true,
+        "receiptMode": "automatic",
+        "receiptSource": "spelling",
+        "pendingLearning": true,
+        "acceptedLearning": [],
+        "rejectedSources": [],
+        "ignoredEvents": 0
+      }
+    },
+    {
+      "id": "backspace-restores-literal-and-removes-boundary",
+      "description": "Immediate Backspace consumes the correction receipt before ordinary deletion.",
+      "input": { "initialText": "teh", "initialFieldEpoch": 1 },
+      "events": [
+        {
+          "kind": "applyAutomatic",
+          "atMilliseconds": 100,
+          "source": "spelling",
+          "original": "teh",
+          "replacement": "the",
+          "boundary": " "
+        },
+        { "kind": "backspace", "atMilliseconds": 200 }
+      ],
+      "expect": {
+        "text": "teh",
+        "fieldEpoch": 1,
+        "activeReceipt": false,
+        "receiptMode": null,
+        "receiptSource": null,
+        "pendingLearning": false,
+        "acceptedLearning": [],
+        "rejectedSources": ["spelling"],
+        "ignoredEvents": 0
+      }
+    },
+    {
+      "id": "explicit-revert-preserves-trigger-boundary",
+      "description": "The visible literal candidate restores the word while retaining its committed space.",
+      "input": { "initialText": "teh", "initialFieldEpoch": 1 },
+      "events": [
+        {
+          "kind": "applyAutomatic",
+          "atMilliseconds": 100,
+          "source": "tapLattice",
+          "original": "teh",
+          "replacement": "the",
+          "boundary": " "
+        },
+        { "kind": "revert", "atMilliseconds": 250 }
+      ],
+      "expect": {
+        "text": "teh ",
+        "fieldEpoch": 1,
+        "activeReceipt": false,
+        "receiptMode": null,
+        "receiptSource": null,
+        "pendingLearning": false,
+        "acceptedLearning": [],
+        "rejectedSources": ["tapLattice"],
+        "ignoredEvents": 0
+      }
+    },
+    {
+      "id": "external-change-invalidates-receipt",
+      "description": "An external editor mutation discards the receipt; the next Backspace is ordinary deletion.",
+      "input": { "initialText": "teh", "initialFieldEpoch": 1 },
+      "events": [
+        {
+          "kind": "applyAutomatic",
+          "atMilliseconds": 100,
+          "source": "spelling",
+          "original": "teh",
+          "replacement": "the",
+          "boundary": " "
+        },
+        { "kind": "externalEdit", "atMilliseconds": 200, "text": "the x" },
+        { "kind": "backspace", "atMilliseconds": 300 }
+      ],
+      "expect": {
+        "text": "the ",
+        "fieldEpoch": 1,
+        "activeReceipt": false,
+        "receiptMode": null,
+        "receiptSource": null,
+        "pendingLearning": false,
+        "acceptedLearning": [],
+        "rejectedSources": [],
+        "ignoredEvents": 0
+      }
+    },
+    {
+      "id": "field-change-invalidates-receipt",
+      "description": "A new editor field advances the epoch and makes an old revert command inert.",
+      "input": { "initialText": "teh", "initialFieldEpoch": 7 },
+      "events": [
+        {
+          "kind": "applyAutomatic",
+          "atMilliseconds": 100,
+          "source": "spelling",
+          "original": "teh",
+          "replacement": "the",
+          "boundary": " "
+        },
+        { "kind": "changeField", "atMilliseconds": 200, "text": "note" },
+        { "kind": "revert", "atMilliseconds": 300 }
+      ],
+      "expect": {
+        "text": "note",
+        "fieldEpoch": 8,
+        "activeReceipt": false,
+        "receiptMode": null,
+        "receiptSource": null,
+        "pendingLearning": false,
+        "acceptedLearning": [],
+        "rejectedSources": [],
+        "ignoredEvents": 1
+      }
+    },
+    {
+      "id": "receipt-expiry-accepts-deferred-learning",
+      "description": "An unreverted automatic correction becomes learnable only after its receipt expires.",
+      "input": { "initialText": "teh", "initialFieldEpoch": 1 },
+      "events": [
+        {
+          "kind": "applyAutomatic",
+          "atMilliseconds": 100,
+          "source": "spelling",
+          "original": "teh",
+          "replacement": "the",
+          "boundary": " ",
+          "receiptLifetimeMilliseconds": 3000
+        },
+        { "kind": "advanceTime", "atMilliseconds": 3100 }
+      ],
+      "expect": {
+        "text": "the ",
+        "fieldEpoch": 1,
+        "activeReceipt": false,
+        "receiptMode": null,
+        "receiptSource": null,
+        "pendingLearning": false,
+        "acceptedLearning": ["the"],
+        "rejectedSources": [],
+        "ignoredEvents": 0
+      }
+    },
+    {
+      "id": "swipe-correction-uses-same-revert-contract",
+      "description": "A swipe-derived replacement is not a separate undo system.",
+      "input": { "initialText": "bok", "initialFieldEpoch": 1 },
+      "events": [
+        {
+          "kind": "applyAutomatic",
+          "atMilliseconds": 100,
+          "source": "swipe",
+          "original": "bok",
+          "replacement": "book",
+          "boundary": " "
+        },
+        { "kind": "backspace", "atMilliseconds": 220 }
+      ],
+      "expect": {
+        "text": "bok",
+        "fieldEpoch": 1,
+        "activeReceipt": false,
+        "receiptMode": null,
+        "receiptSource": null,
+        "pendingLearning": false,
+        "acceptedLearning": [],
+        "rejectedSources": ["swipe"],
+        "ignoredEvents": 0
+      }
+    },
+    {
+      "id": "explicit-buddy-fix-has-visible-undo",
+      "description": "A Buddy Fix proposal uses an explicit receipt and exact whole-operation undo.",
+      "input": { "initialText": "i has a cat", "initialFieldEpoch": 1 },
+      "events": [
+        {
+          "kind": "applyExplicit",
+          "atMilliseconds": 100,
+          "source": "buddyFix",
+          "original": "i has a cat",
+          "replacement": "I have a cat."
+        },
+        { "kind": "revert", "atMilliseconds": 400 }
+      ],
+      "expect": {
+        "text": "i has a cat",
+        "fieldEpoch": 1,
+        "activeReceipt": false,
+        "receiptMode": null,
+        "receiptSource": null,
+        "pendingLearning": false,
+        "acceptedLearning": [],
+        "rejectedSources": ["buddyFix"],
+        "ignoredEvents": 0
+      }
+    },
+    {
+      "id": "explicit-buddy-fix-does-not-intercept-backspace",
+      "description": "Backspace after an explicit rewrite deletes normally instead of invoking whole-operation undo.",
+      "input": { "initialText": "i has a cat", "initialFieldEpoch": 1 },
+      "events": [
+        {
+          "kind": "applyExplicit",
+          "atMilliseconds": 100,
+          "source": "buddyFix",
+          "original": "i has a cat",
+          "replacement": "I have a cat."
+        },
+        { "kind": "backspace", "atMilliseconds": 400 }
+      ],
+      "expect": {
+        "text": "I have a cat",
+        "fieldEpoch": 1,
+        "activeReceipt": false,
+        "receiptMode": null,
+        "receiptSource": null,
+        "pendingLearning": false,
+        "acceptedLearning": [],
+        "rejectedSources": [],
+        "ignoredEvents": 0
+      }
+    },
+    {
+      "id": "stale-async-result-cannot-cross-field-epoch",
+      "description": "An asynchronous correction captured in an old field cannot write into the new field.",
+      "input": { "initialText": "teh", "initialFieldEpoch": 4 },
+      "events": [
+        { "kind": "changeField", "atMilliseconds": 200, "text": "hello" },
+        {
+          "kind": "applyAsyncAutomatic",
+          "atMilliseconds": 500,
+          "capturedFieldEpoch": 4,
+          "source": "spelling",
+          "original": "teh",
+          "replacement": "the",
+          "boundary": " "
+        }
+      ],
+      "expect": {
+        "text": "hello",
+        "fieldEpoch": 5,
+        "activeReceipt": false,
+        "receiptMode": null,
+        "receiptSource": null,
+        "pendingLearning": false,
+        "acceptedLearning": [],
+        "rejectedSources": [],
+        "ignoredEvents": 1
+      }
+    }
+  ]
+}

@@ -17,14 +17,48 @@ public struct TypingContextAnalysis: Equatable, Sendable {
 }
 
 public enum TypingContextAnalyzer {
+    /// Returns the exact user-entered suffix used for editor mutation and
+    /// rollback. Ranking may canonicalize separately, but receipts must never
+    /// rewrite apostrophe or normalization style on revert.
+    public static func rawTrailingWord(in context: String?) -> String? {
+        guard let context,
+              context.last.map(WordTokenNormalizer.isWordCharacter) == true else {
+            return nil
+        }
+        return String(
+            context.reversed()
+                .prefix(while: WordTokenNormalizer.isWordCharacter)
+                .reversed()
+        )
+    }
+
+    /// Returns the exact word-plus-horizontal-whitespace suffix that a
+    /// between-words editor mutation must replace. Keeping the raw suffix
+    /// together prevents a multi-space or tab run from shifting the deletion
+    /// into the middle of the preceding word.
+    public static func rawTrailingWordAndHorizontalWhitespace(
+        in context: String?
+    ) -> String? {
+        guard let context else { return nil }
+        let trailingWhitespace = String(
+            context.reversed()
+                .prefix(while: { $0 == " " || $0 == "\t" })
+                .reversed()
+        )
+        guard !trailingWhitespace.isEmpty else { return nil }
+        let wordContext = String(context.dropLast(trailingWhitespace.count))
+        guard let rawWord = rawTrailingWord(in: wordContext) else { return nil }
+        return rawWord + trailingWhitespace
+    }
+
     public static func analyze(_ context: String?) -> TypingContextAnalysis {
         guard let context, !context.isEmpty else {
             return TypingContextAnalysis(mode: .empty, isAtSentenceStart: true)
         }
 
-        if let last = context.last, isWordCharacter(last) {
-            let partial = String(context.reversed().prefix(while: isWordCharacter).reversed())
-            let prefix = String(context.dropLast(partial.count))
+        if let rawPartial = rawTrailingWord(in: context) {
+            let partial = WordTokenNormalizer.canonicalized(rawPartial)
+            let prefix = String(context.dropLast(rawPartial.count))
             return TypingContextAnalysis(
                 mode: .typingWord(partial),
                 isAtSentenceStart: startsSentence(after: prefix)
@@ -39,17 +73,21 @@ public enum TypingContextAnalyzer {
         }
 
         var lastWord: String?
-        if let last = trimmed.last, isWordCharacter(last), context.last?.isWhitespace == true {
-            lastWord = String(trimmed.reversed().prefix(while: isWordCharacter).reversed())
+        if let last = trimmed.last,
+           WordTokenNormalizer.isWordCharacter(last),
+           context.last?.isWhitespace == true {
+            lastWord = WordTokenNormalizer.canonicalized(
+                String(
+                    trimmed.reversed()
+                        .prefix(while: WordTokenNormalizer.isWordCharacter)
+                        .reversed()
+                )
+            )
         }
         return TypingContextAnalysis(
             mode: .betweenWords(lastWord: lastWord),
             isAtSentenceStart: startsSentence(after: context)
         )
-    }
-
-    private static func isWordCharacter(_ character: Character) -> Bool {
-        character.isLetter || character == "'" || character.isNumber
     }
 
     private static func startsSentence(after prefix: String) -> Bool {

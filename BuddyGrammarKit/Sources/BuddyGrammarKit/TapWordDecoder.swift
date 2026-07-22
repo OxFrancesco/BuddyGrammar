@@ -92,6 +92,23 @@ public struct TapWordDecoder: Sendable {
     private static let anchorConfidenceFloor = 0.015
     private static let comparisonEpsilon = 0.000_000_001
 
+    /// Number of letter-key samples expected for a visible word. Display-only
+    /// apostrophes are removed and diacritics are folded to QWERTY geometry.
+    public static func expectedTapCount(for visibleWord: String) -> Int? {
+        WordTokenNormalizer.tapGeometry(for: visibleWord)?.count
+    }
+
+    public static func hasExactKeyboardOwnership(
+        _ taps: [TapWordLatticeTap],
+        visibleWord: String
+    ) -> Bool {
+        guard let geometry = WordTokenNormalizer.tapGeometry(for: visibleWord),
+              taps.count == geometry.count else { return false }
+        let literalPath = String(taps.map(\.literalKey)).lowercased()
+        let resolvedPath = String(taps.map(\.resolvedKey)).lowercased()
+        return geometry == literalPath || geometry == resolvedPath
+    }
+
     public init(lexicon: WordFrequencyLexicon = .shared) {
         self.lexicon = lexicon
     }
@@ -162,22 +179,59 @@ public struct TapWordDecoder: Sendable {
             into: &pathsByWord
         )
 
-        var scored = pathsByWord.values.map { path in
-            ScoredPath(
-                path: path,
-                score: path.spatialLogScore
-                    + languageScore(
-                        for: path.word,
-                        previousWord: previousWord,
-                        languageCode: languageCode
-                    ),
-                isLiteral: path.word == literalWord,
-                isResolved: path.word == resolvedWord
+        let requiredWords = Set([literalWord, resolvedWord])
+        var scoredByWord: [String: ScoredPath] = [:]
+        func insertScored(_ candidate: ScoredPath) {
+            guard let existing = scoredByWord[candidate.path.word] else {
+                scoredByWord[candidate.path.word] = candidate
+                return
+            }
+            if Self.scoredPathRanksBefore(candidate, existing) {
+                scoredByWord[candidate.path.word] = candidate
+            }
+        }
+        for path in pathsByWord.values {
+            if let match = lexicon.match(
+                for: path.word,
+                languageCode: languageCode
+            ) {
+                let displayWord = Self.matchingCase(match.display, to: path.word)
+                insertScored(
+                    ScoredPath(
+                        path: Path(
+                            word: displayWord,
+                            spatialLogScore: path.spatialLogScore
+                        ),
+                        score: path.spatialLogScore
+                            + languageScore(
+                                for: match,
+                                previousWord: previousWord,
+                                languageCode: languageCode
+                            ),
+                        isLiteral: displayWord == literalWord,
+                        isResolved: displayWord == resolvedWord
+                    )
+                )
+                // Canonical accents and apostrophes are extra lexical
+                // hypotheses; conservative literal/resolved anchors remain
+                // available byte-for-byte for undo and fallback.
+                if !requiredWords.contains(path.word) || displayWord == path.word {
+                    continue
+                }
+            }
+            insertScored(
+                ScoredPath(
+                    path: path,
+                    score: path.spatialLogScore
+                        + outOfVocabularyScore(languageCode: languageCode),
+                    isLiteral: path.word == literalWord,
+                    isResolved: path.word == resolvedWord
+                )
             )
         }
+        var scored = Array(scoredByWord.values)
         scored.sort(by: Self.scoredPathRanksBefore)
 
-        let requiredWords = Set([literalWord, resolvedWord])
         let requestedCount = max(requiredWords.count, min(max(limit, 1), Self.maximumResults))
         var selected = Array(scored.prefix(requestedCount))
         for word in requiredWords where !selected.contains(where: { $0.path.word == word }) {
@@ -299,20 +353,14 @@ public struct TapWordDecoder: Sendable {
     }
 
     private func languageScore(
-        for word: String,
+        for match: WordFrequencyLexicon.Match,
         previousWord: String?,
         languageCode: String?
     ) -> Double {
-        guard Self.isEnglish(languageCode) else { return 0 }
-        let normalized = word.lowercased()
-        var score: Double
-        if let rank = lexicon.rank(of: normalized) {
-            score = max(-0.2, 0.9 - 0.25 * log10(Double(rank) + 1))
-        } else {
-            score = -0.75
-        }
+        let normalized = match.display.lowercased()
+        var score = max(-0.2, 0.9 - 0.25 * log10(Double(match.rank) + 1))
 
-        if let previousWord {
+        if Self.isEnglish(languageCode), let previousWord {
             let predictions = NextWordPredictor.predictions(
                 after: previousWord,
                 languageCode: languageCode,
@@ -323,6 +371,10 @@ public struct TapWordDecoder: Sendable {
             }
         }
         return score
+    }
+
+    private func outOfVocabularyScore(languageCode: String?) -> Double {
+        lexicon.supports(languageCode: languageCode) ? -0.75 : 0
     }
 
     private static func safeResolvedKey(
@@ -356,6 +408,19 @@ public struct TapWordDecoder: Sendable {
             return Character(String(normalized).uppercased())
         }
         return normalized
+    }
+
+    private static func matchingCase(_ word: String, to typed: String) -> String {
+        if typed.count > 1,
+           typed.contains(where: \.isLetter),
+           typed.allSatisfy({ !$0.isLetter || $0.isUppercase }) {
+            return word.uppercased()
+        }
+        guard typed.first?.isUppercase == true,
+              let first = word.first else {
+            return word
+        }
+        return first.uppercased() + word.dropFirst()
     }
 
     private static func isEnglish(_ languageCode: String?) -> Bool {

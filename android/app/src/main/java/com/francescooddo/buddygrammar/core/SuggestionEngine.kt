@@ -7,6 +7,8 @@ package com.francescooddo.buddygrammar.core
  * @property replaceBeforeCursor how many characters before the cursor to delete first
  * @property appendSpace whether a trailing space should follow the committed text
  * @property isEmoji true when the suggestion replaces a keyword with an emoji
+ * @property automaticReplacement captured CAS/receipt metadata for a true replacement
+ * @property renderReceipt immutable editor ownership and context captured when the row is shown
  */
 enum class SuggestionKind { CORRECTION, COMPLETION, PREDICTION, EMOJI }
 
@@ -15,6 +17,8 @@ data class Suggestion(
     val replaceBeforeCursor: Int,
     val appendSpace: Boolean,
     val kind: SuggestionKind = SuggestionKind.COMPLETION,
+    val automaticReplacement: AutomaticSuggestionReplacement? = null,
+    val renderReceipt: SuggestionRenderReceipt? = null,
 ) {
     val isEmoji: Boolean get() = kind == SuggestionKind.EMOJI
 }
@@ -25,6 +29,7 @@ data class Suggestion(
  */
 object SuggestionEngine {
     const val MAX_SUGGESTIONS = 3
+    const val PERSONAL_USAGE_CORRECTION_PROTECTION_THRESHOLD = 3
 
     private val fallbackPredictions = listOf("the", "I", "and", "to", "a")
 
@@ -155,6 +160,12 @@ object SuggestionEngine {
         "your" to listOf("own", "time"),
     )
 
+    internal fun commonContinuations(previousWord: String?): List<String> = previousWord
+        ?.trim()
+        ?.lowercase()
+        ?.let(bigrams::get)
+        .orEmpty()
+
     /**
      * Computes up to [MAX_SUGGESTIONS] suggestions for the text before the
      * cursor, blending the user's own [personal] vocabulary with the static
@@ -165,11 +176,20 @@ object SuggestionEngine {
         personal: PersonalLanguageModel? = null,
         languageTag: String = LanguageSupport.DEFAULT_LANGUAGE_TAG,
         suggestionsAllowed: Boolean = true,
+        lexicon: RankedLanguageLexicon = RankedLanguageLexicon.legacyEnglish,
     ): List<Suggestion> {
         if (!suggestionsAllowed) return emptyList()
-        val currentWord = currentWord(textBeforeCursor)
+        val rawCurrentWord = WordTokenNormalizer.rawTrailingWord(textBeforeCursor)
+        val currentWord = WordTokenNormalizer.canonicalize(rawCurrentWord)
         return if (currentWord.isNotEmpty()) {
-            completionSuggestions(textBeforeCursor, currentWord, personal, languageTag)
+            completionSuggestions(
+                textBeforeCursor = textBeforeCursor,
+                currentWord = currentWord,
+                rawCurrentWord = rawCurrentWord,
+                personal = personal,
+                languageTag = languageTag,
+                lexicon = lexicon,
+            )
         } else {
             predictionSuggestions(textBeforeCursor, personal, languageTag)
         }
@@ -184,17 +204,15 @@ object SuggestionEngine {
     private fun completionSuggestions(
         textBeforeCursor: String,
         currentWord: String,
+        rawCurrentWord: String,
         personal: PersonalLanguageModel?,
         languageTag: String,
+        lexicon: RankedLanguageLexicon,
     ): List<Suggestion> {
         val prefix = currentWord.lowercase()
-        val usesEnglishPriors = LanguageSupport.usesEnglishPriors(languageTag)
         val personalWords = personal?.completions(prefix, 2, languageTag).orEmpty()
-        val staticWords = if (usesEnglishPriors) {
-            WordList.words.asSequence()
-                .filter { it.length > prefix.length && it.startsWith(prefix) }
-                .take(MAX_SUGGESTIONS)
-                .toList()
+        val staticWords = if (lexicon.supports(languageTag)) {
+            lexicon.completions(prefix, languageTag, MAX_SUGGESTIONS)
         } else {
             emptyList()
         }
@@ -206,26 +224,39 @@ object SuggestionEngine {
 
         val slots = mutableListOf<Suggestion>()
         val correction = if (
-            usesEnglishPriors &&
-            (personal?.usageCount(currentWord, languageTag) == 0 || personal == null)
+            lexicon.supports(languageTag) &&
+            (personal?.usageCount(currentWord, languageTag) ?: 0) <
+            PERSONAL_USAGE_CORRECTION_PROTECTION_THRESHOLD
         ) {
-            LocalWordCorrector.bestCorrection(currentWord)
+            LocalWordCorrector.bestCorrection(currentWord, lexicon.words(languageTag))
         } else {
             null
         }
-        correction?.let { word ->
-            slots += Suggestion(
-                text = matchCase(word, currentWord),
-                replaceBeforeCursor = currentWord.length,
-                appendSpace = true,
-                kind = SuggestionKind.CORRECTION,
-            )
-        }
+        correction
+            ?.takeUnless { word ->
+                personal?.isCorrectionSuppressed(currentWord, word, languageTag) == true
+            }
+            ?.let { word ->
+                val replacement = matchCase(word, currentWord)
+                slots += Suggestion(
+                    text = replacement,
+                    replaceBeforeCursor = rawCurrentWord.length,
+                    appendSpace = true,
+                    kind = SuggestionKind.CORRECTION,
+                    automaticReplacement = AutomaticSuggestionReplacement.create(
+                        originalText = rawCurrentWord,
+                        replacementText = replacement,
+                        boundaryText = " ",
+                        precedingContext = textBeforeCursor.dropLast(rawCurrentWord.length),
+                        source = AutomaticSuggestionSource.SPELLING,
+                    ),
+                )
+            }
         completions.forEach { word ->
             if (slots.any { it.text.equals(word, ignoreCase = true) }) return@forEach
             slots += Suggestion(
                 text = word,
-                replaceBeforeCursor = currentWord.length,
+                replaceBeforeCursor = rawCurrentWord.length,
                 appendSpace = true,
                 kind = SuggestionKind.COMPLETION,
             )
@@ -233,7 +264,7 @@ object SuggestionEngine {
         if (emoji != null) {
             val emojiSuggestion = Suggestion(
                 text = emoji,
-                replaceBeforeCursor = currentWord.length,
+                replaceBeforeCursor = rawCurrentWord.length,
                 appendSpace = false,
                 kind = SuggestionKind.EMOJI,
             )
@@ -298,12 +329,16 @@ object SuggestionEngine {
     }
 
     private fun currentWord(textBeforeCursor: String): String =
-        textBeforeCursor.takeLastWhile { it.isLetterOrDigit() || it == '\'' }
+        WordTokenNormalizer.canonicalize(
+            textBeforeCursor.takeLastWhile(WordTokenNormalizer::isWordCharacter),
+        )
 
     private fun wordsInCurrentSentence(text: String): List<String> {
         val boundary = text.indexOfLast { it in SENTENCE_TERMINATORS }
         val sentence = text.substring(if (boundary >= 0) boundary + 1 else 0)
-        return WORD_PATTERN.findAll(sentence).map { it.value }.toList()
+        return WORD_PATTERN.findAll(sentence)
+            .map { WordTokenNormalizer.canonicalize(it.value) }
+            .toList()
     }
 
     private fun matchCase(word: String, typed: String): String = when {
@@ -316,5 +351,5 @@ object SuggestionEngine {
     }
 
     private val SENTENCE_TERMINATORS = setOf('.', '!', '?', '\n', '…')
-    private val WORD_PATTERN = Regex("[\\p{L}\\p{N}]+(?:'[\\p{L}\\p{N}]+)*")
+    private val WORD_PATTERN = Regex("[\\p{L}\\p{N}]+(?:['’][\\p{L}\\p{N}]+)*(?:['’])?")
 }

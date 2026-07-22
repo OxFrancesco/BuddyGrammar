@@ -11,6 +11,25 @@ final class SharedPreferencesTests: XCTestCase {
         )
     }
 
+    func testLearningResetGenerationsPersistAndAdvanceIndependently() {
+        let preferences = SharedPreferences(defaults: defaults)
+
+        XCTAssertEqual(
+            preferences.loadLearningResetGenerations(),
+            LearningResetGenerations()
+        )
+        XCTAssertEqual(preferences.advanceLanguageLearningResetGeneration(), 1)
+        XCTAssertEqual(
+            SharedPreferences(defaults: defaults).loadLearningResetGenerations(),
+            LearningResetGenerations(language: 1, typing: 0)
+        )
+        XCTAssertEqual(preferences.advanceTypingLearningResetGeneration(), 1)
+        XCTAssertEqual(
+            preferences.loadLearningResetGenerations(),
+            LearningResetGenerations(language: 1, typing: 1)
+        )
+    }
+
     private var suiteName: String!
     private var defaults: UserDefaults!
 
@@ -132,64 +151,17 @@ final class SharedPreferencesTests: XCTestCase {
         XCTAssertEqual(settings.activeOpenRouterModelID, "custom/provider-model")
     }
 
-    func testKeyboardDictationSessionMovesFromLaunchToAutomaticInsertion() throws {
+    func testLegacyKeyboardDictationArtifactsAreCleared() {
         let preferences = SharedPreferences(defaults: defaults)
-        let sessionID = UUID(uuidString: "7BFA18B2-85C9-48B5-A124-23926CE9144F")!
-        let startedAt = Date(timeIntervalSince1970: 1_000)
+        let sessionKey = "BuddyGrammar.iOS.keyboardDictationSession"
+        let heartbeatKey = "BuddyGrammar.iOS.companionHeartbeat"
+        defaults.set(Data([0x01]), forKey: sessionKey)
+        defaults.set(123.0, forKey: heartbeatKey)
 
-        let launching = try preferences.beginKeyboardDictationSession(
-            id: sessionID,
-            now: startedAt
-        )
-        XCTAssertEqual(launching.phase, .launching)
+        preferences.clearLegacyKeyboardDictationArtifacts()
 
-        let recording = try preferences.updateKeyboardDictationSession(
-            id: sessionID,
-            phase: .recording,
-            now: startedAt.addingTimeInterval(1)
-        )
-        XCTAssertEqual(recording?.phase, .recording)
-
-        let stopRequested = try preferences.requestKeyboardDictationStop(
-            id: sessionID,
-            now: startedAt.addingTimeInterval(2)
-        )
-        XCTAssertEqual(stopRequested?.phase, .stopRequested)
-
-        _ = try preferences.updateKeyboardDictationSession(
-            id: sessionID,
-            phase: .transcribing,
-            now: startedAt.addingTimeInterval(3)
-        )
-        let ready = try preferences.updateKeyboardDictationSession(
-            id: sessionID,
-            phase: .ready,
-            transcript: "Hello from the keyboard.",
-            languageCode: "it",
-            now: startedAt.addingTimeInterval(4)
-        )
-
-        XCTAssertEqual(ready?.phase, .ready)
-        XCTAssertEqual(ready?.transcript, "Hello from the keyboard.")
-        XCTAssertEqual(ready?.languageCode, "it")
-        XCTAssertEqual(
-            preferences.loadKeyboardDictationSession(now: startedAt.addingTimeInterval(4)),
-            ready
-        )
-    }
-
-    func testStaleKeyboardDictationSessionIsDiscarded() throws {
-        let preferences = SharedPreferences(defaults: defaults)
-        let startedAt = Date(timeIntervalSince1970: 1_000)
-        _ = try preferences.beginKeyboardDictationSession(now: startedAt)
-
-        XCTAssertNil(
-            preferences.loadKeyboardDictationSession(
-                now: startedAt.addingTimeInterval(
-                    BuddyGrammarConfiguration.keyboardDictationSessionLifetime + 1
-                )
-            )
-        )
+        XCTAssertNil(defaults.object(forKey: sessionKey))
+        XCTAssertNil(defaults.object(forKey: heartbeatKey))
     }
 
     func testPendingTranscriptRoundTripAndClear() throws {

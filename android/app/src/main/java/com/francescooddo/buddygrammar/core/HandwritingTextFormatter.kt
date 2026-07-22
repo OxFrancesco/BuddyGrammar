@@ -8,9 +8,11 @@ package com.francescooddo.buddygrammar.core
 object HandwritingTextFormatter {
     fun textForInsertion(
         recognizedText: String,
-        contextBeforeCursor: String,
+        contextBeforeCursor: String?,
         languageTag: String = LanguageSupport.DEFAULT_LANGUAGE_TAG,
     ): String {
+        // Unknown editor context cannot justify changing recognized casing.
+        if (contextBeforeCursor == null) return recognizedText
         val usesEnglishRules = LanguageSupport.usesEnglishPriors(languageTag)
         if (!usesEnglishRules) return recognizedText
         var text = recognizedText

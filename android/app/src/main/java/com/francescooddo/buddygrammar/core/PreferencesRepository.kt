@@ -24,8 +24,10 @@ class PreferencesRepository(context: Context) {
             KEY_INSTRUCTION,
             AppConfig.DEFAULT_CORRECTION_INSTRUCTION.trimIndent(),
         ) ?: AppConfig.DEFAULT_CORRECTION_INSTRUCTION.trimIndent()
-        val instruction = if (
-            storedInstruction.trim() == AppConfig.LEGACY_CORRECTION_INSTRUCTION.trimIndent().trim()
+        val instruction = if (storedInstruction.trim() in setOf(
+                AppConfig.LEGACY_CORRECTION_INSTRUCTION.trimIndent().trim(),
+                AppConfig.PREVIOUS_CORRECTION_INSTRUCTION.trimIndent().trim(),
+            )
         ) {
             AppConfig.DEFAULT_CORRECTION_INSTRUCTION.trimIndent()
         } else {
@@ -44,6 +46,10 @@ class PreferencesRepository(context: Context) {
                 KEY_PERSONALIZED_PRACTICE,
                 true,
             ),
+            copiesCompletedDictationToClipboard = preferences.getBoolean(
+                KEY_COPY_COMPLETED_DICTATION,
+                false,
+            ),
             hasAcceptedCloudProcessing = preferences.getBoolean(KEY_CLOUD_CONSENT, false),
             hasCompletedOnboarding = preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false),
         )
@@ -60,6 +66,10 @@ class PreferencesRepository(context: Context) {
             .putInt(KEY_CORRECTION_UNDO_DURATION, normalized.correctionUndoDurationSeconds)
             .putBoolean(KEY_ADAPTIVE_TYPING, settings.adaptiveTypingEnabled)
             .putBoolean(KEY_PERSONALIZED_PRACTICE, settings.personalizedPracticeEnabled)
+            .putBoolean(
+                KEY_COPY_COMPLETED_DICTATION,
+                settings.copiesCompletedDictationToClipboard,
+            )
             .putBoolean(KEY_CLOUD_CONSENT, settings.hasAcceptedCloudProcessing)
             .putBoolean(KEY_ONBOARDING_COMPLETE, settings.hasCompletedOnboarding)
             .apply()
@@ -74,26 +84,73 @@ class PreferencesRepository(context: Context) {
         }
     }
 
-    fun loadTypingProfile(): TypingProfileSnapshot = TypingProfileCodec.decode(
-        preferences.getString(KEY_TYPING_PROFILE, null),
-    )
+    fun loadTypingProfile(): TypingProfileSnapshot = synchronized(LEARNING_RESET_LOCK) {
+        TypingProfileCodec.decode(preferences.getString(KEY_TYPING_PROFILE, null))
+    }
 
-    fun saveTypingProfile(profile: TypingProfileSnapshot) {
+    fun saveTypingProfile(
+        profile: TypingProfileSnapshot,
+        expectedResetGeneration: Long,
+    ): Boolean = synchronized(LEARNING_RESET_LOCK) {
+        if (typingProfileResetGeneration() != expectedResetGeneration) return@synchronized false
         preferences.edit()
             .putString(KEY_TYPING_PROFILE, TypingProfileCodec.encode(profile))
             .apply()
+        true
     }
 
-    fun clearTypingProfile() {
-        preferences.edit().remove(KEY_TYPING_PROFILE).apply()
+    fun clearTypingProfile() = synchronized(LEARNING_RESET_LOCK) {
+        val generation = typingProfileResetGeneration() + 1
+        preferences.edit()
+            .remove(KEY_TYPING_PROFILE)
+            .putLong(KEY_TYPING_PROFILE_RESET_GENERATION, generation)
+            .commit()
     }
 
-    fun clearPersonalLanguageModel() {
-        appContext.getSharedPreferences(PERSONAL_MODEL_PREFERENCES, Context.MODE_PRIVATE)
-            .edit()
+    fun loadPersonalLanguageModel(): String? = synchronized(LEARNING_RESET_LOCK) {
+        personalModelPreferences().getString(PERSONAL_MODEL_KEY, null)
+    }
+
+    fun savePersonalLanguageModel(
+        data: String,
+        expectedResetGeneration: Long,
+    ): Boolean = synchronized(LEARNING_RESET_LOCK) {
+        val modelPreferences = personalModelPreferences()
+        if (
+            modelPreferences.getLong(PERSONAL_MODEL_RESET_GENERATION, 0L) !=
+            expectedResetGeneration
+        ) return@synchronized false
+        modelPreferences.edit().putString(PERSONAL_MODEL_KEY, data).apply()
+        true
+    }
+
+    fun clearPersonalLanguageModel() = synchronized(LEARNING_RESET_LOCK) {
+        val modelPreferences = personalModelPreferences()
+        val generation = modelPreferences.getLong(PERSONAL_MODEL_RESET_GENERATION, 0L) + 1
+        modelPreferences.edit()
             .remove(PERSONAL_MODEL_KEY)
-            .apply()
+            .putLong(PERSONAL_MODEL_RESET_GENERATION, generation)
+            .commit()
     }
+
+    fun loadLearningResetGenerations(): LearningResetGenerations =
+        synchronized(LEARNING_RESET_LOCK) {
+            LearningResetGenerations(
+                typingProfile = typingProfileResetGeneration(),
+                personalLanguageModel = personalLanguageModelResetGeneration(),
+            )
+        }
+
+    private fun typingProfileResetGeneration(): Long =
+        preferences.getLong(KEY_TYPING_PROFILE_RESET_GENERATION, 0L)
+
+    private fun personalLanguageModelResetGeneration(): Long =
+        personalModelPreferences().getLong(PERSONAL_MODEL_RESET_GENERATION, 0L)
+
+    private fun personalModelPreferences() = appContext.getSharedPreferences(
+        PERSONAL_MODEL_PREFERENCES,
+        Context.MODE_PRIVATE,
+    )
 
     fun savePendingTranscript(
         text: String,
@@ -178,10 +235,12 @@ class PreferencesRepository(context: Context) {
         const val KEY_CORRECTION_UNDO_DURATION = "settings.correctionUndoDurationSeconds"
         const val KEY_ADAPTIVE_TYPING = "settings.adaptiveTypingEnabled"
         const val KEY_PERSONALIZED_PRACTICE = "settings.personalizedPracticeEnabled"
+        const val KEY_COPY_COMPLETED_DICTATION = "settings.copyCompletedDictation"
         const val KEY_CLOUD_CONSENT = "settings.cloudConsent"
         const val KEY_ONBOARDING_COMPLETE = "settings.onboardingComplete"
         const val KEY_INSTALLATION_ID = "installation.identifier"
         const val KEY_TYPING_PROFILE = "adaptive.typing.v1"
+        const val KEY_TYPING_PROFILE_RESET_GENERATION = "adaptive.typing.resetGeneration"
         const val KEY_TRANSCRIPT_TEXT = "transcript.text"
         const val KEY_TRANSCRIPT_DATE = "transcript.createdAt"
         const val KEY_TRANSCRIPT_LANGUAGE = "transcript.languageCode"
@@ -191,5 +250,7 @@ class PreferencesRepository(context: Context) {
         const val KEY_SAVED_LANGUAGE = "dictation.languageCode"
         const val PERSONAL_MODEL_PREFERENCES = "personal_language_model"
         const val PERSONAL_MODEL_KEY = "model"
+        const val PERSONAL_MODEL_RESET_GENERATION = "resetGeneration"
+        val LEARNING_RESET_LOCK = Any()
     }
 }

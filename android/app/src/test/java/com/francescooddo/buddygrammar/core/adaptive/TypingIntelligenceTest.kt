@@ -40,6 +40,8 @@ class TypingIntelligenceTest {
         assertEquals(1, profile.observationCount)
         assertEquals(0.20, profile.meanOffsetX, 0.000_001)
         assertEquals(-0.10, profile.meanOffsetY, 0.000_001)
+        assertEquals(1, profile.keyOffsets.getValue("e").observationCount)
+        assertEquals(0.20, profile.keyOffsets.getValue("e").meanOffsetX, 0.000_001)
     }
 
     @Test
@@ -100,6 +102,30 @@ class TypingIntelligenceTest {
         )
 
         assertEquals('e', result.character)
+    }
+
+    @Test
+    fun `per key calibration does not move an unrelated region`() {
+        val intelligence = TypingIntelligence()
+        repeat(8) {
+            intelligence.observe(
+                TypingOutcome(
+                    tap = TapPoint(x = 2.80, y = 0.50),
+                    intendedCharacter = 'e',
+                    evidence = OutcomeEvidence.EXPLICIT_RETYPE,
+                    policy = TypingPolicy.LEARNING,
+                ),
+            )
+        }
+
+        val unrelated = intelligence.resolve(
+            tap = TapPoint(x = 8.05, y = 0.50),
+            context = TypingContext(currentWordPrefix = "xyz", policy = TypingPolicy.READ_ONLY),
+        )
+
+        assertEquals('o', unrelated.literalCharacter)
+        assertEquals('o', unrelated.character)
+        assertTrue("o" !in intelligence.snapshot().keyOffsets)
     }
 
     @Test

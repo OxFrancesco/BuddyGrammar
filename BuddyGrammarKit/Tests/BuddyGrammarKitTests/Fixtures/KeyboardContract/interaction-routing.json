@@ -1,0 +1,326 @@
+{
+  "$schema": "../trace-suite.schema.json",
+  "schemaVersion": 1,
+  "catalogRevision": "2026.07.1",
+  "suite": "interaction-routing",
+  "configuration": {
+    "longPressDelayMilliseconds": 350,
+    "swipeDistance": 24,
+    "alternateStep": 26,
+    "cursorActivationMilliseconds": 180,
+    "cursorActivationDistance": 12,
+    "cursorStep": 12,
+    "deleteRepeatDelayMilliseconds": 360,
+    "deleteRepeatIntervalMilliseconds": 70
+  },
+  "cases": [
+    {
+      "id": "literal-tap-feedback-and-commit",
+      "description": "A literal press dispatches immediate key feedback, then release commits exactly once without duplicate feedback.",
+      "input": {},
+      "events": [
+        {
+          "kind": "pressKey",
+          "literal": "e",
+          "alternates": [],
+          "x": 0,
+          "y": 0,
+          "atMilliseconds": 1000
+        },
+        {
+          "kind": "release",
+          "x": 0,
+          "y": 0,
+          "atMilliseconds": 1080
+        }
+      ],
+      "expect": {
+        "committedText": ["e"],
+        "deleteBackwardCount": 0,
+        "deleteWordCount": 0,
+        "cursorDeltas": [],
+        "swipePhases": [],
+        "keyFeedbackCount": 1,
+        "selectionFeedbackCount": 0,
+        "alternateSelections": [],
+        "hideAlternatesCount": 0,
+        "settled": true
+      }
+    },
+    {
+      "id": "cancel-clears-pending-key-and-deadline",
+      "description": "Cancellation preserves the one immediate press-feedback event, commits nothing, and makes a scheduled long-press harmless.",
+      "input": {},
+      "events": [
+        {
+          "kind": "pressKey",
+          "literal": "a",
+          "alternates": ["à"],
+          "x": 0,
+          "y": 0,
+          "atMilliseconds": 2000
+        },
+        {
+          "kind": "cancel",
+          "atMilliseconds": 2100
+        },
+        {
+          "kind": "fireScheduled",
+          "deadlineKind": "longPress",
+          "atMilliseconds": 2350
+        }
+      ],
+      "expect": {
+        "committedText": [],
+        "deleteBackwardCount": 0,
+        "deleteWordCount": 0,
+        "cursorDeltas": [],
+        "swipePhases": [],
+        "keyFeedbackCount": 1,
+        "selectionFeedbackCount": 0,
+        "alternateSelections": [],
+        "hideAlternatesCount": 0,
+        "settled": true
+      }
+    },
+    {
+      "id": "swipe-suppresses-literal",
+      "description": "Crossing the swipe threshold preserves one immediate press-feedback event and emits a complete swipe path without a literal commit or release duplicate.",
+      "input": {},
+      "events": [
+        {
+          "kind": "pressKey",
+          "literal": "h",
+          "alternates": [],
+          "x": 0,
+          "y": 0,
+          "atMilliseconds": 3000
+        },
+        {
+          "kind": "move",
+          "x": 30,
+          "y": 4,
+          "atMilliseconds": 3100
+        },
+        {
+          "kind": "move",
+          "x": 45,
+          "y": 5,
+          "atMilliseconds": 3150
+        },
+        {
+          "kind": "release",
+          "x": 55,
+          "y": 5,
+          "atMilliseconds": 3200
+        }
+      ],
+      "expect": {
+        "committedText": [],
+        "deleteBackwardCount": 0,
+        "deleteWordCount": 0,
+        "cursorDeltas": [],
+        "swipePhases": ["began", "moved", "moved", "ended"],
+        "keyFeedbackCount": 1,
+        "selectionFeedbackCount": 0,
+        "alternateSelections": [],
+        "hideAlternatesCount": 0,
+        "settled": true
+      }
+    },
+    {
+      "id": "space-hold-scrubs-cursor",
+      "description": "Space dispatches immediate press feedback; crossing the scrub distance can activate before the stationary-hold deadline and moves the cursor without inserting or duplicating feedback on release.",
+      "input": {},
+      "events": [
+        {
+          "kind": "pressSpace",
+          "x": 0,
+          "y": 0,
+          "atMilliseconds": 4000
+        },
+        {
+          "kind": "move",
+          "x": 31,
+          "y": 2,
+          "atMilliseconds": 4100
+        },
+        {
+          "kind": "move",
+          "x": 47,
+          "y": 2,
+          "atMilliseconds": 4150
+        },
+        {
+          "kind": "release",
+          "x": 47,
+          "y": 2,
+          "atMilliseconds": 4170
+        }
+      ],
+      "expect": {
+        "committedText": [],
+        "deleteBackwardCount": 0,
+        "deleteWordCount": 0,
+        "cursorDeltas": [2, 1],
+        "swipePhases": [],
+        "keyFeedbackCount": 1,
+        "selectionFeedbackCount": 1,
+        "alternateSelections": [],
+        "hideAlternatesCount": 0,
+        "settled": true
+      }
+    },
+    {
+      "id": "stationary-space-hold-enters-cursor-mode",
+      "description": "Holding Space through the activation deadline enters cursor mode even before movement, so release never inserts an accidental space.",
+      "input": {},
+      "events": [
+        {
+          "kind": "pressSpace",
+          "x": 0,
+          "y": 0,
+          "atMilliseconds": 4700
+        },
+        {
+          "kind": "fireScheduled",
+          "deadlineKind": "cursorActivation",
+          "atMilliseconds": 4880
+        },
+        {
+          "kind": "release",
+          "x": 0,
+          "y": 0,
+          "atMilliseconds": 4900
+        }
+      ],
+      "expect": {
+        "committedText": [],
+        "deleteBackwardCount": 0,
+        "deleteWordCount": 0,
+        "cursorDeltas": [],
+        "swipePhases": [],
+        "keyFeedbackCount": 1,
+        "selectionFeedbackCount": 1,
+        "alternateSelections": [],
+        "hideAlternatesCount": 0,
+        "settled": true
+      }
+    },
+    {
+      "id": "delete-repeat-remains-character-only",
+      "description": "Delete repeats remain character granular after more repeats than the retired word-delete threshold.",
+      "input": {},
+      "events": [
+        {
+          "kind": "pressDelete",
+          "x": 0,
+          "y": 0,
+          "atMilliseconds": 5000
+        },
+        {
+          "kind": "fireScheduled",
+          "deadlineKind": "deleteRepeat",
+          "atMilliseconds": 5360
+        },
+        {
+          "kind": "fireScheduled",
+          "deadlineKind": "deleteRepeat",
+          "atMilliseconds": 5430
+        },
+        {
+          "kind": "fireScheduled",
+          "deadlineKind": "deleteRepeat",
+          "atMilliseconds": 5500
+        },
+        {
+          "kind": "fireScheduled",
+          "deadlineKind": "deleteRepeat",
+          "atMilliseconds": 5570
+        },
+        {
+          "kind": "fireScheduled",
+          "deadlineKind": "deleteRepeat",
+          "atMilliseconds": 5640
+        },
+        {
+          "kind": "fireScheduled",
+          "deadlineKind": "deleteRepeat",
+          "atMilliseconds": 5710
+        },
+        {
+          "kind": "fireScheduled",
+          "deadlineKind": "deleteRepeat",
+          "atMilliseconds": 5780
+        },
+        {
+          "kind": "fireScheduled",
+          "deadlineKind": "deleteRepeat",
+          "atMilliseconds": 5850
+        },
+        {
+          "kind": "release",
+          "x": 0,
+          "y": 0,
+          "atMilliseconds": 5860
+        }
+      ],
+      "expect": {
+        "committedText": [],
+        "deleteBackwardCount": 9,
+        "deleteWordCount": 0,
+        "cursorDeltas": [],
+        "swipePhases": [],
+        "keyFeedbackCount": 9,
+        "selectionFeedbackCount": 0,
+        "alternateSelections": [],
+        "hideAlternatesCount": 0,
+        "settled": true
+      }
+    },
+    {
+      "id": "long-press-commits-selected-alternate",
+      "description": "Long press exposes synthetic alternates and commits only the alternate selected by the scrub position.",
+      "input": {},
+      "events": [
+        {
+          "kind": "pressKey",
+          "literal": "e",
+          "alternates": ["é", "è", "ê"],
+          "x": 0,
+          "y": 0,
+          "atMilliseconds": 6000
+        },
+        {
+          "kind": "fireScheduled",
+          "deadlineKind": "longPress",
+          "atMilliseconds": 6350
+        },
+        {
+          "kind": "move",
+          "x": 52,
+          "y": 0,
+          "atMilliseconds": 6400
+        },
+        {
+          "kind": "release",
+          "x": 52,
+          "y": 0,
+          "atMilliseconds": 6450
+        }
+      ],
+      "expect": {
+        "committedText": ["ê"],
+        "deleteBackwardCount": 0,
+        "deleteWordCount": 0,
+        "cursorDeltas": [],
+        "swipePhases": [],
+        "keyFeedbackCount": 1,
+        "selectionFeedbackCount": 1,
+        "alternateSelections": [0, 2],
+        "hideAlternatesCount": 1,
+        "settled": true
+      }
+    }
+  ]
+}
