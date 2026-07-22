@@ -1,0 +1,424 @@
+{
+  "$schema": "../trace-suite.schema.json",
+  "schemaVersion": 1,
+  "catalogRevision": "2026.07.1",
+  "suite": "capability-policy",
+  "cases": [
+    {
+      "id": "plain-text-cloud-ready",
+      "description": "Normal text enables local intelligence and explicitly consented cloud correction.",
+      "input": {
+        "fieldKind": "text",
+        "secure": false,
+        "noSuggestions": false,
+        "noPersonalizedLearning": false,
+        "cloudProcessingConsent": true,
+        "cloudTransportAvailable": true,
+        "platformVoiceAvailable": true,
+        "editorCanMoveCursor": true
+      },
+      "expect": {
+        "layoutVariant": "text",
+        "canSuggest": true,
+        "canLearn": true,
+      "canAutoCorrect": true,
+      "canSwipe": true,
+      "canReadContext": true,
+      "canUseComposition": true,
+      "canMoveCursor": true,
+        "buddyFix": "allowed",
+        "platformVoice": "allowed"
+      }
+    },
+    {
+      "id": "plain-text-without-cloud-consent",
+      "description": "Local typing remains intelligent when cloud consent is absent.",
+      "input": {
+        "fieldKind": "text",
+        "secure": false,
+        "noSuggestions": false,
+        "noPersonalizedLearning": false,
+        "cloudProcessingConsent": false,
+        "cloudTransportAvailable": true,
+        "platformVoiceAvailable": true,
+        "editorCanMoveCursor": true
+      },
+      "expect": {
+        "layoutVariant": "text",
+        "canSuggest": true,
+        "canLearn": true,
+      "canAutoCorrect": true,
+      "canSwipe": true,
+      "canReadContext": true,
+      "canUseComposition": true,
+      "canMoveCursor": true,
+        "buddyFix": "denied.cloud-consent-required",
+        "platformVoice": "allowed"
+      }
+    },
+    {
+      "id": "plain-text-without-cloud-transport",
+      "description": "Cloud correction is unavailable without extension transport but local behavior is unchanged.",
+      "input": {
+        "fieldKind": "text",
+        "secure": false,
+        "noSuggestions": false,
+        "noPersonalizedLearning": false,
+        "cloudProcessingConsent": true,
+        "cloudTransportAvailable": false,
+        "platformVoiceAvailable": false,
+        "editorCanMoveCursor": true
+      },
+      "expect": {
+        "layoutVariant": "text",
+        "canSuggest": true,
+        "canLearn": true,
+      "canAutoCorrect": true,
+      "canSwipe": true,
+      "canReadContext": true,
+      "canUseComposition": true,
+      "canMoveCursor": true,
+        "buddyFix": "denied.cloud-transport-unavailable",
+        "platformVoice": "denied.platform-voice-unavailable"
+      }
+    },
+    {
+      "id": "no-personalized-learning",
+      "description": "The editor can permit local suggestions while forbidding profile writes.",
+      "input": {
+        "fieldKind": "text",
+        "secure": false,
+        "noSuggestions": false,
+        "noPersonalizedLearning": true,
+        "cloudProcessingConsent": true,
+        "cloudTransportAvailable": true,
+        "platformVoiceAvailable": true,
+        "editorCanMoveCursor": true
+      },
+      "expect": {
+        "layoutVariant": "text",
+        "canSuggest": true,
+        "canLearn": false,
+      "canAutoCorrect": true,
+      "canSwipe": true,
+      "canReadContext": true,
+      "canUseComposition": true,
+      "canMoveCursor": true,
+        "buddyFix": "allowed",
+        "platformVoice": "allowed"
+      }
+    },
+    {
+      "id": "email-is-structured",
+      "description": "Email fields expose email punctuation and deny correction, learning, swipe, and cloud text tools.",
+      "input": {
+        "fieldKind": "email",
+        "secure": false,
+        "noSuggestions": false,
+        "noPersonalizedLearning": false,
+        "cloudProcessingConsent": true,
+        "cloudTransportAvailable": true,
+        "platformVoiceAvailable": true,
+        "editorCanMoveCursor": true
+      },
+      "expect": {
+        "layoutVariant": "email",
+        "canSuggest": false,
+        "canLearn": false,
+      "canAutoCorrect": false,
+      "canSwipe": false,
+      "canReadContext": false,
+      "canUseComposition": false,
+      "canMoveCursor": true,
+        "buddyFix": "denied.structured-field",
+        "platformVoice": "denied.structured-field"
+      }
+    },
+    {
+      "id": "url-is-structured",
+      "description": "URL fields expose URL punctuation and never feed language intelligence.",
+      "input": {
+        "fieldKind": "url",
+        "secure": false,
+        "noSuggestions": false,
+        "noPersonalizedLearning": false,
+        "cloudProcessingConsent": true,
+        "cloudTransportAvailable": true,
+        "platformVoiceAvailable": true,
+        "editorCanMoveCursor": true
+      },
+      "expect": {
+        "layoutVariant": "url",
+        "canSuggest": false,
+        "canLearn": false,
+      "canAutoCorrect": false,
+      "canSwipe": false,
+      "canReadContext": false,
+      "canUseComposition": false,
+      "canMoveCursor": true,
+        "buddyFix": "denied.structured-field",
+        "platformVoice": "denied.structured-field"
+      }
+    },
+    {
+      "id": "person-name-is-structured",
+      "description": "Name fields use the text geometry but avoid correction and learning.",
+      "input": {
+        "fieldKind": "name",
+        "secure": false,
+        "noSuggestions": false,
+        "noPersonalizedLearning": false,
+        "cloudProcessingConsent": true,
+        "cloudTransportAvailable": true,
+        "platformVoiceAvailable": true,
+        "editorCanMoveCursor": true
+      },
+      "expect": {
+        "layoutVariant": "text",
+        "canSuggest": false,
+        "canLearn": false,
+      "canAutoCorrect": false,
+      "canSwipe": false,
+      "canReadContext": false,
+      "canUseComposition": false,
+      "canMoveCursor": true,
+        "buddyFix": "denied.structured-field",
+        "platformVoice": "denied.structured-field"
+      }
+    },
+    {
+      "id": "decimal-uses-numeric-layout",
+      "description": "Decimal fields select locale-aware numeric geometry with no language processing.",
+      "input": {
+        "fieldKind": "decimal",
+        "secure": false,
+        "noSuggestions": false,
+        "noPersonalizedLearning": false,
+        "cloudProcessingConsent": true,
+        "cloudTransportAvailable": true,
+        "platformVoiceAvailable": true,
+        "editorCanMoveCursor": true
+      },
+      "expect": {
+        "layoutVariant": "decimal",
+        "canSuggest": false,
+        "canLearn": false,
+      "canAutoCorrect": false,
+      "canSwipe": false,
+      "canReadContext": false,
+      "canUseComposition": false,
+      "canMoveCursor": true,
+        "buddyFix": "denied.structured-field",
+        "platformVoice": "denied.structured-field"
+      }
+    },
+    {
+      "id": "phone-uses-phone-layout",
+      "description": "Phone fields expose dialer symbols and no language processing.",
+      "input": {
+        "fieldKind": "phone",
+        "secure": false,
+        "noSuggestions": false,
+        "noPersonalizedLearning": false,
+        "cloudProcessingConsent": true,
+        "cloudTransportAvailable": true,
+        "platformVoiceAvailable": true,
+        "editorCanMoveCursor": true
+      },
+      "expect": {
+        "layoutVariant": "phone",
+        "canSuggest": false,
+        "canLearn": false,
+      "canAutoCorrect": false,
+      "canSwipe": false,
+      "canReadContext": false,
+      "canUseComposition": false,
+      "canMoveCursor": true,
+        "buddyFix": "denied.structured-field",
+        "platformVoice": "denied.structured-field"
+      }
+    },
+    {
+      "id": "password-is-sensitive",
+      "description": "Passwords are literal-only and expose no text tool or voice path.",
+      "input": {
+        "fieldKind": "password",
+        "secure": true,
+        "noSuggestions": true,
+        "noPersonalizedLearning": true,
+        "cloudProcessingConsent": true,
+        "cloudTransportAvailable": true,
+        "platformVoiceAvailable": true,
+        "editorCanMoveCursor": true
+      },
+      "expect": {
+        "layoutVariant": "secure",
+        "canSuggest": false,
+        "canLearn": false,
+      "canAutoCorrect": false,
+      "canSwipe": false,
+      "canReadContext": false,
+      "canUseComposition": false,
+      "canMoveCursor": true,
+        "buddyFix": "denied.sensitive-field",
+        "platformVoice": "denied.sensitive-field"
+      }
+    },
+    {
+      "id": "secure-trait-overrides-plain-kind",
+      "description": "A native secure trait forces the secure surface even when the editor reports a generic text kind.",
+      "input": {
+        "fieldKind": "text",
+        "secure": true,
+        "noSuggestions": false,
+        "noPersonalizedLearning": false,
+        "cloudProcessingConsent": true,
+        "cloudTransportAvailable": true,
+        "platformVoiceAvailable": true,
+        "editorCanMoveCursor": true
+      },
+      "expect": {
+        "layoutVariant": "secure",
+        "canSuggest": false,
+        "canLearn": false,
+      "canAutoCorrect": false,
+      "canSwipe": false,
+      "canReadContext": false,
+      "canUseComposition": false,
+      "canMoveCursor": true,
+        "buddyFix": "denied.sensitive-field",
+        "platformVoice": "denied.sensitive-field"
+      }
+    },
+    {
+      "id": "otp-is-sensitive",
+      "description": "One-time codes remain literal-only even if the native editor does not mark them secure.",
+      "input": {
+        "fieldKind": "oneTimeCode",
+        "secure": false,
+        "noSuggestions": true,
+        "noPersonalizedLearning": true,
+        "cloudProcessingConsent": true,
+        "cloudTransportAvailable": true,
+        "platformVoiceAvailable": true,
+        "editorCanMoveCursor": true
+      },
+      "expect": {
+        "layoutVariant": "secure",
+        "canSuggest": false,
+        "canLearn": false,
+      "canAutoCorrect": false,
+      "canSwipe": false,
+      "canReadContext": false,
+      "canUseComposition": false,
+      "canMoveCursor": true,
+        "buddyFix": "denied.sensitive-field",
+        "platformVoice": "denied.sensitive-field"
+      }
+    },
+    {
+      "id": "code-field",
+      "description": "Code fields expose code punctuation without prose correction.",
+      "input": {
+        "fieldKind": "code",
+        "secure": false,
+        "noSuggestions": true,
+        "noPersonalizedLearning": true,
+        "cloudProcessingConsent": true,
+        "cloudTransportAvailable": true,
+        "platformVoiceAvailable": true,
+        "editorCanMoveCursor": true
+      },
+      "expect": {
+        "layoutVariant": "code",
+        "canSuggest": false,
+        "canLearn": false,
+      "canAutoCorrect": false,
+      "canSwipe": false,
+      "canReadContext": false,
+      "canUseComposition": false,
+      "canMoveCursor": true,
+        "buddyFix": "denied.code-field",
+        "platformVoice": "denied.code-field"
+      }
+    },
+    {
+      "id": "editor-no-suggestions",
+      "description": "A host no-suggestions request suppresses all prediction-dependent behavior.",
+      "input": {
+        "fieldKind": "text",
+        "secure": false,
+        "noSuggestions": true,
+        "noPersonalizedLearning": false,
+        "cloudProcessingConsent": true,
+        "cloudTransportAvailable": true,
+        "platformVoiceAvailable": true,
+        "editorCanMoveCursor": true
+      },
+      "expect": {
+      "layoutVariant": "literal",
+        "canSuggest": false,
+        "canLearn": false,
+      "canAutoCorrect": false,
+      "canSwipe": false,
+      "canReadContext": false,
+      "canUseComposition": false,
+      "canMoveCursor": true,
+        "buddyFix": "denied.editor-no-suggestions",
+        "platformVoice": "allowed"
+      }
+    },
+    {
+      "id": "search-is-local-only",
+      "description": "Search allows local help without retaining queries or sending them to Buddy Fix.",
+      "input": {
+        "fieldKind": "search",
+        "secure": false,
+        "noSuggestions": false,
+        "noPersonalizedLearning": false,
+        "cloudProcessingConsent": true,
+        "cloudTransportAvailable": true,
+        "platformVoiceAvailable": true,
+        "editorCanMoveCursor": true
+      },
+      "expect": {
+        "layoutVariant": "search",
+        "canSuggest": true,
+        "canLearn": false,
+      "canAutoCorrect": true,
+      "canSwipe": true,
+      "canReadContext": true,
+      "canUseComposition": true,
+      "canMoveCursor": true,
+        "buddyFix": "denied.structured-field",
+        "platformVoice": "allowed"
+      }
+    },
+    {
+      "id": "cursor-primitive-missing",
+      "description": "Cursor gestures degrade independently when the editor cannot move its caret.",
+      "input": {
+        "fieldKind": "text",
+        "secure": false,
+        "noSuggestions": false,
+        "noPersonalizedLearning": false,
+        "cloudProcessingConsent": true,
+        "cloudTransportAvailable": true,
+        "platformVoiceAvailable": true,
+        "editorCanMoveCursor": false
+      },
+      "expect": {
+        "layoutVariant": "text",
+        "canSuggest": true,
+        "canLearn": true,
+      "canAutoCorrect": true,
+      "canSwipe": true,
+      "canReadContext": true,
+      "canUseComposition": true,
+      "canMoveCursor": false,
+        "buddyFix": "allowed",
+        "platformVoice": "allowed"
+      }
+    }
+  ]
+}
