@@ -33,6 +33,14 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
     private var hostingController: UIHostingController<KeyboardRootView>?
     private var heightConstraint: NSLayoutConstraint?
     private var documentGeneration: UInt64 = 0
+    private let fallbackEditorFieldIdentifier = UUID().uuidString
+
+    /// UIKit declares `documentIdentifier` as nonnull, but the keyboard proxy can
+    /// return Objective-C `nil` while a document is still being attached. Reading
+    /// it through the Swift property traps before application code can recover.
+    private var currentDocumentIdentifier: UUID? {
+        (textDocumentProxy as? NSObject)?.value(forKey: "documentIdentifier") as? UUID
+    }
 
     var enableInputClicksWhenVisible: Bool { true }
 
@@ -161,7 +169,7 @@ extension KeyboardViewController: KeyboardModelDelegate {
     }
 
     var editorFieldIdentifier: String {
-        (textDocumentProxy.documentIdentifier as UUID).uuidString
+        currentDocumentIdentifier?.uuidString ?? fallbackEditorFieldIdentifier
     }
 
     var editorFieldTraits: EditorFieldTraits {
@@ -272,7 +280,7 @@ extension KeyboardViewController: KeyboardModelDelegate {
 
     func captureCorrectionSnapshot() -> DocumentCorrectionSnapshot? {
         let proxy = textDocumentProxy
-        let identifier = proxy.documentIdentifier as UUID
+        guard let identifier = currentDocumentIdentifier else { return nil }
         let before = proxy.documentContextBeforeInput
         let selected = proxy.selectedText
         let after = proxy.documentContextAfterInput
@@ -320,8 +328,9 @@ extension KeyboardViewController: KeyboardModelDelegate {
         to snapshot: DocumentCorrectionSnapshot
     ) -> AppliedCorrection? {
         let proxy = textDocumentProxy
-        guard snapshot.generation == documentGeneration,
-              proxy.documentIdentifier as UUID == snapshot.documentIdentifier,
+        guard let documentIdentifier = currentDocumentIdentifier,
+              snapshot.generation == documentGeneration,
+              documentIdentifier == snapshot.documentIdentifier,
               proxy.documentContextBeforeInput == snapshot.contextBeforeInput,
               proxy.selectedText == snapshot.selectedText,
               proxy.documentContextAfterInput == snapshot.contextAfterInput else {
@@ -345,7 +354,7 @@ extension KeyboardViewController: KeyboardModelDelegate {
         }
 
         return AppliedCorrection(
-            documentIdentifier: proxy.documentIdentifier as UUID,
+            documentIdentifier: documentIdentifier,
             contextBeforeInput: proxy.documentContextBeforeInput,
             selectedText: proxy.selectedText,
             contextAfterInput: proxy.documentContextAfterInput,
@@ -356,7 +365,8 @@ extension KeyboardViewController: KeyboardModelDelegate {
 
     func canUndoCorrection(_ correction: AppliedCorrection) -> Bool {
         let proxy = textDocumentProxy
-        return proxy.documentIdentifier as UUID == correction.documentIdentifier
+        guard let documentIdentifier = currentDocumentIdentifier else { return false }
+        return documentIdentifier == correction.documentIdentifier
             && proxy.documentContextBeforeInput == correction.contextBeforeInput
             && proxy.selectedText == correction.selectedText
             && proxy.documentContextAfterInput == correction.contextAfterInput
