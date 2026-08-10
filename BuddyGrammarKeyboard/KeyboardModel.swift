@@ -67,7 +67,7 @@ enum KeyboardStatus: Equatable {
         case .transcriptInserted:
             "Saved transcript inserted."
         case .appleDictationGuidance:
-            "For Apple Dictation, switch to the system keyboard and tap its microphone."
+            "Tap the system mic below to start Apple Dictation."
         case .settingsGuidance:
             "Open BuddyGrammar from the Home Screen to change keyboard settings."
         case .fullAccessRequired:

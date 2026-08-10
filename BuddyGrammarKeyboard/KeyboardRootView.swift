@@ -303,7 +303,7 @@ private struct StatusIndicator: View {
         case .correctionSuggestionSuppressed:
             "nosign"
         case .appleDictationGuidance:
-            "keyboard"
+            "mic.fill"
         case .settingsGuidance:
             "gearshape"
         case .ready:
@@ -412,9 +412,27 @@ private struct BuddyDrawer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Buddy writing")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Text("Buddy writing")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                Spacer(minLength: 8)
+
+                Button {
+                    model.showAppleDictationGuidance()
+                    dismiss()
+                } label: {
+                    Label("Voice dictation", systemImage: "mic.fill")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 9)
+                        .frame(height: 32)
+                }
+                .buttonStyle(KeyboardAccessoryButtonStyle(isProminent: true))
+                .accessibilityIdentifier("keyboard.voiceInput")
+                .accessibilityLabel("Voice dictation")
+                .accessibilityHint("Uses the Apple microphone below the keyboard.")
+            }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
@@ -461,14 +479,6 @@ private struct BuddyDrawer: View {
                     .accessibilityIdentifier("keyboard.deleteWord")
                     .accessibilityHint(
                         "Deletes one whitespace run, word run, or punctuation character."
-                    )
-
-                    drawerButton("Apple Dictation", icon: "keyboard") {
-                        model.showAppleDictationGuidance()
-                    }
-                    .accessibilityIdentifier("keyboard.dictationGuide")
-                    .accessibilityHint(
-                        "Explains how to use Apple Dictation from the system keyboard"
                     )
 
                     drawerButton("Handwriting", icon: "pencil.and.scribble") {
