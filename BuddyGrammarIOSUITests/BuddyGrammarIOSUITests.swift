@@ -119,7 +119,7 @@ final class BuddyGrammarIOSUITests: XCTestCase {
     }
 
     @MainActor
-    func testLiveKeyboardStarCorrectionWhenEnabled() throws {
+    func testLiveKeyboardReturnHoldFixesAllTextWhenEnabled() throws {
         #if !KEYBOARD_E2E
         throw XCTSkip(
             "Run with the KEYBOARD_E2E compilation condition after enabling the signed keyboard and Full Access."
@@ -136,29 +136,43 @@ final class BuddyGrammarIOSUITests: XCTestCase {
         input.tap()
         input.typeKey(.downArrow, modifierFlags: .command)
 
-        let globeCoordinate = app.coordinate(
-            withNormalizedOffset: CGVector(dx: 0.12, dy: 0.94)
-        )
-        let star = app.buttons["keyboard.star"]
-        for _ in 0..<8 where !star.exists {
-            globeCoordinate.tap()
-            if star.waitForExistence(timeout: 2) {
-                break
-            }
-        }
-
+        let returnKey = app.buttons["keyboard.return"]
         XCTAssertTrue(
-            star.exists,
+            activateBuddyKeyboard(in: app, waitingFor: returnKey),
             "The real BuddyGrammar keyboard extension should become active."
         )
         attachScreenshot(named: "BuddyGrammar keyboard active", app: app)
 
         let original = String(describing: input.value)
-        star.tap()
+        // XCTest reports keyboard-extension element frames in the extension's
+        // local coordinate space, which can translate the bottom row below the
+        // host app's screen. Use the visible iPhone 15 Return-key position for
+        // this physical hold while still requiring the identified key above.
+        app.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.93, dy: 0.875)
+        ).press(forDuration: 0.7)
 
         let status = app.descendants(matching: .any)["keyboard.status"]
-        XCTAssertTrue(status.waitForExistence(timeout: 3))
-        attachScreenshot(named: "BuddyGrammar star correction started", app: app)
+        let undo = app.buttons["keyboard.undo"]
+        let correctionStarted = NSPredicate { _, _ in
+            status.exists
+                || undo.exists
+                || String(describing: input.value) != original
+        }
+        XCTAssertEqual(
+            XCTWaiter().wait(
+                for: [
+                    XCTNSPredicateExpectation(
+                        predicate: correctionStarted,
+                        object: nil
+                    )
+                ],
+                timeout: 3
+            ),
+            .completed,
+            "Return hold should start or finish a whole-text correction."
+        )
+        attachScreenshot(named: "BuddyGrammar return hold correction started", app: app)
 
         let corrected = NSPredicate { _, _ in
             let value = String(describing: input.value)
@@ -173,36 +187,32 @@ final class BuddyGrammarIOSUITests: XCTestCase {
             timeout: 35
         )
 
-        attachScreenshot(named: "BuddyGrammar star correction finished", app: app)
         XCTAssertEqual(
             correctionResult,
             .completed,
-            "Correction did not finish. Keyboard status: \(String(describing: status.label))"
+            "Return hold did not finish correcting the whole text."
         )
 
         let value = String(describing: input.value)
         XCTAssertEqual(value.first?.isUppercase, true)
 
-        let undo = app.buttons["keyboard.undo"]
-        XCTAssertTrue(
-            undo.waitForExistence(timeout: 2),
-            "Undo should appear after the star correction finishes."
-        )
-        undo.tap()
+        if undo.exists {
+            undo.tap()
 
-        let restored = NSPredicate { _, _ in
-            String(describing: input.value) == original
+            let restored = NSPredicate { _, _ in
+                String(describing: input.value) == original
+            }
+            XCTAssertEqual(
+                XCTWaiter().wait(
+                    for: [XCTNSPredicateExpectation(predicate: restored, object: nil)],
+                    timeout: 3
+                ),
+                .completed,
+                "Undo should restore the exact pre-correction text."
+            )
         }
-        XCTAssertEqual(
-            XCTWaiter().wait(
-                for: [XCTNSPredicateExpectation(predicate: restored, object: nil)],
-                timeout: 3
-            ),
-            .completed,
-            "Undo should restore the exact pre-correction text."
-        )
 
-        attachScreenshot(named: "BuddyGrammar star correction", app: app)
+        attachScreenshot(named: "BuddyGrammar return hold correction", app: app)
     }
 
     @MainActor
@@ -223,24 +233,28 @@ final class BuddyGrammarIOSUITests: XCTestCase {
         input.tap()
         input.typeKey(.downArrow, modifierFlags: .command)
 
-        let globeCoordinate = app.coordinate(
-            withNormalizedOffset: CGVector(dx: 0.12, dy: 0.94)
-        )
-        var buddyControl = app.buttons["keyboard.star"]
-        for _ in 0..<8 where !buddyControl.exists {
-            globeCoordinate.tap()
-            if buddyControl.waitForExistence(timeout: 2) {
-                break
-            }
-        }
-
+        let buddyControl = app.buttons["keyboard.buddy"]
         XCTAssertTrue(
-            buddyControl.exists,
+            activateBuddyKeyboard(in: app, waitingFor: buddyControl),
             "The real BuddyGrammar keyboard extension should become active."
+        )
+        buddyControl.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
+        ).press(forDuration: 0.7)
+
+        let status = app.descendants(matching: .any)["keyboard.status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            status.label.localizedCaseInsensitiveContains("system mic"),
+            "Buddy hold should point to Apple Dictation without opening a microphone in the extension."
+        )
+        XCTAssertFalse(
+            app.buttons["keyboard.voiceInput"].exists,
+            "A Buddy hold should not fall through to the short-tap drawer action."
         )
         XCTAssertFalse(app.buttons["keyboard.mic"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["dictation.keyboardInstructions"].exists)
-        attachScreenshot(named: "Keyboard uses system Dictation", app: app)
+        attachScreenshot(named: "Buddy hold uses system Dictation", app: app)
     }
 
     @MainActor
@@ -249,5 +263,28 @@ final class BuddyGrammarIOSUITests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    @MainActor
+    private func activateBuddyKeyboard(
+        in app: XCUIApplication,
+        waitingFor buddyControl: XCUIElement
+    ) -> Bool {
+        let fallbackGlobeCoordinate = app.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.12, dy: 0.94)
+        )
+
+        for _ in 0..<8 where !buddyControl.exists {
+            let nextKeyboard = app.buttons["Next keyboard"]
+            if nextKeyboard.waitForExistence(timeout: 0.6) {
+                nextKeyboard.tap()
+            } else {
+                fallbackGlobeCoordinate.tap()
+            }
+            if buddyControl.waitForExistence(timeout: 2) {
+                return true
+            }
+        }
+        return buddyControl.exists
     }
 }

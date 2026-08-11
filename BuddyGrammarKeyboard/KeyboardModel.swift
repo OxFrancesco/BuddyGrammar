@@ -107,6 +107,12 @@ enum KeyboardStatus: Equatable {
 enum DocumentCorrectionTarget: Equatable, Sendable {
     case selection
     case currentSentence(charactersAfterCursor: Int)
+    case allText(charactersAfterCursor: Int)
+}
+
+enum DocumentCorrectionRequestScope: Equatable, Sendable {
+    case currentText
+    case allText
 }
 
 struct DocumentCorrectionSnapshot: Equatable, Sendable {
@@ -173,11 +179,13 @@ struct KeyboardSuggestion: Identifiable, Equatable {
 enum KeyboardCorrectionScope: Equatable {
     case selection
     case currentSentence
+    case allText
 
     var label: String {
         switch self {
         case .selection: "Selection"
         case .currentSentence: "Current sentence"
+        case .allText: "All text"
         }
     }
 }
@@ -196,7 +204,9 @@ protocol KeyboardModelDelegate: AnyObject {
     func deleteBackward()
     func moveCursor(byUTF16Offset offset: Int)
     func playInputClick()
-    func captureCorrectionSnapshot() -> DocumentCorrectionSnapshot?
+    func captureCorrectionSnapshot(
+        requestScope: DocumentCorrectionRequestScope
+    ) -> DocumentCorrectionSnapshot?
     func applyCorrection(
         _ replacement: String,
         to snapshot: DocumentCorrectionSnapshot
@@ -2273,6 +2283,26 @@ final class KeyboardModel {
     }
 
     func correctCurrentText(intent: BuddyRewriteIntent = .fix) {
+        correctText(
+            intent: intent,
+            requestScope: .currentText,
+            appliesImmediately: false
+        )
+    }
+
+    func correctAllText() {
+        correctText(
+            intent: .fix,
+            requestScope: .allText,
+            appliesImmediately: true
+        )
+    }
+
+    private func correctText(
+        intent: BuddyRewriteIntent,
+        requestScope: DocumentCorrectionRequestScope,
+        appliesImmediately: Bool
+    ) {
         refreshAvailability()
         cancelCorrection()
         clearCorrectionProposal()
@@ -2283,7 +2313,9 @@ final class KeyboardModel {
               requireCapability(editorCapabilities.readContext) else { return }
         let settings = preferences?.loadSettings() ?? .default
 
-        guard let snapshot = delegate?.captureCorrectionSnapshot() else {
+        guard let snapshot = delegate?.captureCorrectionSnapshot(
+            requestScope: requestScope
+        ) else {
             present(.noText)
             return
         }
@@ -2325,6 +2357,7 @@ final class KeyboardModel {
                 let scope: KeyboardCorrectionScope = switch snapshot.target {
                 case .selection: .selection
                 case .currentSentence: .currentSentence
+                case .allText: .allText
                 }
                 let proposal = ReviewableCorrectionProposal(
                     intent: intent,
@@ -2342,7 +2375,11 @@ final class KeyboardModel {
                 correctionProposalScope = scope
                 correctionTask = nil
                 correctionRequestID = nil
-                present(.correctionProposalReady)
+                if appliesImmediately {
+                    acceptCorrectionProposal()
+                } else {
+                    present(.correctionProposalReady)
+                }
             } catch is CancellationError {
                 // Cancellation is expected whenever the document changes.
             } catch {
@@ -2382,7 +2419,7 @@ final class KeyboardModel {
         switch pendingCorrectionProposal.snapshot.target {
         case .selection:
             learningContext = pendingCorrectionProposal.snapshot.contextBeforeInput
-        case .currentSentence:
+        case .currentSentence, .allText:
             learningContext = nil
         }
         beginCorrectionUndo(

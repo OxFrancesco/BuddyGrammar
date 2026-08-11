@@ -64,7 +64,9 @@ struct KeyboardLabView: View {
                 Label("Freeform keyboard test", systemImage: "keyboard.fill")
                     .font(.headline)
 
-                Text("Switch to BuddyGrammar with the globe key, then tap ★ to correct the sample.")
+                Text(
+                    "Switch to BuddyGrammar with the globe key, then hold Return to fix the whole sample."
+                )
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 

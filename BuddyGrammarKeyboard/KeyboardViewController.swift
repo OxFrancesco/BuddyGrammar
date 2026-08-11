@@ -278,14 +278,16 @@ extension KeyboardViewController: KeyboardModelDelegate {
         UIDevice.current.playInputClick()
     }
 
-    func captureCorrectionSnapshot() -> DocumentCorrectionSnapshot? {
+    func captureCorrectionSnapshot(
+        requestScope: DocumentCorrectionRequestScope
+    ) -> DocumentCorrectionSnapshot? {
         let proxy = textDocumentProxy
         guard let identifier = currentDocumentIdentifier else { return nil }
         let before = proxy.documentContextBeforeInput
         let selected = proxy.selectedText
         let after = proxy.documentContextAfterInput
 
-        if let selected {
+        if requestScope == .currentText, let selected {
             guard let candidate = TextCorrectionCandidate(capturedText: selected) else {
                 return nil
             }
@@ -297,6 +299,27 @@ extension KeyboardViewController: KeyboardModelDelegate {
                 contextAfterInput: after,
                 target: .selection,
                 candidate: candidate
+            )
+        }
+
+        if requestScope == .allText {
+            guard let allText = TextContextExtractor.allAccessibleText(
+                contextBeforeCursor: before ?? "",
+                selectedText: selected,
+                contextAfterCursor: after ?? ""
+            ) else {
+                return nil
+            }
+            return DocumentCorrectionSnapshot(
+                documentIdentifier: identifier,
+                generation: documentGeneration,
+                contextBeforeInput: before,
+                selectedText: selected,
+                contextAfterInput: after,
+                target: .allText(
+                    charactersAfterCursor: allText.textAfterCursor.utf16.count
+                ),
+                candidate: allText.candidate
             )
         }
 
@@ -341,7 +364,14 @@ extension KeyboardViewController: KeyboardModelDelegate {
         switch snapshot.target {
         case .selection:
             proxy.insertText(replacement)
-        case .currentSentence(let charactersAfterCursor):
+        case .currentSentence(let charactersAfterCursor),
+             .allText(let charactersAfterCursor):
+            if case .allText = snapshot.target, let selected = snapshot.selectedText {
+                // Reinsert the selection unchanged to collapse it at its end;
+                // replacement can then use the same bounded suffix algorithm
+                // as a cursor-only field.
+                proxy.insertText(selected)
+            }
             if charactersAfterCursor > 0 {
                 // Move to the end of the sentence before replacing the
                 // bounded captured range.

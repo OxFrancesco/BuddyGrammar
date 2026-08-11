@@ -76,4 +76,45 @@ final class TextContextExtractorTests: XCTestCase {
         XCTAssertEqual(candidate.candidate.capturedText, " this need fixing.  ")
         XCTAssertEqual(candidate.textAfterCursor, "")
     }
+
+    func testAllAccessibleTextIncludesBothCursorContextsAndSelection() throws {
+        let result = try XCTUnwrap(
+            TextContextExtractor.allAccessibleText(
+                contextBeforeCursor: "First sentence. ",
+                selectedText: "this are",
+                contextAfterCursor: " the rest."
+            )
+        )
+
+        XCTAssertEqual(result.candidate.capturedText, "First sentence. this are the rest.")
+        XCTAssertEqual(result.candidate.requestText, "First sentence. this are the rest.")
+        XCTAssertEqual(result.textBeforeCursor, "First sentence. this are")
+        XCTAssertEqual(result.textAfterCursor, " the rest.")
+    }
+
+    func testAllAccessibleTextPreservesOuterWhitespace() throws {
+        let result = try XCTUnwrap(
+            TextContextExtractor.allAccessibleText(
+                contextBeforeCursor: "  hello",
+                selectedText: nil,
+                contextAfterCursor: " world\n"
+            )
+        )
+
+        XCTAssertEqual(result.candidate.requestText, "hello world")
+        XCTAssertEqual(
+            result.candidate.replacement(with: "Hello, world."),
+            "  Hello, world.\n"
+        )
+    }
+
+    func testAllAccessibleTextRejectsWhitespaceOnlyInput() {
+        XCTAssertNil(
+            TextContextExtractor.allAccessibleText(
+                contextBeforeCursor: "  ",
+                selectedText: "\n",
+                contextAfterCursor: "\t"
+            )
+        )
+    }
 }

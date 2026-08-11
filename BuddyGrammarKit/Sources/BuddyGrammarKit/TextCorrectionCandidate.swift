@@ -119,4 +119,26 @@ public enum TextContextExtractor {
             textAfterCursor: right
         )
     }
+
+    /// Builds a correction candidate from all text the host editor exposes to
+    /// a custom keyboard. Some editors intentionally provide only bounded
+    /// context; this helper never attempts to move beyond that privacy boundary.
+    public static func allAccessibleText(
+        contextBeforeCursor: String,
+        selectedText: String?,
+        contextAfterCursor: String
+    ) -> CursorTextCorrectionCandidate? {
+        let textBeforeReplacementEnd = contextBeforeCursor + (selectedText ?? "")
+        guard let candidate = TextCorrectionCandidate(
+            capturedText: textBeforeReplacementEnd + contextAfterCursor
+        ) else {
+            return nil
+        }
+
+        return CursorTextCorrectionCandidate(
+            candidate: candidate,
+            textBeforeCursor: textBeforeReplacementEnd,
+            textAfterCursor: contextAfterCursor
+        )
+    }
 }

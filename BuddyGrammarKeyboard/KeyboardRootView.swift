@@ -167,21 +167,33 @@ private struct KeyboardSuggestionBar: View {
             }
             .frame(maxWidth: .infinity)
 
-            Button {
-                isBuddyDrawerPresented.toggle()
-            } label: {
+            KeyboardPressAndHoldButton(
+                action: { isBuddyDrawerPresented.toggle() },
+                longPressAction: {
+                    isBuddyDrawerPresented = false
+                    model.showAppleDictationGuidance()
+                },
+                accessibilityLabel: isBuddyDrawerPresented
+                    ? "Close Buddy tools"
+                    : "Open Buddy tools",
+                accessibilityHint: "Hold for Apple Dictation, then tap the system microphone below.",
+                accessibilityIdentifier: "keyboard.buddy",
+                longPressAccessibilityActionName: "Use Apple Dictation"
+            ) { isPressed in
                 Label("Buddy", systemImage: "sparkles")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 9)
                     .frame(height: 32)
+                    .foregroundStyle(isBuddyDrawerPresented ? Color.white : Color.primary)
+                    .background(
+                        isBuddyDrawerPresented
+                            ? Color.accentColor.opacity(isPressed ? 0.72 : 1)
+                            : Color(
+                                uiColor: isPressed ? .systemGray3 : .systemBackground
+                            )
+                    )
+                    .clipShape(.rect(cornerRadius: 8))
             }
-            .buttonStyle(
-                KeyboardAccessoryButtonStyle(isProminent: isBuddyDrawerPresented)
-            )
-            .accessibilityIdentifier("keyboard.buddy")
-            .accessibilityLabel(
-                isBuddyDrawerPresented ? "Close Buddy tools" : "Open Buddy tools"
-            )
         }
         .animation(.snappy, value: model.canUndoCorrection)
         .animation(.snappy, value: model.automaticCorrectionOriginalText)
@@ -1189,10 +1201,17 @@ private struct ReturnKey: View {
     let metrics: KeyboardMetrics
 
     var body: some View {
-        Button {
-            model.playInputClick()
-            model.insertReturn()
-        } label: {
+        KeyboardPressAndHoldButton(
+            action: {
+                model.playInputClick()
+                model.insertReturn()
+            },
+            longPressAction: model.correctAllText,
+            accessibilityLabel: model.keyboardReturnLabel,
+            accessibilityHint: "Hold to automatically fix all text in this field.",
+            accessibilityIdentifier: "keyboard.return",
+            longPressAccessibilityActionName: "Fix all text"
+        ) { isPressed in
             Text(model.keyboardReturnLabel)
                 .font(.caption.weight(.medium))
                 .lineLimit(1)
@@ -1201,15 +1220,62 @@ private struct ReturnKey: View {
                     width: max(48, metrics.wideFunctionKeyWidth * 1.08),
                     height: metrics.keyHeight
                 )
+                .foregroundStyle(Color.primary)
+                .background(
+                    isPressed
+                        ? Color(uiColor: .systemGray2)
+                        : Color(uiColor: .systemGray3)
+                )
+                .clipShape(.rect(cornerRadius: 6))
         }
-        .buttonStyle(
-            KeyboardFunctionButtonStyle(
-                width: max(48, metrics.wideFunctionKeyWidth * 1.08),
-                height: metrics.keyHeight
-            )
-        )
-        .accessibilityLabel(model.keyboardReturnLabel)
-        .accessibilityIdentifier("keyboard.return")
+    }
+}
+
+private struct KeyboardPressAndHoldButton<Label: View>: View {
+    let action: () -> Void
+    let longPressAction: () -> Void
+    let accessibilityLabel: String
+    let accessibilityHint: String
+    let accessibilityIdentifier: String
+    let longPressAccessibilityActionName: String
+    @ViewBuilder let label: (Bool) -> Label
+
+    @GestureState private var isPressed = false
+
+    var body: some View {
+        label(isPressed)
+            .contentShape(.rect)
+            .gesture(actionGesture)
+            .simultaneousGesture(pressedStateGesture)
+            .accessibilityRepresentation {
+                Button(accessibilityLabel, action: action)
+                    .accessibilityHint(accessibilityHint)
+                    .accessibilityIdentifier(accessibilityIdentifier)
+                    .accessibilityAction(
+                        named: Text(longPressAccessibilityActionName),
+                        longPressAction
+                    )
+            }
+    }
+
+    private var actionGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.5, maximumDistance: 22)
+            .exclusively(before: TapGesture())
+            .onEnded { result in
+                switch result {
+                case .first:
+                    longPressAction()
+                case .second:
+                    action()
+                }
+            }
+    }
+
+    private var pressedStateGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .updating($isPressed) { _, state, _ in
+                state = true
+            }
     }
 }
 
