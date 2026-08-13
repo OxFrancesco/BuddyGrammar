@@ -20,6 +20,7 @@ public struct WordFrequencyLexicon: Sendable {
 
     private let entriesByLanguage: [String: [Match]]
     private let matchesByLanguageAndGeometry: [String: [String: Match]]
+    private let completionEntryIndicesByLanguageAndPrefix: [String: [String: [Int]]]
 
     public init() {
         var languageWords: [String: [String]] = [:]
@@ -46,6 +47,7 @@ public struct WordFrequencyLexicon: Sendable {
     public init(languageWords: [String: [String]]) {
         var entries: [String: [Match]] = [:]
         var matches: [String: [String: Match]] = [:]
+        var completionIndices: [String: [String: [Int]]] = [:]
         for (rawLanguage, words) in languageWords {
             let language = LanguageSupport.primaryCode(for: rawLanguage)
             var seenDisplay = Set<String>()
@@ -70,9 +72,18 @@ public struct WordFrequencyLexicon: Sendable {
             }
             entries[language] = ranked
             matches[language] = byGeometry
+            var indicesByPrefix: [String: [Int]] = [:]
+            for entry in ranked {
+                for prefixLength in 1...min(2, entry.geometry.count) {
+                    let prefix = String(entry.geometry.prefix(prefixLength))
+                    indicesByPrefix[prefix, default: []].append(entry.rank)
+                }
+            }
+            completionIndices[language] = indicesByPrefix
         }
         entriesByLanguage = entries
         matchesByLanguageAndGeometry = matches
+        completionEntryIndicesByLanguageAndPrefix = completionIndices
     }
 
     public func supports(languageCode: String?) -> Bool {
@@ -110,8 +121,11 @@ public struct WordFrequencyLexicon: Sendable {
         let language = LanguageSupport.primaryCode(for: languageCode)
         let canonicalTyped = Self.canonicalDisplay(for: prefix)
         let requiresApostropheMatch = canonicalTyped.contains("’")
+        let bucketPrefix = String(prefixGeometry.prefix(min(2, prefixGeometry.count)))
+        let entries = entriesByLanguage[language] ?? []
         var results: [String] = []
-        for entry in entriesByLanguage[language] ?? [] {
+        for index in completionEntryIndicesByLanguageAndPrefix[language]?[bucketPrefix] ?? [] {
+            let entry = entries[index]
             guard (requiresApostropheMatch
                     ? entry.display.hasPrefix(canonicalTyped)
                     : entry.geometry.hasPrefix(prefixGeometry)),

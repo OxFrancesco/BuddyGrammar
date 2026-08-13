@@ -26,6 +26,19 @@ class RankedLanguageLexiconTest {
         assertEquals("l’ho", lexicon.match("l'ho", "it-IT")?.display)
         assertEquals(listOf("c’è"), lexicon.completions("c'", "it-CH", 1))
     }
+
+    @Test
+    fun `correction candidates stay language and length bounded`() {
+        val lexicon = contractLexicon()
+        val candidates = lexicon.correctionCandidates("performence", "en-US").toList()
+
+        assertEquals(true, "performance" in candidates)
+        assertEquals(false, "home" in candidates)
+        assertEquals(true, candidates.all { it.length in 9..13 })
+        assertEquals(emptyList<String>(), lexicon.correctionCandidates("home", "it").filter {
+            it == "home"
+        })
+    }
 }
 
 internal fun contractLexicon(): RankedLanguageLexicon = RankedLanguageLexicon.parse(

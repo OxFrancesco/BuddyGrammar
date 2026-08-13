@@ -44,6 +44,12 @@ internal class KeyboardInteractionComposeAdapter(
     private val latencyRecorder: KeyboardLatencyRecorder = KeyboardLatencyRecorder.production,
 ) {
     private val pointerSession = KeyboardPointerSessionAdapter<PointerId>(session)
+    private val audioManager = feedbackView.context.getSystemService(AudioManager::class.java)
+    private val systemSoundEffectsEnabled = Settings.System.getInt(
+        feedbackView.context.contentResolver,
+        Settings.System.SOUND_EFFECTS_ENABLED,
+        0,
+    ) != 0
 
     var visualState by mutableStateOf(pointerSession.visualState)
         private set
@@ -155,13 +161,6 @@ internal class KeyboardInteractionComposeAdapter(
             }
         }
         feedbackView.performHapticFeedback(constant)
-        val context = feedbackView.context
-        val audioManager = context.getSystemService(AudioManager::class.java)
-        val systemSoundEffectsEnabled = Settings.System.getInt(
-            context.contentResolver,
-            Settings.System.SOUND_EFFECTS_ENABLED,
-            0,
-        ) != 0
         if (
             audioManager != null && KeyboardFeedbackPolicy.shouldPlayStandardClick(
                 feedback = kind,

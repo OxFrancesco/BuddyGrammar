@@ -37,6 +37,7 @@ import com.francescooddo.buddygrammar.core.AndroidIcuGraphemeBoundaryProvider
 import com.francescooddo.buddygrammar.core.AutomaticSuggestionReplacement
 import com.francescooddo.buddygrammar.core.AutomaticSuggestionSource
 import com.francescooddo.buddygrammar.core.BuddyGrammarApi
+import com.francescooddo.buddygrammar.core.BuddySettings
 import com.francescooddo.buddygrammar.core.BuddyRewriteIntent
 import com.francescooddo.buddygrammar.core.CatalogPlane
 import com.francescooddo.buddygrammar.core.CorrectionProposalEditorStamp
@@ -266,6 +267,7 @@ class BuddyGrammarImeService :
     )
     private val swipeTypingEngine by lazy { SwipeVocabulary.productionEngine(keyboardLexicon) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var cachedSettings = BuddySettings()
 
     private val lifecycleRegistry = LifecycleRegistry(this)
     private val store = ViewModelStore()
@@ -283,14 +285,13 @@ class BuddyGrammarImeService :
             languageTagProvider = { currentLanguageTag },
             cloudFallback = { png ->
                 refreshEditorCapabilities()
-                val settings = preferences.loadSettings()
                 if (!editorCapabilities.cloudHandwriting.isAllowed) {
                     null
                 } else {
                     api.recognizeHandwriting(
                         imagePng = png,
                         clientId = preferences.installationId(),
-                        modelId = settings.activeModelId,
+                        modelId = cachedSettings.activeModelId,
                         languageCode = currentLanguageTag,
                     )
                 }
@@ -346,6 +347,7 @@ class BuddyGrammarImeService :
         private set
 
     private var correctionJob: Job? = null
+    private var typingRefreshJob: Job? = null
     private val correctionRequestOwnership = CorrectionRequestOwnership()
     private val voiceRequestOwnership = VoiceRequestOwnership()
     private var correctionUndoJob: Job? = null
@@ -500,6 +502,8 @@ class BuddyGrammarImeService :
 
     /** Idempotent because Android may finish the view and input separately. */
     private fun teardownEndedField() {
+        typingRefreshJob?.cancel()
+        typingRefreshJob = null
         synchronizeLearningResetGenerations()
         persistAdaptiveProfile(force = true)
         lastAdaptiveDecision = null
@@ -563,12 +567,7 @@ class BuddyGrammarImeService :
                 localCorrectionOriginalText = null
             }
         }
-        val currentWordLength = readTextBeforeCursorForIntelligence(SUGGESTION_CONTEXT)
-            .orEmpty()
-            .takeLastWhile(WordTokenNormalizer::isWordCharacter)
-            .let { TapWordDecoder.expectedTapCount(it) ?: 0 }
-        if (currentWordTaps.size != currentWordLength) clearCurrentWordTaps()
-        refreshTypingState()
+        scheduleTypingStateRefresh()
     }
 
     override fun onDestroy() {
@@ -631,7 +630,7 @@ class BuddyGrammarImeService :
         )
         if (
             policy == TypingPolicy.PRACTICE &&
-            preferences.loadSettings().personalizedPracticeEnabled
+            cachedSettings.personalizedPracticeEnabled
         ) {
             expectedPracticeCharacter(before.length)?.let { intendedCharacter ->
                 typingIntelligence.observe(
@@ -821,7 +820,7 @@ class BuddyGrammarImeService :
             boundaryText = text.takeIf { finishesWord && didCommitBoundary }.orEmpty(),
         )
         keyboardState.onCharacterCommitted()
-        refreshTypingState()
+        scheduleTypingStateRefresh()
     }
 
     fun onSpaceKey() {
@@ -841,7 +840,7 @@ class BuddyGrammarImeService :
             appliedCorrection,
             boundaryText = " ".takeIf { didCommitBoundary }.orEmpty(),
         )
-        refreshTypingState()
+        scheduleTypingStateRefresh()
     }
 
     fun onDeleteKey() {
@@ -879,7 +878,7 @@ class BuddyGrammarImeService :
             connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
             connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL))
         }
-        refreshTypingState()
+        scheduleTypingStateRefresh()
     }
 
     fun onDeleteWordKey() {
@@ -902,7 +901,7 @@ class BuddyGrammarImeService :
         if (!deleted) {
             sendWordDeleteKeyEvent(connection)
         }
-        refreshTypingState()
+        scheduleTypingStateRefresh()
     }
 
     fun moveCursorBy(characterDelta: Int) {
@@ -990,7 +989,7 @@ class BuddyGrammarImeService :
             appliedCorrection,
             boundaryText = "\n".takeIf { didCommitNewline }.orEmpty(),
         )
-        refreshTypingState()
+        scheduleTypingStateRefresh()
     }
 
     fun onShiftKey() {
@@ -1444,7 +1443,7 @@ class BuddyGrammarImeService :
             setStatus(editorCapabilities.readContext.denialMessage("★ correction"), error = true)
             return
         }
-        val settings = preferences.loadSettings()
+        val settings = cachedSettings
         val snapshot = captureSnapshot()
         refreshEditorCapabilities()
         if (!editorCapabilities.allowsCloudCorrectionDispatch()) {
@@ -1547,7 +1546,7 @@ class BuddyGrammarImeService :
         clearReviewProposal()
         if (didApply) {
             observeCommittedText(replacement)
-            val settings = preferences.loadSettings()
+            val settings = cachedSettings
             beginCorrectionUndo(
                 state = CorrectionUndoState(
                     originalText = snapshot.candidate.capturedText,
@@ -1769,6 +1768,8 @@ class BuddyGrammarImeService :
     // endregion
 
     private fun localEdit(preserveObservedSuffix: Boolean = false) {
+        typingRefreshJob?.cancel()
+        typingRefreshJob = null
         clearLocalCorrectionReceipt(acceptLearning = true)
         clearReviewProposal()
         clearCorrectionUndo()
@@ -1887,8 +1888,7 @@ class BuddyGrammarImeService :
 
     private fun adaptiveTypingPolicy(): TypingPolicy {
         if (secureField) return TypingPolicy.SENSITIVE
-        val settings = preferences.loadSettings()
-        if (!settings.adaptiveTypingEnabled || !editorCapabilities.suggestions.isAllowed) {
+        if (!cachedSettings.adaptiveTypingEnabled || !editorCapabilities.suggestions.isAllowed) {
             return TypingPolicy.LITERAL
         }
         if (activePracticeSession != null) return TypingPolicy.PRACTICE
@@ -2005,7 +2005,7 @@ class BuddyGrammarImeService :
 
     private fun applyLocalWordCorrectionIfNeeded(): AppliedLocalCorrection? {
         if (!editorCapabilities.autoCorrection.isAllowed || activePracticeSession != null) return null
-        if (!preferences.loadSettings().automaticallyCorrectWords) return null
+        if (!cachedSettings.automaticallyCorrectWords) return null
         val connection = currentInputConnection ?: return null
         val before = readTextBeforeCursorForIntelligence(SUGGESTION_CONTEXT) ?: return null
         val rawCurrentWord = WordTokenNormalizer.rawTrailingWord(before)
@@ -2360,6 +2360,26 @@ class BuddyGrammarImeService :
     }
 
     private fun refreshTypingState() {
+        typingRefreshJob?.cancel()
+        typingRefreshJob = null
+        performTypingStateRefresh()
+    }
+
+    /**
+     * Prediction work is intentionally outside the editor commit critical
+     * section. Rapid taps cancel stale work and pay for one fresh context read
+     * after the short burst instead of one read and full dictionary pass per key.
+     */
+    private fun scheduleTypingStateRefresh() {
+        typingRefreshJob?.cancel()
+        typingRefreshJob = scope.launch {
+            delay(TYPING_REFRESH_DELAY_MS)
+            typingRefreshJob = null
+            performTypingStateRefresh()
+        }
+    }
+
+    private fun performTypingStateRefresh() {
         val refreshPlan = KeyboardRefreshPolicy.plan(
             suggestionsAllowed = editorCapabilities.suggestions.isAllowed,
             readContextAllowed = editorCapabilities.readContext.isAllowed,
@@ -2381,6 +2401,10 @@ class BuddyGrammarImeService :
             }
             return
         }
+        val currentWordLength = before
+            .takeLastWhile(WordTokenNormalizer::isWordCharacter)
+            .let { TapWordDecoder.expectedTapCount(it) ?: 0 }
+        if (currentWordTaps.size != currentWordLength) clearCurrentWordTaps()
         keyboardState.updateAutoShift(before, capitalizationMode)
         if (!refreshPlan.shouldShowSuggestions) {
             suggestions = emptyList()
@@ -2595,6 +2619,7 @@ class BuddyGrammarImeService :
     }
 
     private fun refreshEditorCapabilities(info: EditorInfo? = currentInputEditorInfo) {
+        if (info != null) cachedSettings = preferences.loadSettings()
         editorCapabilities = if (info == null) {
             EditorCapabilities.INACTIVE
         } else {
@@ -2602,7 +2627,7 @@ class BuddyGrammarImeService :
                 inputType = info.inputType,
                 imeOptions = info.imeOptions,
                 privateImeOptions = info.privateImeOptions,
-                cloudConsentGranted = preferences.loadSettings().hasAcceptedCloudProcessing,
+                cloudConsentGranted = cachedSettings.hasAcceptedCloudProcessing,
                 platformVoiceAvailable = SpeechRecognizer.isRecognitionAvailable(this),
                 editorCanMoveCursor = editorCursorPrimitiveAvailable,
                 sharedTranscriptAvailable = preferences.loadPendingTranscript() != null,
@@ -2680,6 +2705,7 @@ class BuddyGrammarImeService :
         const val CORRECTION_CONTEXT_READ_LIMIT = MAX_CONTEXT + 128
         const val ANCHOR_LENGTH = 64
         const val SUGGESTION_CONTEXT = 64
+        const val TYPING_REFRESH_DELAY_MS = 24L
         const val MAX_WORD_DELETE_CONTEXT = 256
         const val GRAPHEME_CONTEXT_UTF16 = 256
         const val STATUS_LIFETIME_MS = 4_000L

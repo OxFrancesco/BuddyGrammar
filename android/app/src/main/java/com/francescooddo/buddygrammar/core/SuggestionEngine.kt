@@ -228,7 +228,10 @@ object SuggestionEngine {
             (personal?.usageCount(currentWord, languageTag) ?: 0) <
             PERSONAL_USAGE_CORRECTION_PROTECTION_THRESHOLD
         ) {
-            LocalWordCorrector.bestCorrection(currentWord, lexicon.words(languageTag))
+            LocalWordCorrector.bestCorrection(
+                currentWord,
+                lexicon.correctionCandidates(currentWord, languageTag),
+            )
         } else {
             null
         }

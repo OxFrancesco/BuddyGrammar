@@ -92,6 +92,12 @@ final class SuggestionLogicTests: XCTestCase {
                 candidates: ["xylophone"]
             )
         )
+        XCTAssertNil(
+            LocalWordCorrector.bestCorrection(
+                for: "cat",
+                candidates: ["cat", "car"]
+            )
+        )
     }
 
     func testHandwritingAllCapsIsLowercasedInsideASentence() {

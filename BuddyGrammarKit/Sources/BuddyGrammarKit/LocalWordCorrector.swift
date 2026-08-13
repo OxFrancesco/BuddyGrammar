@@ -7,22 +7,35 @@ public enum LocalWordCorrector {
     ) -> String? {
         let source = typedWord.lowercased()
         guard source.count >= 2 else { return nil }
+        let maximumLengthDelta = source.count >= 6 ? 2 : 1
+        var seen = Set<String>()
+        var best: RankedCandidate?
 
-        let ranked = candidates
-            .lazy
-            .filter { !$0.isEmpty && $0.caseInsensitiveCompare(typedWord) != .orderedSame }
-            .map { candidate in
-                let normalized = candidate.lowercased()
-                return (candidate, normalizedDistance(from: source, to: normalized))
+        for (index, candidate) in candidates.enumerated() {
+            guard !candidate.isEmpty,
+                  abs(candidate.count - source.count) <= maximumLengthDelta else {
+                continue
             }
-            .filter { $0.1 <= acceptanceThreshold(forLength: max(source.count, $0.0.count)) }
-            .sorted { lhs, rhs in
-                if abs(lhs.1 - rhs.1) > 0.0001 { return lhs.1 < rhs.1 }
-                return lhs.0.count < rhs.0.count
+            let normalized = candidate.lowercased()
+            guard seen.insert(normalized).inserted else { continue }
+            if normalized == source { return nil }
+            let ranked = RankedCandidate(
+                word: candidate,
+                distance: normalizedDistance(from: source, to: normalized),
+                index: index
+            )
+            guard ranked.distance <= acceptanceThreshold(
+                forLength: max(source.count, candidate.count)
+            ) else {
+                continue
             }
+            if best.map({ ranked.isPreferred(over: $0) }) ?? true {
+                best = ranked
+            }
+        }
 
-        guard let best = ranked.first?.0 else { return nil }
-        return matchingCapitalization(of: typedWord, appliedTo: best)
+        guard let best else { return nil }
+        return matchingCapitalization(of: typedWord, appliedTo: best.word)
     }
 
     private static func normalizedDistance(from source: String, to target: String) -> Double {
@@ -30,32 +43,44 @@ public enum LocalWordCorrector {
         let rhs = Array(target)
         guard !lhs.isEmpty, !rhs.isEmpty else { return 1 }
 
-        var matrix = Array(
-            repeating: Array(repeating: 0.0, count: rhs.count + 1),
-            count: lhs.count + 1
-        )
-        for index in 0...lhs.count { matrix[index][0] = Double(index) * 0.9 }
-        for index in 0...rhs.count { matrix[0][index] = Double(index) * 0.9 }
+        var twoRowsBack = Array(repeating: 0.0, count: rhs.count + 1)
+        var previousRow = (0...rhs.count).map { Double($0) * 0.9 }
 
         for sourceIndex in 1...lhs.count {
+            var currentRow = Array(repeating: 0.0, count: rhs.count + 1)
+            currentRow[0] = Double(sourceIndex) * 0.9
             for targetIndex in 1...rhs.count {
-                let substitution = matrix[sourceIndex - 1][targetIndex - 1]
+                let substitution = previousRow[targetIndex - 1]
                     + substitutionCost(lhs[sourceIndex - 1], rhs[targetIndex - 1])
-                let deletion = matrix[sourceIndex - 1][targetIndex] + 0.9
-                let insertion = matrix[sourceIndex][targetIndex - 1] + 0.9
+                let deletion = previousRow[targetIndex] + 0.9
+                let insertion = currentRow[targetIndex - 1] + 0.9
                 var best = min(substitution, deletion, insertion)
 
                 if sourceIndex > 1,
                    targetIndex > 1,
                    lhs[sourceIndex - 1] == rhs[targetIndex - 2],
                    lhs[sourceIndex - 2] == rhs[targetIndex - 1] {
-                    best = min(best, matrix[sourceIndex - 2][targetIndex - 2] + 0.45)
+                    best = min(best, twoRowsBack[targetIndex - 2] + 0.45)
                 }
-                matrix[sourceIndex][targetIndex] = best
+                currentRow[targetIndex] = best
             }
+            twoRowsBack = previousRow
+            previousRow = currentRow
         }
 
-        return matrix[lhs.count][rhs.count] / Double(max(lhs.count, rhs.count))
+        return previousRow[rhs.count] / Double(max(lhs.count, rhs.count))
+    }
+
+    private struct RankedCandidate {
+        let word: String
+        let distance: Double
+        let index: Int
+
+        func isPreferred(over other: Self) -> Bool {
+            if abs(distance - other.distance) > 0.0001 { return distance < other.distance }
+            if word.count != other.word.count { return word.count < other.word.count }
+            return index < other.index
+        }
     }
 
     private static func substitutionCost(_ lhs: Character, _ rhs: Character) -> Double {

@@ -588,8 +588,6 @@ private struct LetterKeyboardLayer: View {
     let metrics: KeyboardMetrics
     let interaction: KeyboardPointerInteraction
 
-    @State private var keyFrames: [String: CGRect] = [:]
-
     var body: some View {
         VStack(spacing: metrics.rowSpacing) {
             RoutedCharacterRow(
@@ -631,12 +629,10 @@ private struct LetterKeyboardLayer: View {
             )
         }
         .onPreferenceChange(KeyFramePreferenceKey.self) { frames in
-            keyFrames = frames
             interaction.updateKeyFrames(frames)
         }
         .onDisappear {
             interaction.cancel()
-            keyFrames = [:]
         }
     }
 }
@@ -1470,20 +1466,20 @@ final class KeyboardPointerInteraction {
         for effect in effects {
             switch effect {
             case .pressed(let target):
-                pressedTarget = target
+                if pressedTarget != target { pressedTarget = target }
                 if target == nil {
-                    isCursorMode = false
+                    if isCursorMode { isCursorMode = false }
                 }
             case .preview(let text):
-                previewText = text
+                if previewText != text { previewText = text }
             case .schedule(let deadline):
                 schedule(deadline)
             case .showAlternates(let options, let index):
-                alternateOptions = options
-                selectedAlternateIndex = index
+                if alternateOptions != options { alternateOptions = options }
+                if selectedAlternateIndex != index { selectedAlternateIndex = index }
             case .hideAlternates:
-                alternateOptions = []
-                selectedAlternateIndex = 0
+                if !alternateOptions.isEmpty { alternateOptions = [] }
+                if selectedAlternateIndex != 0 { selectedAlternateIndex = 0 }
             case .commitText(let text):
                 commit(text)
                 finishCommitLatencyMeasurement()
@@ -1494,7 +1490,7 @@ final class KeyboardPointerInteraction {
                 model?.deleteWordBackward()
                 finishCommitLatencyMeasurement()
             case .moveCursor(let offset):
-                isCursorMode = true
+                if !isCursorMode { isCursorMode = true }
                 model?.moveCursor(byCharacterOffset: offset)
             case .swipeBegan(let point):
                 cancelActiveLatencyMeasurements()
@@ -1509,7 +1505,7 @@ final class KeyboardPointerInteraction {
                 keyFeedbackCount &+= 1
                 finishFeedbackLatencyMeasurement()
             case .feedback(.selection):
-                if pressedTarget == .space {
+                if pressedTarget == .space, !isCursorMode {
                     isCursorMode = true
                 }
                 selectionFeedbackCount &+= 1

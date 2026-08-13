@@ -430,8 +430,9 @@ final class KeyboardModel {
     @ObservationIgnored private let adaptiveStore: AdaptiveLearningStore?
     @ObservationIgnored private let keyboardCatalog: KeyboardCatalog?
     @ObservationIgnored private let languageDefaults: UserDefaults
-    @ObservationIgnored private let completionSource = WordCompletionSource()
+    @ObservationIgnored private lazy var completionSource = WordCompletionSource()
     @ObservationIgnored private var correctionTask: Task<Void, Never>?
+    @ObservationIgnored private var typingRefreshTask: Task<Void, Never>?
     @ObservationIgnored private var correctionRequestID: UUID?
     @ObservationIgnored private var statusDismissTask: Task<Void, Never>?
     @ObservationIgnored private var undoDismissTask: Task<Void, Never>?
@@ -445,10 +446,10 @@ final class KeyboardModel {
     @ObservationIgnored private var supplementalReplacements: [String: String] = [:]
     @ObservationIgnored private var cachedSwipeEngine: SwipeTypingEngine?
     @ObservationIgnored private var didWarmUpConnection = false
-    @ObservationIgnored private let textIntelligence: TextIntelligence
+    @ObservationIgnored private var textIntelligenceBacking: TextIntelligence?
     @ObservationIgnored private var observedTextSuffix = ObservedTextSuffix()
     @ObservationIgnored private var typingIntelligence: TypingIntelligence
-    @ObservationIgnored private let tapWordDecoder = TapWordDecoder()
+    @ObservationIgnored private lazy var tapWordDecoder = TapWordDecoder()
     @ObservationIgnored private var currentWordTaps: [TapWordLatticeTap] = []
     @ObservationIgnored private var currentWordTapTargetStartedAtProvenBoundary = false
     @ObservationIgnored private var activePracticeSession: ActivePracticeSession?
@@ -461,6 +462,9 @@ final class KeyboardModel {
     @ObservationIgnored private var observedTypingResetGeneration: UInt64?
     @ObservationIgnored private var languagePersonalizationWasAvailable: Bool?
     @ObservationIgnored private var typingPersonalizationWasAvailable: Bool?
+    @ObservationIgnored private var cachedSettings = BuddyGrammarSettings.default
+    @ObservationIgnored private var shouldPresentStaleContextAfterRefresh = false
+    @ObservationIgnored private var needsDocumentContextRefresh = false
 
     init(
         correctionClient: OpenRouterCorrectionClient = OpenRouterCorrectionClient(),
@@ -475,6 +479,7 @@ final class KeyboardModel {
         self.preferences = preferences
         self.adaptiveStore = adaptiveStore
         self.languageDefaults = languageDefaults
+        self.cachedSettings = preferences?.loadSettings() ?? .default
         let keyboardCatalog = try? KeyboardCatalog.bundled()
         self.keyboardCatalog = keyboardCatalog
         if let storedLanguage = languageDefaults.string(
@@ -493,14 +498,24 @@ final class KeyboardModel {
                 minimumDeleteRepeatInterval: deleteRepeatInterval
             )
         }
-        self.textIntelligence = textIntelligence ?? TextIntelligence(
-            personalLanguageModel: preferences?.makePersonalLanguageModel()
-                ?? PersonalLanguageModel(defaults: nil)
-        )
+        self.textIntelligenceBacking = textIntelligence
         self.typingIntelligence = TypingIntelligence(
             profile: adaptiveStore?.loadTypingProfile() ?? TypingProfile(),
             policy: .literal
         )
+    }
+
+    private var textIntelligence: TextIntelligence {
+        if let textIntelligenceBacking { return textIntelligenceBacking }
+        let intelligence = TextIntelligence(
+            personalLanguageModel: preferences?.makePersonalLanguageModel()
+                ?? PersonalLanguageModel(defaults: nil)
+        )
+        if !languagePersonalizationIsAvailable {
+            intelligence.discardInMemoryPersonalization()
+        }
+        textIntelligenceBacking = intelligence
+        return intelligence
     }
 
     func connect(delegate: KeyboardModelDelegate) {
@@ -518,7 +533,7 @@ final class KeyboardModel {
         refreshAvailability()
         refreshAdaptiveState()
         refreshPendingTranscriptAvailability()
-        refreshSuggestions()
+        scheduleSuggestionsRefresh()
         warmUpCorrectionConnectionIfNeeded()
     }
 
@@ -553,6 +568,7 @@ final class KeyboardModel {
     private func refreshEditorCapabilities() {
         hasFullAccess = delegate?.keyboardHasFullAccess ?? false
         let settings = preferences?.loadSettings() ?? .default
+        cachedSettings = settings
         let traits = delegate?.editorFieldTraits ?? EditorFieldTraits(kind: .unknown)
         editorCapabilities = EditorCapabilityPolicy.evaluate(
             traits: traits,
@@ -759,8 +775,6 @@ final class KeyboardModel {
         literalKey: Character,
         timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime
     ) {
-        synchronizeLearningResetState()
-        configureTypingPolicy()
         guard editorCapabilities.suggestions.isAllowed,
               editorCapabilities.readContext.isAllowed else {
             insertLiteralCharacter(String(literalKey))
@@ -1461,7 +1475,7 @@ final class KeyboardModel {
         } else {
             if languagePersonalizationWasAvailable != false {
                 discardPendingPersonalLearningState()
-                textIntelligence.discardInMemoryPersonalization()
+                textIntelligenceBacking?.discardInMemoryPersonalization()
             }
             observedLanguageResetGeneration = nil
         }
@@ -1523,14 +1537,13 @@ final class KeyboardModel {
     }
 
     private func typingPolicy() -> TypingPolicy {
-        let settings = preferences?.loadSettings() ?? .default
         guard editorCapabilities.automaticCorrection.isAllowed else {
             return .literal
         }
         if activePracticeSession != nil {
-            return settings.adaptiveTypingEnabled ? .practice : .literal
+            return cachedSettings.adaptiveTypingEnabled ? .practice : .literal
         }
-        guard settings.adaptiveTypingEnabled else {
+        guard cachedSettings.adaptiveTypingEnabled else {
             return .literal
         }
         guard typingPersonalizationIsAvailable else {
@@ -1542,8 +1555,7 @@ final class KeyboardModel {
     }
 
     private func expectedPracticeKey(atResponseLength responseLength: Int) -> Character? {
-        let settings = preferences?.loadSettings() ?? .default
-        guard settings.personalizedPracticeEnabled,
+        guard cachedSettings.personalizedPracticeEnabled,
               let session = activePracticeSession else {
             return nil
         }
@@ -1555,7 +1567,6 @@ final class KeyboardModel {
     }
 
     private func markAdaptiveProfileDirty() {
-        synchronizeLearningResetState()
         guard typingPersonalizationIsAvailable else { return }
         adaptiveProfileIsDirty = true
         observationsSinceAdaptiveSave += 1
@@ -1617,7 +1628,6 @@ final class KeyboardModel {
               let preferences else {
             return nil
         }
-        let settings = preferences.loadSettings()
 
         let languageCode = activeKeyboardLanguageCode
             .split(separator: "-")
@@ -1626,7 +1636,7 @@ final class KeyboardModel {
         return try await handwritingClient.recognize(
             imageData: imageData,
             clientID: preferences.installationIdentifier(),
-            modelID: settings.activeOpenRouterModelID,
+            modelID: cachedSettings.activeOpenRouterModelID,
             languageCode: languageCode
         )
     }
@@ -1643,11 +1653,15 @@ final class KeyboardModel {
 
     func refreshSuggestions() {
         synchronizeLearningResetState()
+        updateSuggestions(context: intelligenceContextBeforeInput())
+    }
+
+    private func updateSuggestions(context: String?) {
         guard activePracticeSession == nil,
               editorCapabilities.suggestions.isAllowed,
               editorCapabilities.readContext.isAllowed,
-              let context = intelligenceContextBeforeInput() else {
-            suggestions = []
+              let context else {
+            if !suggestions.isEmpty { suggestions = [] }
             return
         }
         let analysis = TypingContextAnalyzer.analyze(context)
@@ -1665,7 +1679,10 @@ final class KeyboardModel {
         if let emojiSuggestion {
             next.append(emojiSuggestion)
         }
-        suggestions = Array(next.prefix(3))
+        let refreshedSuggestions = Array(next.prefix(3))
+        if suggestions != refreshedSuggestions {
+            suggestions = refreshedSuggestions
+        }
     }
 
     private func latticeSuggestion(for context: String?) -> KeyboardSuggestion? {
@@ -1920,9 +1937,8 @@ final class KeyboardModel {
         }
         let prefix = String(context.dropLast(rawWord.count))
 
-        let settings = preferences?.loadSettings() ?? .default
         if activePracticeSession == nil,
-           settings.automaticallyCorrectWords,
+           cachedSettings.automaticallyCorrectWords,
            editorCapabilities.automaticCorrection.isAllowed {
             if let correction = latticeCorrection(
                 for: word,
@@ -1945,7 +1961,7 @@ final class KeyboardModel {
         }
 
         if activePracticeSession == nil,
-           settings.automaticallyCorrectWords,
+           cachedSettings.automaticallyCorrectWords,
            editorCapabilities.automaticCorrection.isAllowed,
            let correction = localTextSuggestions(for: context, limit: 3)
                .first(where: { $0.kind == .correction }) {
@@ -2207,9 +2223,20 @@ final class KeyboardModel {
         if invalidatedProposal {
             clearCorrectionProposal()
         }
+        shouldPresentStaleContextAfterRefresh =
+            shouldPresentStaleContextAfterRefresh || invalidatedProposal
+        if correctionTask != nil {
+            cancelCorrection()
+            setQuietly(baselineStatus)
+        }
+        scheduleDocumentContextRefresh()
+    }
+
+    private func reconcileDocumentContext() {
         let previousCapabilities = editorCapabilities
         refreshEditorCapabilities()
-        refreshAutomaticShiftState()
+        let context = intelligenceContextBeforeInput()
+        refreshAutomaticShiftState(fromContext: context)
         if previousCapabilities != editorCapabilities {
             baselineStatus = availabilityStatus()
         }
@@ -2236,7 +2263,6 @@ final class KeyboardModel {
             || delegate?.canUndoCorrection(pendingCorrectionUndo) != true {
             clearCorrectionUndo(acceptLearning: false)
         }
-        let context = intelligenceContextBeforeInput()
         observedTextSuffix.retainIfUnchanged(
             contextBeforeInput: context
         )
@@ -2250,18 +2276,20 @@ final class KeyboardModel {
         if currentWordTaps.count != currentWordLength {
             currentWordTaps.removeAll(keepingCapacity: true)
         }
-        refreshSuggestions()
+        updateSuggestions(context: context)
         refreshPendingTranscriptAvailability()
-        if invalidatedProposal {
+        if shouldPresentStaleContextAfterRefresh {
+            shouldPresentStaleContextAfterRefresh = false
             present(.staleContext)
         }
-        guard correctionTask != nil else { return }
-        cancelCorrection()
-        setQuietly(baselineStatus)
     }
 
     func deactivate() {
         editorFieldEpoch &+= 1
+        typingRefreshTask?.cancel()
+        typingRefreshTask = nil
+        shouldPresentStaleContextAfterRefresh = false
+        needsDocumentContextRefresh = false
         cancelCorrection()
         clearCorrectionProposal()
         clearCorrectionUndo()
@@ -2270,7 +2298,7 @@ final class KeyboardModel {
         lastTypingDecision = nil
         pendingRejectedDecision = nil
         currentWordTaps.removeAll(keepingCapacity: true)
-        textIntelligence.persist()
+        textIntelligenceBacking?.persist()
         setQuietly(baselineStatus)
     }
 
@@ -2311,7 +2339,7 @@ final class KeyboardModel {
 
         guard requireCapability(editorCapabilities.cloudCorrection),
               requireCapability(editorCapabilities.readContext) else { return }
-        let settings = preferences?.loadSettings() ?? .default
+        let settings = cachedSettings
 
         guard let snapshot = delegate?.captureCorrectionSnapshot(
             requestScope: requestScope
@@ -2652,17 +2680,28 @@ final class KeyboardModel {
 
     private func refreshAutomaticShiftState(ownedInsertion: String? = nil) {
         guard layoutMode == .letters, !userEnabledCapsLock else { return }
-        let contextualShift = KeyboardAutomaticShiftPolicy.shouldShift(
-            mode: keyboardAutoCapitalization,
-            contextBeforeInput: intelligenceContextBeforeInput()
-        )
-        let shouldShift = contextualShift ?? ownedInsertion.flatMap {
-            KeyboardAutomaticShiftPolicy.shouldShiftAfterOwnedInsertion(
+        if let ownedInsertion {
+            let shouldShift = KeyboardAutomaticShiftPolicy.shouldShiftAfterOwnedInsertion(
                 mode: keyboardAutoCapitalization,
                 wasShifted: shiftState.isShifted,
-                insertedText: $0
+                insertedText: ownedInsertion
             )
+            applyAutomaticShift(shouldShift)
+        } else {
+            refreshAutomaticShiftState(fromContext: intelligenceContextBeforeInput())
         }
+    }
+
+    private func refreshAutomaticShiftState(fromContext context: String?) {
+        guard layoutMode == .letters, !userEnabledCapsLock else { return }
+        let shouldShift = KeyboardAutomaticShiftPolicy.shouldShift(
+            mode: keyboardAutoCapitalization,
+            contextBeforeInput: context
+        )
+        applyAutomaticShift(shouldShift)
+    }
+
+    private func applyAutomaticShift(_ shouldShift: Bool?) {
         guard let shouldShift else { return }
         switch keyboardAutoCapitalization {
         case .none:
@@ -2675,10 +2714,41 @@ final class KeyboardModel {
     }
 
     private func refreshAfterEditorMutation(ownedInsertion: String? = nil) {
-        refreshAutomaticShiftState(ownedInsertion: ownedInsertion)
-        refreshSuggestions()
+        if let ownedInsertion {
+            refreshAutomaticShiftState(ownedInsertion: ownedInsertion)
+            scheduleSuggestionsRefresh()
+        } else {
+            scheduleDocumentContextRefresh()
+        }
     }
 
+    private func scheduleSuggestionsRefresh() {
+        if needsDocumentContextRefresh {
+            scheduleDocumentContextRefresh()
+            return
+        }
+        typingRefreshTask?.cancel()
+        typingRefreshTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(Self.typingRefreshDelayMilliseconds))
+            guard !Task.isCancelled else { return }
+            self?.typingRefreshTask = nil
+            self?.refreshSuggestions()
+        }
+    }
+
+    private func scheduleDocumentContextRefresh() {
+        needsDocumentContextRefresh = true
+        typingRefreshTask?.cancel()
+        typingRefreshTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(Self.typingRefreshDelayMilliseconds))
+            guard !Task.isCancelled else { return }
+            self?.typingRefreshTask = nil
+            self?.needsDocumentContextRefresh = false
+            self?.reconcileDocumentContext()
+        }
+    }
+
+    private static let typingRefreshDelayMilliseconds = 24
     private static let autocorrectionBoundaryCharacters: Set<String> = [
         ".", ",", "?", "!", ";", ":",
     ]

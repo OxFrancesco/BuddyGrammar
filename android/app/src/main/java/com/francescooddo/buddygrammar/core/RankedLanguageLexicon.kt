@@ -19,10 +19,12 @@ class RankedLanguageLexicon(
 
     private val entriesByLanguage: Map<String, List<Match>>
     private val matchesByLanguageAndGeometry: Map<String, Map<String, Match>>
+    private val correctionEntriesByLanguageAndLength: Map<String, Map<Int, List<Match>>>
 
     init {
         val entries = mutableMapOf<String, List<Match>>()
         val matches = mutableMapOf<String, Map<String, Match>>()
+        val corrections = mutableMapOf<String, Map<Int, List<Match>>>()
         languageWords.forEach { (rawLanguage, words) ->
             val language = LanguageSupport.scope(rawLanguage)
             val seenDisplay = mutableSetOf<String>()
@@ -39,9 +41,11 @@ class RankedLanguageLexicon(
             }
             entries[language] = ranked
             matches[language] = byGeometry
+            corrections[language] = ranked.groupBy { it.display.length }
         }
         entriesByLanguage = entries
         matchesByLanguageAndGeometry = matches
+        correctionEntriesByLanguageAndLength = corrections
     }
 
     fun supports(languageTag: String?): Boolean =
@@ -52,6 +56,24 @@ class RankedLanguageLexicon(
 
     fun words(languageTag: String?): List<String> =
         entriesByLanguage[LanguageSupport.scope(languageTag)].orEmpty().map(Match::display)
+
+    /**
+     * Returns only words whose length can pass the typo corrector's first
+     * gate. This keeps each key press from copying and scanning the complete
+     * production dictionary.
+     */
+    fun correctionCandidates(word: String, languageTag: String?): Iterable<String> {
+        val sourceLength = word.length
+        val maximumLengthDelta = if (sourceLength >= 6) 2 else 1
+        val entriesByLength =
+            correctionEntriesByLanguageAndLength[LanguageSupport.scope(languageTag)].orEmpty()
+        return ((sourceLength - maximumLengthDelta).coerceAtLeast(1)..
+            sourceLength + maximumLengthDelta)
+            .asSequence()
+            .flatMap { length -> entriesByLength[length].orEmpty().asSequence() }
+            .map(Match::display)
+            .asIterable()
+    }
 
     fun match(word: String, languageTag: String?): Match? {
         val geometry = SwipeWordNormalizer.normalize(word)?.geometry ?: return null
