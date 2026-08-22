@@ -5,7 +5,7 @@ settings:
   base:
     SWIFT_VERSION: 6.0
     MACOSX_DEPLOYMENT_TARGET: 15.0
-    CURRENT_PROJECT_VERSION: 18
+    CURRENT_PROJECT_VERSION: 20
     MARKETING_VERSION: 0.1.0
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: G2442WAF29
@@ -142,6 +142,10 @@ targets:
     deploymentTarget: "18.0"
     sources:
       - path: BuddyGrammarIOSTests
+      # KeyboardMetrics is defined by the keyboard extension target; compiling
+      # this single layout file into the test bundle keeps the metrics tests
+      # honest without coupling them to the whole extension.
+      - path: BuddyGrammarKeyboard/KeyboardLayoutMetrics.swift
     dependencies:
       - package: BuddyGrammarKit
     settings:

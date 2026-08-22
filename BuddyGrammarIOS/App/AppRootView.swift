@@ -1,3 +1,4 @@
+import BuddyGrammarKit
 import SwiftUI
 
 struct AppRootView: View {
@@ -15,6 +16,10 @@ struct AppRootView: View {
         .tint(.buddyAccent)
         .task {
             model.refresh()
+        }
+        .onOpenURL { url in
+            guard KeyboardDictationHandoff.sessionID(from: url) != nil else { return }
+            model.handleKeyboardDictationHandoff()
         }
         .alert(item: $model.alert) { alert in
             Alert(

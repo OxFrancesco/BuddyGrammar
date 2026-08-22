@@ -246,6 +246,18 @@ final class IOSAppModel {
         }
     }
 
+    /// The keyboard hands off to this app because extensions cannot record
+    /// audio. Open the Dictate tab and begin capturing immediately so the
+    /// user can speak without extra taps.
+    func handleKeyboardDictationHandoff() {
+        selectedTab = .dictation
+        guard settings.hasCompletedOnboarding,
+              !dictationPhase.isRecording else { return }
+        Task { [weak self] in
+            await self?.startDictation()
+        }
+    }
+
     func finishDictation() async {
         guard dictationPhase.isRecording else { return }
 

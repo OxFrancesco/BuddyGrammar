@@ -48,6 +48,7 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         super.viewDidLoad()
         primaryLanguage = Locale.preferredLanguages.first ?? "en-US"
         hasDictationKey = false
+        setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
 
         let rootView = KeyboardRootView(model: model, controllerBridge: controllerBridge)
         let hostingController = UIHostingController(rootView: rootView)
@@ -86,15 +87,57 @@ final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedb
         requestSupplementaryLexicon(completion: lexiconCompletion)
     }
 
+    /// The keyboard spans the full screen width, so its outermost keys sit on
+    /// the system screen-edge gesture zones. iOS otherwise holds touches near
+    /// those edges (Q, A, Z, shift, delete, return) while deciding whether the
+    /// user is performing an edge swipe, which shows up as dropped or
+    /// second-late keystrokes on real devices.
+    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge {
+        [.left, .right]
+    }
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
         updatePreferredHeight()
         model.activate()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        unlockWindowTouchDelivery()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         model.deactivate()
         super.viewWillDisappear(animated)
+    }
+
+    /// Window-level system gesture recognizers (the app-switcher and
+    /// notification gates) delay touch delivery to the keyboard while they
+    /// disambiguate. They never claim these touches from a keyboard, so the
+    /// delay is pure latency on every keystroke; opting them out is the
+    /// documented remedy for edge keys that respond a beat late.
+    ///
+    /// Only the window and its ancestors are touched — the keyboard's own
+    /// hosted SwiftUI content keeps its recognizers untouched.
+    private func unlockWindowTouchDelivery() {
+        guard let window = view.window else { return }
+        var systemContainers: [UIView] = [window]
+        var next: UIView? = window.superview
+        while let current = next {
+            systemContainers.append(current)
+            next = current.superview
+        }
+        for container in systemContainers {
+            for recognizer in container.gestureRecognizers ?? [] {
+                recognizer.delaysTouchesBegan = false
+                recognizer.delaysTouchesEnded = false
+                if recognizer is UIScreenEdgePanGestureRecognizer {
+                    recognizer.isEnabled = false
+                }
+            }
+        }
     }
 
     override func viewWillTransition(
@@ -276,6 +319,43 @@ extension KeyboardViewController: KeyboardModelDelegate {
 
     func playInputClick() {
         UIDevice.current.playInputClick()
+    }
+
+    func openHostApplication(
+        _ url: URL,
+        completion: @escaping @MainActor @Sendable (Bool) -> Void
+    ) {
+        guard let extensionContext else {
+            completion(openHostApplicationThroughResponderChain(url))
+            return
+        }
+        extensionContext.open(url) { [weak self] didOpen in
+            Task { @MainActor in
+                guard !didOpen else {
+                    completion(true)
+                    return
+                }
+                completion(
+                    self?.openHostApplicationThroughResponderChain(url) ?? false
+                )
+            }
+        }
+    }
+
+    /// `extensionContext.open` is not honored for keyboard extensions, so the
+    /// documented fallback walks the responder chain to reach the host
+    /// application's `openURL:` implementation.
+    private func openHostApplicationThroughResponderChain(_ url: URL) -> Bool {
+        let selector = NSSelectorFromString("openURL:")
+        var responder: UIResponder? = self
+        while let current = responder {
+            if current.responds(to: selector), !(current is UIInputViewController) {
+                current.perform(selector, with: url)
+                return true
+            }
+            responder = current.next
+        }
+        return false
     }
 
     func captureCorrectionSnapshot(

@@ -171,14 +171,14 @@ private struct KeyboardSuggestionBar: View {
                 action: { isBuddyDrawerPresented.toggle() },
                 longPressAction: {
                     isBuddyDrawerPresented = false
-                    model.showAppleDictationGuidance()
+                    model.requestDictationHandoff()
                 },
                 accessibilityLabel: isBuddyDrawerPresented
                     ? "Close Buddy tools"
                     : "Open Buddy tools",
-                accessibilityHint: "Hold for Apple Dictation, then tap the system microphone below.",
+                accessibilityHint: "Hold to start ElevenLabs dictation in BuddyGrammar.",
                 accessibilityIdentifier: "keyboard.buddy",
-                longPressAccessibilityActionName: "Use Apple Dictation"
+                longPressAccessibilityActionName: "Start voice dictation"
             ) { isPressed in
                 Label("Buddy", systemImage: "sparkles")
                     .font(.caption.weight(.semibold))
@@ -314,7 +314,7 @@ private struct StatusIndicator: View {
             "hand.raised"
         case .correctionSuggestionSuppressed:
             "nosign"
-        case .appleDictationGuidance:
+        case .dictationHandoffStarted:
             "mic.fill"
         case .settingsGuidance:
             "gearshape"
@@ -432,7 +432,7 @@ private struct BuddyDrawer: View {
                 Spacer(minLength: 8)
 
                 Button {
-                    model.showAppleDictationGuidance()
+                    model.requestDictationHandoff()
                     dismiss()
                 } label: {
                     Label("Voice dictation", systemImage: "mic.fill")
@@ -443,7 +443,9 @@ private struct BuddyDrawer: View {
                 .buttonStyle(KeyboardAccessoryButtonStyle(isProminent: true))
                 .accessibilityIdentifier("keyboard.voiceInput")
                 .accessibilityLabel("Voice dictation")
-                .accessibilityHint("Uses the Apple microphone below the keyboard.")
+                .accessibilityHint(
+                    "Starts ElevenLabs dictation in the BuddyGrammar app."
+                )
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -935,7 +937,6 @@ private struct RoutedCharacterKey: View {
                     : Color(uiColor: .systemBackground)
             )
             .clipShape(.rect(cornerRadius: 6))
-            .shadow(color: .black.opacity(0.16), radius: 0.5, y: 1)
             .contentShape(.rect)
             .background {
                 if recordsLetterFrame {
@@ -1143,7 +1144,6 @@ private struct SpaceKey: View {
                     : Color(uiColor: .systemBackground)
             )
             .clipShape(.rect(cornerRadius: 6))
-            .shadow(color: .black.opacity(0.16), radius: 0.5, y: 1)
             .contentShape(.rect)
             .gesture(pointerGesture)
             .onDisappear(perform: cancelGesture)
@@ -1725,7 +1725,6 @@ struct KeyboardKeyButtonStyle: ButtonStyle {
                     : Color(uiColor: .systemBackground)
             )
             .clipShape(.rect(cornerRadius: 6))
-            .shadow(color: .black.opacity(0.16), radius: 0.5, y: 1)
     }
 }
 

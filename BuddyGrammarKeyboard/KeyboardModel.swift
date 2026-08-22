@@ -32,7 +32,7 @@ enum KeyboardStatus: Equatable {
     case addedToDictionary(String)
     case correctionSuggestionSuppressed
     case transcriptInserted
-    case appleDictationGuidance
+    case dictationHandoffStarted
     case settingsGuidance
     case fullAccessRequired
     case cloudConsentRequired
@@ -66,8 +66,8 @@ enum KeyboardStatus: Equatable {
             "That exact correction will not be suggested again."
         case .transcriptInserted:
             "Saved transcript inserted."
-        case .appleDictationGuidance:
-            "Tap the system mic below to start Apple Dictation."
+        case .dictationHandoffStarted:
+            "Starting dictation in BuddyGrammar…"
         case .settingsGuidance:
             "Open BuddyGrammar from the Home Screen to change keyboard settings."
         case .fullAccessRequired:
@@ -98,7 +98,7 @@ enum KeyboardStatus: Equatable {
              .correctionProposalReady, .correctionProposalDismissed,
              .swipeAbstained, .addedToDictionary,
              .correctionSuggestionSuppressed,
-             .appleDictationGuidance, .settingsGuidance:
+             .dictationHandoffStarted, .settingsGuidance:
             false
         }
     }
@@ -204,6 +204,10 @@ protocol KeyboardModelDelegate: AnyObject {
     func deleteBackward()
     func moveCursor(byUTF16Offset offset: Int)
     func playInputClick()
+    func openHostApplication(
+        _ url: URL,
+        completion: @escaping @MainActor @Sendable (Bool) -> Void
+    )
     func captureCorrectionSnapshot(
         requestScope: DocumentCorrectionRequestScope
     ) -> DocumentCorrectionSnapshot?
@@ -465,6 +469,13 @@ final class KeyboardModel {
     @ObservationIgnored private var cachedSettings = BuddyGrammarSettings.default
     @ObservationIgnored private var shouldPresentStaleContextAfterRefresh = false
     @ObservationIgnored private var needsDocumentContextRefresh = false
+    /// Mirrors `documentContextBeforeInput` so the keystroke hot path never
+    /// blocks on the host-app IPC round trip. Owned insertions and deletions
+    /// update it locally; the debounced reconcile re-verifies against the
+    /// editor once per typing pause.
+    @ObservationIgnored private var cachedContextBeforeInput: String?
+    @ObservationIgnored private var isCachedContextUsable = false
+    @ObservationIgnored private var lastLearningResetCheckMilliseconds: Double = -.infinity
 
     init(
         correctionClient: OpenRouterCorrectionClient = OpenRouterCorrectionClient(),
@@ -526,10 +537,15 @@ final class KeyboardModel {
         correctionCompositionSession.synchronizeField(
             identifier: delegate.editorFieldIdentifier
         )
+        invalidateCachedContext()
         activate()
     }
 
     func activate() {
+        // The host editor may contain text typed while this keyboard was
+        // hidden, so a cached mirror from a previous session cannot be
+        // trusted until the next live verification.
+        invalidateCachedContext()
         refreshAvailability()
         refreshAdaptiveState()
         refreshPendingTranscriptAvailability()
@@ -708,9 +724,39 @@ final class KeyboardModel {
     }
 
     private func intelligenceContextBeforeInput() -> String? {
-        EditorContextAccessGate.read(capability: editorCapabilities.readContext) {
+        if isCachedContextUsable, let cached = cachedContextBeforeInput {
+            return cached
+        }
+        return liveContextBeforeInput()
+    }
+
+    /// Reads the editor through the host proxy and refreshes the local cache.
+    /// Reserved for correctness-critical guards and the debounced reconcile;
+    /// per-keystroke work uses ``intelligenceContextBeforeInput``.
+    private func liveContextBeforeInput() -> String? {
+        let live = EditorContextAccessGate.read(capability: editorCapabilities.readContext) {
             delegate?.contextBeforeInput
         }
+        cachedContextBeforeInput = live
+        isCachedContextUsable = live != nil
+        return live
+    }
+
+    private func observeOwnedInsertion(_ text: String) {
+        guard isCachedContextUsable, let cached = cachedContextBeforeInput else { return }
+        cachedContextBeforeInput = cached + text
+    }
+
+    private func observeOwnedDeletion(count: Int) {
+        guard isCachedContextUsable, let cached = cachedContextBeforeInput else { return }
+        guard count > 0 else { return }
+        cachedContextBeforeInput = String(cached.dropLast(min(count, cached.count)))
+    }
+
+    /// Cursor movement changes what "before input" means without changing any
+    /// text, so the mirror can no longer be extended locally.
+    private func invalidateCachedContext() {
+        isCachedContextUsable = false
     }
 
     private func intelligenceContextAfterInput() -> String? {
@@ -747,9 +793,10 @@ final class KeyboardModel {
         let output = shiftState.isShifted && layoutMode == .letters
             ? character.uppercased()
             : character
+        var whitespaceToDelete = 0
         if Self.autocorrectionBoundaryCharacters.contains(character),
            editorCapabilities.readContext.isAllowed {
-            let whitespaceToDelete = RecognizedTextFormatter.whitespaceToDeleteBefore(
+            whitespaceToDelete = RecognizedTextFormatter.whitespaceToDeleteBefore(
                 output,
                 contextBeforeInput: intelligenceContextBeforeInput()
             )
@@ -758,6 +805,8 @@ final class KeyboardModel {
             }
         }
         delegate?.insertText(output)
+        observeOwnedDeletion(count: whitespaceToDelete)
+        observeOwnedInsertion(output)
         if let automaticCorrection {
             beginAutomaticCorrectionReceipt(
                 automaticCorrection,
@@ -864,6 +913,7 @@ final class KeyboardModel {
         let automaticCorrection = commitCurrentWord()
         currentWordTaps.removeAll(keepingCapacity: true)
         delegate?.insertText(" ")
+        observeOwnedInsertion(" ")
         if let automaticCorrection {
             beginAutomaticCorrectionReceipt(automaticCorrection, boundary: " ")
         }
@@ -877,6 +927,7 @@ final class KeyboardModel {
         let automaticCorrection = commitCurrentWord()
         currentWordTaps.removeAll(keepingCapacity: true)
         delegate?.insertText("\n")
+        observeOwnedInsertion("\n")
         if let automaticCorrection {
             beginAutomaticCorrectionReceipt(automaticCorrection, boundary: "\n")
         }
@@ -892,6 +943,7 @@ final class KeyboardModel {
                 pendingRejectedDecision = nil
                 currentWordTaps.removeAll(keepingCapacity: true)
                 observedTextSuffix.clear()
+                invalidateCachedContext()
                 refreshAfterEditorMutation()
                 return
             }
@@ -907,6 +959,7 @@ final class KeyboardModel {
             currentWordTaps.removeLast()
         }
         delegate?.deleteBackward()
+        observeOwnedDeletion(count: 1)
         refreshAfterEditorMutation()
     }
 
@@ -919,6 +972,7 @@ final class KeyboardModel {
         observedTextSuffix.clear()
         guard editorCapabilities.readContext.isAllowed else {
             delegate.deleteBackward()
+            invalidateCachedContext()
             refreshAfterEditorMutation()
             return
         }
@@ -927,6 +981,7 @@ final class KeyboardModel {
             // present. Keep the visible action useful without guessing across
             // an editor boundary.
             delegate.deleteBackward()
+            invalidateCachedContext()
             refreshAfterEditorMutation()
             return
         }
@@ -941,6 +996,7 @@ final class KeyboardModel {
         for _ in 0..<deletionCount {
             delegate.deleteBackward()
         }
+        observeOwnedDeletion(count: deletionCount)
         refreshAfterEditorMutation()
     }
 
@@ -966,6 +1022,7 @@ final class KeyboardModel {
         }
         guard editorOffset != 0 else { return }
         delegate?.moveCursor(byUTF16Offset: editorOffset)
+        invalidateCachedContext()
         refreshSuggestions()
     }
 
@@ -1100,6 +1157,8 @@ final class KeyboardModel {
                 committedText: replacement.insertion,
                 contextBeforeInput: replacement.precedingContext + replacement.insertion
             )
+            cachedContextBeforeInput = replacement.precedingContext + replacement.insertion
+            isCachedContextUsable = true
             refreshAfterEditorMutation(ownedInsertion: replacement.insertion)
             return
         }
@@ -1118,7 +1177,9 @@ final class KeyboardModel {
         cancelCorrectionForLocalEdit()
         observedTextSuffix.clear()
         currentWordTaps.removeAll(keepingCapacity: true)
-        guard let finalContext = intelligenceContextBeforeInput(),
+        // Final pre-mutation guard reads the editor directly: a suggestion tap
+        // must never apply onto a cached context after an external edit.
+        guard let finalContext = liveContextBeforeInput(),
               suggestion.mutationReceipt.matches(
                   fieldEpoch: editorFieldEpoch,
                   fieldIdentifier: delegate.editorFieldIdentifier,
@@ -1134,6 +1195,8 @@ final class KeyboardModel {
             delegate.deleteBackward()
         }
         delegate.insertText(suggestion.insertion)
+        cachedContextBeforeInput = prefix + suggestion.insertion
+        isCachedContextUsable = true
         if suggestion.kind != .emoji {
             observePersonalCommittedText(
                 suggestion.insertion,
@@ -1288,6 +1351,8 @@ final class KeyboardModel {
         )
         guard !insertion.isEmpty else { return false }
         delegate.insertText(insertion)
+        cachedContextBeforeInput = (retainedContext ?? "") + insertion
+        isCachedContextUsable = true
         observePersonalCommittedText(
             insertion,
             precededBy: retainedContext,
@@ -1457,7 +1522,18 @@ final class KeyboardModel {
     /// Reconciles both live learning families with App Group reset epochs.
     /// Losing access drops only memory; returning access or a newer epoch
     /// reloads a generation-owned durable snapshot.
-    private func synchronizeLearningResetState() {
+    ///
+    /// The App Group read is throttled: reset epochs change only when the
+    /// user acts in the containing app, so polling them more than twice a
+    /// second spends main-actor time on the keystroke path for nothing.
+    private func synchronizeLearningResetState(force: Bool = false) {
+        let nowMilliseconds = ProcessInfo.processInfo.systemUptime * 1_000
+        if !force,
+           nowMilliseconds - lastLearningResetCheckMilliseconds < 2_000 {
+            return
+        }
+        lastLearningResetCheckMilliseconds = nowMilliseconds
+
         let languageAvailable = languagePersonalizationIsAvailable
         let generations = languageAvailable
             ? preferences?.loadLearningResetGenerations()
@@ -1511,7 +1587,7 @@ final class KeyboardModel {
     }
 
     private func refreshAdaptiveState() {
-        synchronizeLearningResetState()
+        synchronizeLearningResetState(force: true)
         activePracticeSession = typingPersonalizationIsAvailable
             ? adaptiveStore?.loadActivePracticeSession()
             : nil
@@ -1592,7 +1668,7 @@ final class KeyboardModel {
                 expectedResetGeneration: observedTypingResetGeneration
             ) ?? false
             guard didSave else {
-                synchronizeLearningResetState()
+                synchronizeLearningResetState(force: true)
                 return
             }
             adaptiveProfileIsDirty = false
@@ -2169,6 +2245,7 @@ final class KeyboardModel {
         pendingRejectedDecision = nil
         currentWordTaps.removeAll(keepingCapacity: true)
         observedTextSuffix.clear()
+        invalidateCachedContext()
         refreshAfterEditorMutation()
     }
 
@@ -2235,7 +2312,7 @@ final class KeyboardModel {
     private func reconcileDocumentContext() {
         let previousCapabilities = editorCapabilities
         refreshEditorCapabilities()
-        let context = intelligenceContextBeforeInput()
+        let context = liveContextBeforeInput()
         refreshAutomaticShiftState(fromContext: context)
         if previousCapabilities != editorCapabilities {
             baselineStatus = availabilityStatus()
@@ -2290,6 +2367,7 @@ final class KeyboardModel {
         typingRefreshTask = nil
         shouldPresentStaleContextAfterRefresh = false
         needsDocumentContextRefresh = false
+        invalidateCachedContext()
         cancelCorrection()
         clearCorrectionProposal()
         clearCorrectionUndo()
@@ -2302,8 +2380,26 @@ final class KeyboardModel {
         setQuietly(baselineStatus)
     }
 
-    func showAppleDictationGuidance() {
-        present(.appleDictationGuidance)
+    /// Hands dictation off to the containing app, which owns microphone
+    /// capture and ElevenLabs transcription. Custom keyboard extensions
+    /// cannot record audio, so BuddyGrammar opens in Dictate mode and saves
+    /// the finished transcript for insertion from the keyboard.
+    func requestDictationHandoff() {
+        let sessionID = UUID()
+        guard let url = KeyboardDictationHandoff.url(for: sessionID),
+              let delegate else {
+            present(.error("Open BuddyGrammar once, then try voice dictation again."))
+            return
+        }
+        present(.dictationHandoffStarted)
+        delegate.openHostApplication(url) { [weak self] didOpen in
+            guard let self, !didOpen else { return }
+            if self.status == .dictationHandoffStarted {
+                self.present(
+                    .error("Open BuddyGrammar once, then try voice dictation again.")
+                )
+            }
+        }
     }
 
     func showSettingsGuidance() {
@@ -2493,6 +2589,7 @@ final class KeyboardModel {
         let didUndo = effect.didMutateEditor
         present(didUndo ? .correctionUndone : .staleContext)
         if didUndo {
+            invalidateCachedContext()
             refreshAfterEditorMutation()
         } else {
             refreshSuggestions()
@@ -2748,7 +2845,11 @@ final class KeyboardModel {
         }
     }
 
-    private static let typingRefreshDelayMilliseconds = 24
+    /// Heavy refresh work (suggestions, capability reconciliation, learning
+    /// resets) only runs once typing pauses for this long. Rapid keystrokes
+    /// keep rescheduling the task, so the keystroke path never contends with
+    /// UITextChecker or personalization work on the main actor.
+    private static let typingRefreshDelayMilliseconds = 140
     private static let autocorrectionBoundaryCharacters: Set<String> = [
         ".", ",", "?", "!", ";", ":",
     ]
