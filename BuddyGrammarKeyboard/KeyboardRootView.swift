@@ -10,6 +10,7 @@ struct KeyboardRootView: View {
 
     @State private var interaction = KeyboardPointerInteraction()
     @State private var isBuddyDrawerPresented = false
+    @State private var touchFrames: [String: CGRect] = [:]
 
     var body: some View {
         GeometryReader { proxy in
@@ -30,6 +31,19 @@ struct KeyboardRootView: View {
                                 SwipeTrail(points: interaction.swipePoints)
                                     .allowsHitTesting(false)
                             }
+                        }
+                        .overlay {
+                            KeyboardTouchSurface(
+                                interaction: interaction,
+                                targets: touchTargets()
+                            )
+                        }
+                        .onPreferenceChange(KeyFramePreferenceKey.self) { frames in
+                            interaction.updateKeyFrames(frames)
+                            touchFrames = frames
+                        }
+                        .onDisappear {
+                            interaction.cancel()
                         }
                         .frame(maxHeight: .infinity)
                 }
@@ -80,6 +94,55 @@ struct KeyboardRootView: View {
             isBuddyDrawerPresented = false
         }
         .animation(.snappy, value: isBuddyDrawerPresented)
+    }
+
+    /// Router targets for every capturable key on the active plane, keyed by
+    /// the same identifier the frame recorder uses. Must stay identical to
+    /// the targets the key views compare for pressed-state highlighting.
+    private func touchTargets() -> KeyboardTouchTargets {
+        let swipeAllowed = model.editorCapabilities.swipeTyping.isAllowed
+        var targets: [String: KeyboardInteractionTarget] = [
+            "space": .space,
+            "delete": .delete,
+        ]
+        func register(_ characters: [String], allowsSwipe: Bool) {
+            for character in characters {
+                targets[character.lowercased()] = .key(
+                    character,
+                    alternates: model.alternates(for: character),
+                    allowsSwipe: allowsSwipe
+                )
+            }
+        }
+        switch model.layoutMode {
+        case .letters:
+            model.keyboardLetterRows.forEach { register($0, allowsSwipe: swipeAllowed) }
+            model.keyboardInlineKeys.forEach { key in
+                targets[key.output.lowercased()] = .key(
+                    key.output,
+                    alternates: [],
+                    allowsSwipe: false
+                )
+            }
+        case .numbers where !model.usesNumericFieldLayout:
+            model.keyboardNumberRows.forEach { register($0, allowsSwipe: false) }
+            register([".", ",", "?", "!", "'"], allowsSwipe: false)
+        case .symbols:
+            model.keyboardSymbolRows.forEach { register($0, allowsSwipe: false) }
+            register([".", ",", "?", "!", "'"], allowsSwipe: false)
+        case .numbers:
+            model.keyboardNumericRows.forEach { register($0, allowsSwipe: false) }
+            model.keyboardInlineKeys.forEach { key in
+                targets[key.output.lowercased()] = .key(
+                    key.output,
+                    alternates: [],
+                    allowsSwipe: false
+                )
+            }
+        case .latex, .emoji, .handwriting:
+            break
+        }
+        return KeyboardTouchTargets(rects: touchFrames, targets: targets)
     }
 
     @ViewBuilder
@@ -597,16 +660,14 @@ private struct LetterKeyboardLayer: View {
                 model: model,
                 metrics: metrics,
                 interaction: interaction,
-                allowsSwipe: model.editorCapabilities.swipeTyping.isAllowed,
-                recordsLetterFrames: true
+                allowsSwipe: model.editorCapabilities.swipeTyping.isAllowed
             )
             RoutedCharacterRow(
                 characters: model.keyboardLetterRows[safe: 1] ?? [],
                 model: model,
                 metrics: metrics,
                 interaction: interaction,
-                allowsSwipe: model.editorCapabilities.swipeTyping.isAllowed,
-                recordsLetterFrames: true
+                allowsSwipe: model.editorCapabilities.swipeTyping.isAllowed
             )
             .padding(.horizontal, metrics.letterKeyWidth / 2)
 
@@ -617,8 +678,7 @@ private struct LetterKeyboardLayer: View {
                     model: model,
                     metrics: metrics,
                     interaction: interaction,
-                    allowsSwipe: model.editorCapabilities.swipeTyping.isAllowed,
-                    recordsLetterFrames: true
+                    allowsSwipe: model.editorCapabilities.swipeTyping.isAllowed
                 )
                 DeleteKey(model: model, metrics: metrics, interaction: interaction)
             }
@@ -629,12 +689,6 @@ private struct LetterKeyboardLayer: View {
                 metrics: metrics,
                 interaction: interaction
             )
-        }
-        .onPreferenceChange(KeyFramePreferenceKey.self) { frames in
-            interaction.updateKeyFrames(frames)
-        }
-        .onDisappear {
-            interaction.cancel()
         }
     }
 }
@@ -822,8 +876,6 @@ struct DeleteKey: View {
     let metrics: KeyboardMetrics
     let interaction: KeyboardPointerInteraction
 
-    @State private var gestureID: UUID?
-
     var body: some View {
         Image(systemName: "delete.left")
             .frame(width: metrics.wideFunctionKeyWidth, height: metrics.keyHeight)
@@ -835,8 +887,7 @@ struct DeleteKey: View {
             )
             .clipShape(.rect(cornerRadius: 6))
             .contentShape(.rect)
-            .gesture(pointerGesture)
-            .onDisappear(perform: cancelGesture)
+            .background { deleteFrameRecorder }
             .accessibilityLabel("Delete")
             .accessibilityHint(
                 "Hold to repeatedly delete characters. Use Delete word to remove a word"
@@ -853,29 +904,17 @@ struct DeleteKey: View {
             .accessibilityIdentifier("keyboard.delete")
     }
 
-    private var pointerGesture: some Gesture {
-        DragGesture(minimumDistance: 0, coordinateSpace: .named(keyboardPointerCoordinateSpace))
-            .onChanged { value in
-                guard gestureID == nil else { return }
-                let token = UUID()
-                gestureID = token
-                interaction.press(
-                    target: .delete,
-                    at: value.startLocation,
-                    gestureID: token
-                )
-            }
-            .onEnded { value in
-                guard let token = gestureID else { return }
-                interaction.release(at: value.location, gestureID: token)
-                gestureID = nil
-            }
-    }
-
-    private func cancelGesture() {
-        guard let token = gestureID else { return }
-        interaction.cancel(gestureID: token)
-        gestureID = nil
+    private var deleteFrameRecorder: some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: KeyFramePreferenceKey.self,
+                value: [
+                    "delete": proxy.frame(
+                        in: .named(keyboardPointerCoordinateSpace)
+                    ),
+                ]
+            )
+        }
     }
 }
 
@@ -885,7 +924,6 @@ private struct RoutedCharacterRow: View {
     let metrics: KeyboardMetrics
     let interaction: KeyboardPointerInteraction
     var allowsSwipe = false
-    var recordsLetterFrames = false
 
     var body: some View {
         HStack(spacing: metrics.keySpacing) {
@@ -896,8 +934,7 @@ private struct RoutedCharacterRow: View {
                     model: model,
                     metrics: metrics,
                     interaction: interaction,
-                    allowsSwipe: allowsSwipe,
-                    recordsLetterFrame: recordsLetterFrames
+                    allowsSwipe: allowsSwipe
                 )
             }
         }
@@ -914,9 +951,6 @@ private struct RoutedCharacterKey: View {
     let metrics: KeyboardMetrics
     let interaction: KeyboardPointerInteraction
     var allowsSwipe = false
-    var recordsLetterFrame = false
-
-    @State private var gestureID: UUID?
 
     private var alternates: [String] {
         model.alternates(for: output)
@@ -939,25 +973,21 @@ private struct RoutedCharacterKey: View {
             .clipShape(.rect(cornerRadius: 6))
             .contentShape(.rect)
             .background {
-                if recordsLetterFrame {
-                    GeometryReader { proxy in
-                        Color.clear.preference(
-                            key: KeyFramePreferenceKey.self,
-                            value: [
-                                output.lowercased(): proxy.frame(
-                                    in: .named(keyboardPointerCoordinateSpace)
-                                ),
-                            ]
-                        )
-                    }
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: KeyFramePreferenceKey.self,
+                        value: [
+                            (id ?? output).lowercased(): proxy.frame(
+                                in: .named(keyboardPointerCoordinateSpace)
+                            ),
+                        ]
+                    )
                 }
             }
             .overlay(alignment: .top) {
                 keyPopup
             }
             .zIndex(interaction.isPressed(target) ? 5 : 0)
-            .gesture(pointerGesture)
-            .onDisappear(perform: cancelGesture)
             .accessibilityLabel(accessibilityLabel ?? output)
             .accessibilityHint(alternates.isEmpty ? "" : "Hold for accented characters")
             .accessibilityAddTraits(.isButton)
@@ -1012,36 +1042,6 @@ private struct RoutedCharacterKey: View {
                 .shadow(radius: 3, y: 1)
                 .offset(y: -58)
         }
-    }
-
-    private var pointerGesture: some Gesture {
-        DragGesture(minimumDistance: 0, coordinateSpace: .named(keyboardPointerCoordinateSpace))
-            .onChanged { value in
-                if let token = gestureID {
-                    if allowsSwipe || !alternates.isEmpty {
-                        interaction.move(to: value.location, gestureID: token)
-                    }
-                } else {
-                    let token = UUID()
-                    gestureID = token
-                    interaction.press(
-                        target: target,
-                        at: value.startLocation,
-                        gestureID: token
-                    )
-                }
-            }
-            .onEnded { value in
-                guard let token = gestureID else { return }
-                interaction.release(at: value.location, gestureID: token)
-                gestureID = nil
-            }
-    }
-
-    private func cancelGesture() {
-        guard let token = gestureID else { return }
-        interaction.cancel(gestureID: token)
-        gestureID = nil
     }
 
     private var displayedOutput: String {
@@ -1131,8 +1131,6 @@ private struct SpaceKey: View {
     let metrics: KeyboardMetrics
     let interaction: KeyboardPointerInteraction
 
-    @State private var gestureID: UUID?
-
     var body: some View {
         Text(interaction.isCursorMode ? "↔︎" : model.keyboardSpaceLabel)
             .font(.callout)
@@ -1145,8 +1143,7 @@ private struct SpaceKey: View {
             )
             .clipShape(.rect(cornerRadius: 6))
             .contentShape(.rect)
-            .gesture(pointerGesture)
-            .onDisappear(perform: cancelGesture)
+            .background { spaceFrameRecorder }
             .accessibilityLabel(model.keyboardSpaceLabel)
             .accessibilityHint("Hold, then slide to move the cursor")
             .accessibilityAddTraits(.isButton)
@@ -1163,32 +1160,17 @@ private struct SpaceKey: View {
             .accessibilityIdentifier("keyboard.space")
     }
 
-    private var pointerGesture: some Gesture {
-        DragGesture(minimumDistance: 0, coordinateSpace: .named(keyboardPointerCoordinateSpace))
-            .onChanged { value in
-                if let token = gestureID {
-                    interaction.move(to: value.location, gestureID: token)
-                } else {
-                    let token = UUID()
-                    gestureID = token
-                    interaction.press(
-                        target: .space,
-                        at: value.startLocation,
-                        gestureID: token
-                    )
-                }
-            }
-            .onEnded { value in
-                guard let token = gestureID else { return }
-                interaction.release(at: value.location, gestureID: token)
-                gestureID = nil
-            }
-    }
-
-    private func cancelGesture() {
-        guard let token = gestureID else { return }
-        interaction.cancel(gestureID: token)
-        gestureID = nil
+    private var spaceFrameRecorder: some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: KeyFramePreferenceKey.self,
+                value: [
+                    "space": proxy.frame(
+                        in: .named(keyboardPointerCoordinateSpace)
+                    ),
+                ]
+            )
+        }
     }
 }
 
@@ -1611,7 +1593,13 @@ final class KeyboardPointerInteraction {
     }
 
     private func appendBoundedSwipePoint(_ point: CGPoint) {
-        guard swipePoints.last != point else { return }
+        // Touches arrive at display refresh rate or faster; redrawing the
+        // SwiftUI trail for sub-point jitter is pure invalidation cost.
+        if let last = swipePoints.last,
+           abs(last.x - point.x) < 2.5,
+           abs(last.y - point.y) < 2.5 {
+            return
+        }
         swipePoints.append(point)
         guard swipePoints.count > Self.maximumLiveSwipeSamples else { return }
         let interior = swipePoints.indices.dropFirst().dropLast()

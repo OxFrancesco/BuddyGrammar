@@ -342,15 +342,28 @@ extension KeyboardViewController: KeyboardModelDelegate {
         }
     }
 
-    /// `extensionContext.open` is not honored for keyboard extensions, so the
-    /// documented fallback walks the responder chain to reach the host
-    /// application's `openURL:` implementation.
+    /// Opens the containing app from the extension. `extensionContext.open`
+    /// is Today-widget-only, so this walks the responder chain to the host
+    /// process's UIApplication and invokes the *modern* Open URL entry point.
+    ///
+    /// The legacy `openURL:` selector is force-failed by UIKit since iOS 18
+    /// ("BUG IN CLIENT OF UIKIT … Force returning false"), which silently
+    /// swallowed earlier handoff attempts. `openURL:options:completionHandler:`
+    /// still works when all three arguments are passed explicitly, so the
+    /// method implementation is invoked directly through its IMP instead of
+    /// `perform`, which cannot supply the third parameter.
     private func openHostApplicationThroughResponderChain(_ url: URL) -> Bool {
-        let selector = NSSelectorFromString("openURL:")
+        let selector = NSSelectorFromString("openURL:options:completionHandler:")
         var responder: UIResponder? = self
         while let current = responder {
-            if current.responds(to: selector), !(current is UIInputViewController) {
-                current.perform(selector, with: url)
+            if current.responds(to: selector) {
+                let implementation = current.method(for: selector)
+                typealias OpenURLEntryPoint = @convention(c) (
+                    NSObject, Selector, URL, [UIApplication.OpenExternalURLOptionsKey: Any],
+                    ((Bool) -> Void)?
+                ) -> Void
+                let open = unsafeBitCast(implementation, to: OpenURLEntryPoint.self)
+                open(current, selector, url, [:], nil)
                 return true
             }
             responder = current.next

@@ -476,6 +476,7 @@ final class KeyboardModel {
     @ObservationIgnored private var cachedContextBeforeInput: String?
     @ObservationIgnored private var isCachedContextUsable = false
     @ObservationIgnored private var lastLearningResetCheckMilliseconds: Double = -.infinity
+    @ObservationIgnored private var handoffVerificationTask: Task<Void, Never>?
 
     init(
         correctionClient: OpenRouterCorrectionClient = OpenRouterCorrectionClient(),
@@ -2365,6 +2366,8 @@ final class KeyboardModel {
         editorFieldEpoch &+= 1
         typingRefreshTask?.cancel()
         typingRefreshTask = nil
+        handoffVerificationTask?.cancel()
+        handoffVerificationTask = nil
         shouldPresentStaleContextAfterRefresh = false
         needsDocumentContextRefresh = false
         invalidateCachedContext()
@@ -2391,15 +2394,44 @@ final class KeyboardModel {
             present(.error("Open BuddyGrammar once, then try voice dictation again."))
             return
         }
+        // The app consumes this the moment the deep link arrives. If it is
+        // still pending after a grace period, the launch was blocked and the
+        // status must not keep claiming that dictation is starting.
+        preferences?.saveDictationHandoffRequest(.now)
+        handoffVerificationTask?.cancel()
         present(.dictationHandoffStarted)
         delegate.openHostApplication(url) { [weak self] didOpen in
             guard let self, !didOpen else { return }
             if self.status == .dictationHandoffStarted {
-                self.present(
-                    .error("Open BuddyGrammar once, then try voice dictation again.")
-                )
+                self.presentDictationHandoffFailure()
             }
         }
+        scheduleDictationHandoffVerification()
+    }
+
+    /// The runtime call reports success whenever it dispatched at all, even
+    /// when iOS later refuses to launch the app (extension URL policies).
+    /// The shared-container handshake is the only truth: if BuddyGrammar
+    /// never consumed the request, guide instead of stalling.
+    private func scheduleDictationHandoffVerification() {
+        handoffVerificationTask?.cancel()
+        handoffVerificationTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled, let self else { return }
+            self.handoffVerificationTask = nil
+            guard self.status == .dictationHandoffStarted,
+                  self.preferences?.consumeDictationHandoffRequest() == true
+            else { return }
+            self.presentDictationHandoffFailure()
+        }
+    }
+
+    private func presentDictationHandoffFailure() {
+        handoffVerificationTask?.cancel()
+        handoffVerificationTask = nil
+        present(
+            .error("BuddyGrammar didn't open. Open it once, then tap Voice dictation again.")
+        )
     }
 
     func showSettingsGuidance() {

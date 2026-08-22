@@ -16,6 +16,7 @@ public final class SharedPreferences: @unchecked Sendable {
         static let pendingTranscript = "BuddyGrammar.iOS.pendingTranscript"
         static let savedDictation = "BuddyGrammar.iOS.savedDictation"
         static let keyboardDictationSession = "BuddyGrammar.iOS.keyboardDictationSession"
+        static let dictationHandoffRequest = "BuddyGrammar.iOS.dictationHandoffRequest"
         static let installationIdentifier = "BuddyGrammar.iOS.installationIdentifier"
         static let companionHeartbeat = "BuddyGrammar.iOS.companionHeartbeat"
         static let languageLearningResetGeneration =
@@ -83,6 +84,19 @@ public final class SharedPreferences: @unchecked Sendable {
 
     public func clearSavedDictation() {
         defaults.removeObject(forKey: Key.savedDictation)
+    }
+
+    /// Pending keyboard→app dictation handoff. The keyboard records a request
+    /// before opening the app; the app consumes it the moment the deep link
+    /// arrives, so an unconsumed request means the launch never happened.
+    public func saveDictationHandoffRequest(_ date: Date) {
+        try? save(date, forKey: Key.dictationHandoffRequest)
+    }
+
+    public func consumeDictationHandoffRequest() -> Bool {
+        let existed = defaults.object(forKey: Key.dictationHandoffRequest) != nil
+        defaults.removeObject(forKey: Key.dictationHandoffRequest)
+        return existed
     }
 
     /// Removes App Group artifacts left by prerelease builds that attempted

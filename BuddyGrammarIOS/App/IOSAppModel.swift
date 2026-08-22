@@ -250,6 +250,9 @@ final class IOSAppModel {
     /// audio. Open the Dictate tab and begin capturing immediately so the
     /// user can speak without extra taps.
     func handleKeyboardDictationHandoff() {
+        // Acknowledge the keyboard's pending request so it can tell the
+        // difference between a successful launch and a blocked one.
+        preferences?.consumeDictationHandoffRequest()
         selectedTab = .dictation
         guard settings.hasCompletedOnboarding,
               !dictationPhase.isRecording else { return }
