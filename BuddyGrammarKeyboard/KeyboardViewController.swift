@@ -353,10 +353,18 @@ extension KeyboardViewController: KeyboardModelDelegate {
     /// method implementation is invoked directly through its IMP instead of
     /// `perform`, which cannot supply the third parameter.
     private func openHostApplicationThroughResponderChain(_ url: URL) -> Bool {
+        guard let applicationClass = NSClassFromString("UIApplication") else {
+            return false
+        }
         let selector = NSSelectorFromString("openURL:options:completionHandler:")
         var responder: UIResponder? = self
         while let current = responder {
-            if current.responds(to: selector) {
+            // Only the host process's UIApplication owns a real
+            // implementation of this selector. Intermediate responders such
+            // as UIScene/UIWindowScene merely forward it, and invoking their
+            // forwarding stub aborts with an unrecognized-selector crash.
+            if current.isKind(of: applicationClass),
+               current.responds(to: selector) {
                 let implementation = current.method(for: selector)
                 typealias OpenURLEntryPoint = @convention(c) (
                     NSObject, Selector, URL, [UIApplication.OpenExternalURLOptionsKey: Any],
