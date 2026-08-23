@@ -34,14 +34,25 @@ struct DictationView: View {
                 .font(.system(.title2, design: .rounded, weight: .bold))
 
             if model.isKeyboardDictationActive {
-                Label(
-                    "Swipe back to the app you were typing in — the recording keeps going. Stop from the keyboard and your words will be inserted.",
-                    systemImage: "arrow.uturn.backward"
+                VStack(spacing: 10) {
+                    Label("Swipe back now", systemImage: "arrow.uturn.backward")
+                        .font(.system(.headline, design: .rounded, weight: .bold))
+                    Text(
+                        "The recording keeps going in the background. Return to the app you were typing in — stop from the keyboard and your words will be inserted there."
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(16)
+                .background(.regularMaterial, in: .rect(cornerRadius: 20))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .strokeBorder(Color.buddyAccent.opacity(0.35), lineWidth: 1)
                 )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.leading)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, 4)
+                .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("dictation.keyboardHandoffHint")
             }
 

@@ -39,7 +39,7 @@ const MAX_INSTRUCTION_CHARACTERS = 2_000;
 const MAX_AUDIO_BYTES = 12 * 1024 * 1024;
 const MAX_HANDWRITING_BYTES = 1024 * 1024;
 const OPENROUTER_TIMEOUT_MS = 8_000;
-const ELEVENLABS_TIMEOUT_MS = 20_000;
+const ELEVENLABS_TIMEOUT_MS = 60_000;
 const DEFAULT_MODEL = "google/gemini-3.1-flash-lite";
 const MODEL_REASONING_EFFORT: Record<string, string> = {
   // Grammar correction is a deterministic copyedit; minimal effort keeps
@@ -355,19 +355,49 @@ async function transcribe(
   if (languageCode) outgoing.set("language_code", languageCode);
   outgoing.set("file", new File([bytes], "dictation.m4a", { type: "audio/mp4" }));
 
-  const upstream = await dependencies.fetch(ELEVENLABS_URL, {
-    method: "POST",
-    headers: { "xi-api-key": env.ELEVENLABS_API_KEY },
-    body: outgoing,
-    signal: AbortSignal.timeout(ELEVENLABS_TIMEOUT_MS),
-  });
+  let upstream: Response;
+  try {
+    upstream = await dependencies.fetch(ELEVENLABS_URL, {
+      method: "POST",
+      headers: { "xi-api-key": env.ELEVENLABS_API_KEY },
+      body: outgoing,
+      signal: AbortSignal.timeout(ELEVENLABS_TIMEOUT_MS),
+    });
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === "TimeoutError";
+    console.error(
+      JSON.stringify({
+        event: "transcribe_upstream_failure",
+        requestID,
+        reason: timedOut ? "timeout" : "network_error",
+        audioBytes: bytes.byteLength,
+      }),
+    );
+    throw new RequestProblem(
+      timedOut ? 504 : 502,
+      timedOut ? "provider_timeout" : "provider_unavailable",
+      timedOut
+        ? "Transcription took too long. Please try again shortly."
+        : "Transcription is temporarily unavailable.",
+    );
+  }
   if (!upstream.ok) {
+    const upstreamBody = await upstream.text();
+    console.error(
+      JSON.stringify({
+        event: "transcribe_upstream_error",
+        requestID,
+        providerStatus: upstream.status,
+        providerBody: upstreamBody.slice(0, 400),
+        audioBytes: bytes.byteLength,
+      }),
+    );
     throw new RequestProblem(
       upstream.status === 429 ? 429 : 502,
       upstream.status === 429 ? "provider_rate_limited" : "provider_error",
       upstream.status === 429
         ? "Transcription is busy. Please try again shortly."
-        : "Transcription could not be completed.",
+        : `Transcription could not be completed (provider error ${upstream.status}).`,
     );
   }
 

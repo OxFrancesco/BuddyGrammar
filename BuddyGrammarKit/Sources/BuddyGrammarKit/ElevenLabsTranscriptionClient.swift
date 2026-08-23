@@ -43,7 +43,7 @@ public actor ElevenLabsTranscriptionClient {
     public init(
         session: URLSession = .shared,
         endpoint: URL = BuddyGrammarConfiguration.apiBaseURL.appending(path: "v1/transcribe"),
-        requestTimeout: Duration = .seconds(25)
+        requestTimeout: Duration = .seconds(90)
     ) {
         self.session = session
         self.endpoint = endpoint
@@ -57,7 +57,7 @@ public actor ElevenLabsTranscriptionClient {
     ) async throws -> ElevenLabsTranscript {
         guard !audioData.isEmpty else { throw TranscriptionError.emptyAudio }
 
-        var request = URLRequest(url: endpoint, timeoutInterval: 90)
+        var request = URLRequest(url: endpoint, timeoutInterval: 120)
         request.httpMethod = "POST"
         request.setValue("audio/mp4", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -111,6 +111,13 @@ public actor ElevenLabsTranscriptionClient {
 
     private static func serverMessage(from data: Data, statusCode: Int) -> String {
         if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            // The BuddyGrammar worker reports failures as
+            // {error: {code, message}}; other providers use {detail: ...}.
+            if let error = object["error"] as? [String: Any],
+               let message = error["message"] as? String,
+               !message.isEmpty {
+                return message
+            }
             if let detail = object["detail"] as? String, !detail.isEmpty {
                 return detail
             }
