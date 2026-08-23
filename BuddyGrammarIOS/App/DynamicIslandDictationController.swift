@@ -204,6 +204,11 @@ final class DynamicIslandDictationController {
         }
     }
 
+    nonisolated private static func discardedReadinessTap(
+        _ buffer: AVAudioPCMBuffer,
+        _ time: AVAudioTime
+    ) {}
+
     private func startReadinessAudio() throws {
         guard !audioEngine.isRunning else { return }
 
@@ -222,10 +227,17 @@ final class DynamicIslandDictationController {
             throw DynamicIslandDictationError.microphoneUnavailable
         }
         if !inputTapInstalled {
-            input.installTap(onBus: 0, bufferSize: 1_024, format: format) { _, _ in
-                // Readiness audio is deliberately discarded. Only audio captured
-                // after a keyboard mic tap is written to a recording file.
-            }
+            // AVAudio invokes taps on its realtime thread. A closure literal
+            // here would inherit this @MainActor class's isolation and trap
+            // on the runtime isolation assert, so pass a nonisolated
+            // function instead. Readiness audio is deliberately discarded;
+            // only audio captured after a keyboard mic tap is recorded.
+            input.installTap(
+                onBus: 0,
+                bufferSize: 1_024,
+                format: format,
+                block: Self.discardedReadinessTap
+            )
             inputTapInstalled = true
         }
         audioEngine.prepare()
