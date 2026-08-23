@@ -1,7 +1,13 @@
 import BuddyGrammarKit
 import Foundation
 import Observation
+import OSLog
 import UIKit
+
+let keyboardDictationLog = Logger(
+    subsystem: "com.francescooddo.BuddyGrammar",
+    category: "keyboard.dictation"
+)
 
 enum KeyboardLayoutMode: Equatable {
     case letters
@@ -32,7 +38,10 @@ enum KeyboardStatus: Equatable {
     case addedToDictionary(String)
     case correctionSuggestionSuppressed
     case transcriptInserted
-    case dictationHandoffStarted
+    case startingDictation
+    case openingDictation
+    case dictationRecording
+    case dictationProcessing
     case settingsGuidance
     case fullAccessRequired
     case cloudConsentRequired
@@ -65,9 +74,15 @@ enum KeyboardStatus: Equatable {
         case .correctionSuggestionSuppressed:
             "That exact correction will not be suggested again."
         case .transcriptInserted:
-            "Saved transcript inserted."
-        case .dictationHandoffStarted:
-            "Starting dictation in BuddyGrammar…"
+            "Dictation inserted."
+        case .startingDictation:
+            "Starting dictation…"
+        case .openingDictation:
+            "Opening BuddyGrammar… Swipe back and keep talking."
+        case .dictationRecording:
+            "Listening… Stop when you're done."
+        case .dictationProcessing:
+            "Preparing your text…"
         case .settingsGuidance:
             "Open BuddyGrammar from the Home Screen to change keyboard settings."
         case .fullAccessRequired:
@@ -98,10 +113,19 @@ enum KeyboardStatus: Equatable {
              .correctionProposalReady, .correctionProposalDismissed,
              .swipeAbstained, .addedToDictionary,
              .correctionSuggestionSuppressed,
-             .dictationHandoffStarted, .settingsGuidance:
+             .startingDictation, .openingDictation,
+             .dictationRecording, .dictationProcessing,
+             .settingsGuidance:
             false
         }
     }
+}
+
+enum KeyboardDictationPhase: Equatable {
+    case idle
+    case launching
+    case recording
+    case processing
 }
 
 enum DocumentCorrectionTarget: Equatable, Sendable {
@@ -407,6 +431,7 @@ final class KeyboardModel {
     private(set) var suggestions: [KeyboardSuggestion] = []
     private(set) var canUndoCorrection = false
     private(set) var hasPendingTranscript = false
+    private(set) var dictationPhase: KeyboardDictationPhase = .idle
     private(set) var automaticCorrectionOriginalText: String?
     private(set) var correctionProposal: ReviewableCorrectionProposal?
     private(set) var correctionProposalScope: KeyboardCorrectionScope?
@@ -477,6 +502,7 @@ final class KeyboardModel {
     @ObservationIgnored private var isCachedContextUsable = false
     @ObservationIgnored private var lastLearningResetCheckMilliseconds: Double = -.infinity
     @ObservationIgnored private var handoffVerificationTask: Task<Void, Never>?
+    @ObservationIgnored private var dictationMonitorTask: Task<Void, Never>?
 
     init(
         correctionClient: OpenRouterCorrectionClient = OpenRouterCorrectionClient(),
@@ -550,6 +576,8 @@ final class KeyboardModel {
         refreshAvailability()
         refreshAdaptiveState()
         refreshPendingTranscriptAvailability()
+        refreshKeyboardDictationSession()
+        startDictationMonitor()
         scheduleSuggestionsRefresh()
         warmUpCorrectionConnectionIfNeeded()
     }
@@ -2368,6 +2396,8 @@ final class KeyboardModel {
         typingRefreshTask = nil
         handoffVerificationTask?.cancel()
         handoffVerificationTask = nil
+        dictationMonitorTask?.cancel()
+        dictationMonitorTask = nil
         shouldPresentStaleContextAfterRefresh = false
         needsDocumentContextRefresh = false
         invalidateCachedContext()
@@ -2383,55 +2413,247 @@ final class KeyboardModel {
         setQuietly(baselineStatus)
     }
 
-    /// Hands dictation off to the containing app, which owns microphone
-    /// capture and ElevenLabs transcription. Custom keyboard extensions
-    /// cannot record audio, so BuddyGrammar opens in Dictate mode and saves
-    /// the finished transcript for insertion from the keyboard.
-    func requestDictationHandoff() {
-        let sessionID = UUID()
+    /// Starts or stops a dictation session owned by the containing app,
+    /// which holds microphone capture and ElevenLabs transcription. Custom
+    /// keyboard extensions cannot record audio, so BuddyGrammar either
+    /// answers a Darwin signal while its readiness engine is alive or opens
+    /// in Dictate mode; either way the finished transcript is inserted here
+    /// automatically.
+    func toggleDictation() {
+        refreshKeyboardDictationSession()
+
+        switch dictationPhase {
+        case .idle:
+            beginKeyboardDictation()
+        case .recording:
+            requestKeyboardDictationStop()
+        case .launching:
+            // Allow the user to cancel a dictation that never started.
+            cancelKeyboardDictation()
+        case .processing:
+            break
+        }
+    }
+
+    private func beginKeyboardDictation() {
+        refreshAvailability()
+        guard hasFullAccess else {
+            present(.fullAccessRequired)
+            return
+        }
+        guard let preferences else {
+            present(.error("BuddyGrammar could not open its shared container."))
+            return
+        }
+        let settings = preferences.loadSettings()
+        guard settings.hasAcceptedCloudProcessing else {
+            present(.cloudConsentRequired)
+            return
+        }
+
+        do {
+            let session = try preferences.beginKeyboardDictationSession()
+            if preferences.isCompanionAlive() {
+                keyboardDictationLog.notice("Signaling Dynamic Island dictation session \(session.id, privacy: .public)")
+                updateDictationPhase(.launching, status: .startingDictation)
+                DictationCompanionNotifier.post(.startRequested)
+                scheduleDictationHandoffFallback(sessionID: session.id)
+            } else {
+                keyboardDictationLog.notice("Opening BuddyGrammar for dictation session \(session.id, privacy: .public)")
+                updateDictationPhase(.launching, status: .openingDictation)
+                openDictationDeepLink(sessionID: session.id)
+            }
+        } catch {
+            keyboardDictationLog.error("Failed to begin dictation session: \(error, privacy: .public)")
+            present(.error("BuddyGrammar could not start voice dictation."))
+        }
+    }
+
+    /// When the readiness engine does not answer the Darwin signal in time,
+    /// fall back to the visible app launch.
+    private func scheduleDictationHandoffFallback(sessionID: UUID) {
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled,
+                  let self,
+                  let session = preferences?.loadKeyboardDictationSession(),
+                  session.id == sessionID,
+                  session.phase == .launching else { return }
+            keyboardDictationLog.warning("Dynamic Island did not answer; opening BuddyGrammar")
+            updateDictationPhase(.launching, status: .openingDictation)
+            openDictationDeepLink(sessionID: sessionID)
+        }
+    }
+
+    private func openDictationDeepLink(sessionID: UUID) {
         guard let url = KeyboardDictationHandoff.url(for: sessionID),
               let delegate else {
-            present(.error("Open BuddyGrammar once, then try voice dictation again."))
+            failDictationHandoff(sessionID: sessionID)
             return
         }
         // The app consumes this the moment the deep link arrives. If it is
         // still pending after a grace period, the launch was blocked and the
         // status must not keep claiming that dictation is starting.
         preferences?.saveDictationHandoffRequest(.now)
-        handoffVerificationTask?.cancel()
-        present(.dictationHandoffStarted)
         delegate.openHostApplication(url) { [weak self] didOpen in
-            guard let self, !didOpen else { return }
-            if self.status == .dictationHandoffStarted {
-                self.presentDictationHandoffFailure()
+            guard let self, !didOpen,
+                  let session = preferences?.loadKeyboardDictationSession(),
+                  session.id == sessionID,
+                  session.phase == .launching else {
+                return
             }
+            keyboardDictationLog.error("iOS rejected the BuddyGrammar dictation handoff")
+            failDictationHandoff(sessionID: sessionID)
         }
-        scheduleDictationHandoffVerification()
+        scheduleDictationHandoffVerification(sessionID: sessionID)
     }
 
     /// The runtime call reports success whenever it dispatched at all, even
     /// when iOS later refuses to launch the app (extension URL policies).
     /// The shared-container handshake is the only truth: if BuddyGrammar
     /// never consumed the request, guide instead of stalling.
-    private func scheduleDictationHandoffVerification() {
+    private func scheduleDictationHandoffVerification(sessionID: UUID) {
         handoffVerificationTask?.cancel()
         handoffVerificationTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(5))
             guard !Task.isCancelled, let self else { return }
-            self.handoffVerificationTask = nil
-            guard self.status == .dictationHandoffStarted,
-                  self.preferences?.consumeDictationHandoffRequest() == true
+            handoffVerificationTask = nil
+            guard let session = preferences?.loadKeyboardDictationSession(),
+                  session.id == sessionID,
+                  session.phase == .launching,
+                  preferences?.consumeDictationHandoffRequest() == true
             else { return }
-            self.presentDictationHandoffFailure()
+            failDictationHandoff(sessionID: sessionID)
         }
     }
 
-    private func presentDictationHandoffFailure() {
+    private func failDictationHandoff(sessionID: UUID) {
         handoffVerificationTask?.cancel()
         handoffVerificationTask = nil
+        preferences?.clearKeyboardDictationSession(id: sessionID)
+        dictationPhase = .idle
         present(
             .error("BuddyGrammar didn't open. Open it once, then tap Voice dictation again.")
         )
+    }
+
+    private func cancelKeyboardDictation() {
+        keyboardDictationLog.notice("User canceled launching dictation")
+        if let session = preferences?.loadKeyboardDictationSession() {
+            preferences?.clearKeyboardDictationSession(id: session.id)
+        }
+        dictationPhase = .idle
+        present(baselineStatus)
+    }
+
+    private func requestKeyboardDictationStop() {
+        guard let preferences,
+              let session = preferences.loadKeyboardDictationSession() else {
+            updateDictationPhase(.idle, status: baselineStatus)
+            return
+        }
+        do {
+            guard try preferences.requestKeyboardDictationStop(id: session.id) != nil else {
+                refreshKeyboardDictationSession()
+                return
+            }
+            DictationCompanionNotifier.post(.stopRequested)
+            updateDictationPhase(.processing, status: .dictationProcessing)
+        } catch {
+            present(.error("BuddyGrammar could not stop voice dictation."))
+        }
+    }
+
+    private func startDictationMonitor() {
+        dictationMonitorTask?.cancel()
+        dictationMonitorTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                refreshKeyboardDictationSession()
+                // Poll gently while idle; tightly only during an active
+                // session so the keystroke path stays unaffected.
+                let interval: Duration = dictationPhase == .idle
+                    ? .seconds(1)
+                    : .milliseconds(250)
+                try? await Task.sleep(for: interval)
+            }
+        }
+    }
+
+    private func refreshKeyboardDictationSession() {
+        guard let preferences,
+              let session = preferences.loadKeyboardDictationSession() else {
+            if dictationPhase != .idle {
+                dictationPhase = .idle
+            }
+            return
+        }
+
+        switch session.phase {
+        case .launching:
+            // A session stuck in launching means the app never picked it
+            // up (or was closed); expire it so the mic button recovers.
+            if Date.now.timeIntervalSince(session.updatedAt) > 15 {
+                keyboardDictationLog.warning("Expiring stale launching session \(session.id, privacy: .public)")
+                preferences.clearKeyboardDictationSession(id: session.id)
+                dictationPhase = .idle
+                present(.error("Voice dictation didn’t start. Try again."))
+                return
+            }
+            if dictationPhase != .launching {
+                updateDictationPhase(.launching, status: .openingDictation)
+            }
+        case .recording:
+            updateDictationPhase(.recording, status: .dictationRecording)
+        case .stopRequested, .transcribing:
+            updateDictationPhase(.processing, status: .dictationProcessing)
+        case .ready:
+            guard let transcript = session.transcript?.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ), !transcript.isEmpty else {
+                preferences.clearKeyboardDictationSession(id: session.id)
+                dictationPhase = .idle
+                present(.error("Voice dictation returned no text."))
+                return
+            }
+            preferences.clearKeyboardDictationSession(id: session.id)
+            preferences.clearPendingTranscript()
+            hasPendingTranscript = false
+            dictationPhase = .idle
+            insertDictatedText(transcript, languageCode: session.languageCode)
+        case .failed:
+            preferences.clearKeyboardDictationSession(id: session.id)
+            dictationPhase = .idle
+            present(.error(session.errorMessage ?? "Voice dictation failed."))
+        }
+    }
+
+    private func updateDictationPhase(
+        _ phase: KeyboardDictationPhase,
+        status: KeyboardStatus
+    ) {
+        guard dictationPhase != phase else { return }
+        dictationPhase = phase
+        present(status)
+    }
+
+    private func insertDictatedText(
+        _ text: String,
+        languageCode: String?
+    ) {
+        refreshAvailability()
+        guard requireCapability(editorCapabilities.transcriptInsertion) else { return }
+        cancelCorrectionForLocalEdit()
+        let context = intelligenceContextBeforeInput()
+        guard commitRecognizedText(
+            text,
+            context: context,
+            languageCode: languageCode
+        ) else {
+            present(.staleContext)
+            return
+        }
+        present(.transcriptInserted)
     }
 
     func showSettingsGuidance() {

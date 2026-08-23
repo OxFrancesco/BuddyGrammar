@@ -32,7 +32,7 @@ struct OnboardingView: View {
                     )
                     SetupRow(
                         symbol: "waveform.badge.mic",
-                        text: "Use Apple Dictation, or record visibly in BuddyGrammar and insert the saved transcript from the keyboard"
+                        text: "Hold Buddy to dictate: BuddyGrammar records, you swipe back and keep talking, and the transcript is inserted for you"
                     )
                     SetupRow(
                         symbol: "lock",

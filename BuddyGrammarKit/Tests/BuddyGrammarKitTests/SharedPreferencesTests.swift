@@ -151,17 +151,104 @@ final class SharedPreferencesTests: XCTestCase {
         XCTAssertEqual(settings.activeOpenRouterModelID, "custom/provider-model")
     }
 
-    func testLegacyKeyboardDictationArtifactsAreCleared() {
+    func testKeyboardDictationSessionMovesFromLaunchToAutomaticInsertion() throws {
         let preferences = SharedPreferences(defaults: defaults)
-        let sessionKey = "BuddyGrammar.iOS.keyboardDictationSession"
-        let heartbeatKey = "BuddyGrammar.iOS.companionHeartbeat"
-        defaults.set(Data([0x01]), forKey: sessionKey)
-        defaults.set(123.0, forKey: heartbeatKey)
+        let sessionID = UUID(uuidString: "7BFA18B2-85C9-48B5-A124-23926CE9144F")!
+        let startedAt = Date(timeIntervalSince1970: 1_000)
 
-        preferences.clearLegacyKeyboardDictationArtifacts()
+        let launching = try preferences.beginKeyboardDictationSession(
+            id: sessionID,
+            now: startedAt
+        )
+        XCTAssertEqual(launching.phase, .launching)
 
-        XCTAssertNil(defaults.object(forKey: sessionKey))
-        XCTAssertNil(defaults.object(forKey: heartbeatKey))
+        let recording = try preferences.updateKeyboardDictationSession(
+            id: sessionID,
+            phase: .recording,
+            now: startedAt.addingTimeInterval(1)
+        )
+        XCTAssertEqual(recording?.phase, .recording)
+
+        let stopRequested = try preferences.requestKeyboardDictationStop(
+            id: sessionID,
+            now: startedAt.addingTimeInterval(2)
+        )
+        XCTAssertEqual(stopRequested?.phase, .stopRequested)
+
+        _ = try preferences.updateKeyboardDictationSession(
+            id: sessionID,
+            phase: .transcribing,
+            now: startedAt.addingTimeInterval(3)
+        )
+        let ready = try preferences.updateKeyboardDictationSession(
+            id: sessionID,
+            phase: .ready,
+            transcript: "Hello from the keyboard.",
+            languageCode: "it",
+            now: startedAt.addingTimeInterval(4)
+        )
+
+        XCTAssertEqual(ready?.phase, .ready)
+        XCTAssertEqual(ready?.transcript, "Hello from the keyboard.")
+        XCTAssertEqual(ready?.languageCode, "it")
+        XCTAssertEqual(
+            preferences.loadKeyboardDictationSession(now: startedAt.addingTimeInterval(4)),
+            ready
+        )
+    }
+
+    func testStaleKeyboardDictationSessionIsDiscarded() throws {
+        let preferences = SharedPreferences(defaults: defaults)
+        let startedAt = Date(timeIntervalSince1970: 1_000)
+        _ = try preferences.beginKeyboardDictationSession(now: startedAt)
+
+        XCTAssertNil(
+            preferences.loadKeyboardDictationSession(
+                now: startedAt.addingTimeInterval(
+                    BuddyGrammarConfiguration.keyboardDictationSessionLifetime + 1
+                )
+            )
+        )
+    }
+
+    func testClearKeyboardDictationSessionIgnoresMismatchedIdentifier() throws {
+        let preferences = SharedPreferences(defaults: defaults)
+        let session = try preferences.beginKeyboardDictationSession()
+
+        preferences.clearKeyboardDictationSession(id: UUID())
+        XCTAssertEqual(preferences.loadKeyboardDictationSession()?.id, session.id)
+
+        preferences.clearKeyboardDictationSession(id: session.id)
+        XCTAssertNil(preferences.loadKeyboardDictationSession())
+    }
+
+    func testCompanionHeartbeatReportsAliveOnlyWithinTolerance() {
+        let preferences = SharedPreferences(defaults: defaults)
+        // The heartbeat is stored as timeIntervalSinceReferenceDate and only
+        // positive values count, so the fixture must be after 2001.
+        let now = Date(timeIntervalSinceReferenceDate: 5_000)
+
+        XCTAssertFalse(preferences.isCompanionAlive(now: now))
+
+        preferences.recordCompanionHeartbeat(now: now)
+        XCTAssertTrue(preferences.isCompanionAlive(now: now))
+        XCTAssertTrue(
+            preferences.isCompanionAlive(
+                now: now.addingTimeInterval(
+                    BuddyGrammarConfiguration.companionHeartbeatTolerance
+                )
+            )
+        )
+        XCTAssertFalse(
+            preferences.isCompanionAlive(
+                now: now.addingTimeInterval(
+                    BuddyGrammarConfiguration.companionHeartbeatTolerance + 1
+                )
+            )
+        )
+
+        preferences.clearCompanionHeartbeat()
+        XCTAssertFalse(preferences.isCompanionAlive(now: now))
     }
 
     func testPendingTranscriptRoundTripAndClear() throws {

@@ -33,6 +33,18 @@ struct DictationView: View {
             Text(phaseTitle)
                 .font(.system(.title2, design: .rounded, weight: .bold))
 
+            if model.isKeyboardDictationActive {
+                Label(
+                    "Swipe back to the app you were typing in — the recording keeps going. Stop from the keyboard and your words will be inserted.",
+                    systemImage: "arrow.uturn.backward"
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.leading)
+                .padding(.horizontal, 24)
+                .accessibilityIdentifier("dictation.keyboardHandoffHint")
+            }
+
             if model.dictationPhase.isProcessing {
                 ProgressView()
                     .controlSize(.large)

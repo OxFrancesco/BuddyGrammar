@@ -18,8 +18,8 @@ struct AppRootView: View {
             model.refresh()
         }
         .onOpenURL { url in
-            guard KeyboardDictationHandoff.sessionID(from: url) != nil else { return }
-            model.handleKeyboardDictationHandoff()
+            guard let sessionID = KeyboardDictationHandoff.sessionID(from: url) else { return }
+            model.handleKeyboardDictationHandoff(sessionID: sessionID)
         }
         .alert(item: $model.alert) { alert in
             Alert(

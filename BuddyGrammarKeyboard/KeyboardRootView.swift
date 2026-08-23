@@ -203,7 +203,9 @@ private struct KeyboardSuggestionBar: View {
     var body: some View {
         HStack(spacing: 6) {
             Group {
-                if model.canUndoCorrection {
+                if model.dictationPhase != .idle {
+                    KeyboardDictationBar(model: model)
+                } else if model.canUndoCorrection {
                     Button(action: model.undoLastCorrection) {
                         Label("Undo Buddy change", systemImage: "arrow.uturn.backward")
                             .font(.subheadline.weight(.semibold))
@@ -234,12 +236,12 @@ private struct KeyboardSuggestionBar: View {
                 action: { isBuddyDrawerPresented.toggle() },
                 longPressAction: {
                     isBuddyDrawerPresented = false
-                    model.requestDictationHandoff()
+                    model.toggleDictation()
                 },
                 accessibilityLabel: isBuddyDrawerPresented
                     ? "Close Buddy tools"
                     : "Open Buddy tools",
-                accessibilityHint: "Hold to start ElevenLabs dictation in BuddyGrammar.",
+                accessibilityHint: "Hold to start or stop voice dictation.",
                 accessibilityIdentifier: "keyboard.buddy",
                 longPressAccessibilityActionName: "Start voice dictation"
             ) { isPressed in
@@ -345,6 +347,77 @@ private struct StableSuggestionSlots: View {
     }
 }
 
+/// Shown in place of the suggestion slots while a dictation session owned by
+/// the containing app is in flight. Stop and cancel both route through
+/// `toggleDictation()`, which resolves the correct action from shared state.
+private struct KeyboardDictationBar: View {
+    let model: KeyboardModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 5) {
+                Image(systemName: iconName)
+                    .foregroundStyle(model.dictationPhase == .recording ? .red : .secondary)
+                    .accessibilityHidden(true)
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("keyboard.dictationStatus")
+
+            if model.dictationPhase == .processing {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Button {
+                    model.playInputClick()
+                    model.toggleDictation()
+                } label: {
+                    Label(
+                        model.dictationPhase == .recording ? "Stop" : "Cancel",
+                        systemImage: model.dictationPhase == .recording
+                            ? "stop.fill"
+                            : "xmark"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 9)
+                    .frame(height: 32)
+                }
+                .buttonStyle(KeyboardAccessoryButtonStyle(isProminent: true))
+                .accessibilityIdentifier("keyboard.dictationAction")
+                .accessibilityHint(
+                    model.dictationPhase == .recording
+                        ? "Stops recording and inserts your words here."
+                        : "Cancels the dictation that is starting."
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 32)
+    }
+
+    private var iconName: String {
+        switch model.dictationPhase {
+        case .idle: "mic"
+        case .launching: "arrow.up.forward.app"
+        case .recording: "waveform"
+        case .processing: "hourglass"
+        }
+    }
+
+    private var message: String {
+        switch model.dictationPhase {
+        case .idle: ""
+        case .launching: "Starting dictation…"
+        case .recording: "Listening…"
+        case .processing: "Preparing your text…"
+        }
+    }
+}
+
 private struct StatusIndicator: View {
     let status: KeyboardStatus
 
@@ -377,8 +450,12 @@ private struct StatusIndicator: View {
             "hand.raised"
         case .correctionSuggestionSuppressed:
             "nosign"
-        case .dictationHandoffStarted:
+        case .startingDictation, .dictationRecording:
             "mic.fill"
+        case .openingDictation:
+            "arrow.up.forward.app"
+        case .dictationProcessing:
+            "hourglass"
         case .settingsGuidance:
             "gearshape"
         case .ready:
@@ -495,19 +572,30 @@ private struct BuddyDrawer: View {
                 Spacer(minLength: 8)
 
                 Button {
-                    model.requestDictationHandoff()
+                    model.toggleDictation()
                     dismiss()
                 } label: {
-                    Label("Voice dictation", systemImage: "mic.fill")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 9)
-                        .frame(height: 32)
+                    Label(
+                        model.dictationPhase == .recording
+                            ? "Stop dictation"
+                            : "Voice dictation",
+                        systemImage: model.dictationPhase == .recording
+                            ? "stop.fill"
+                            : "mic.fill"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 9)
+                    .frame(height: 32)
                 }
                 .buttonStyle(KeyboardAccessoryButtonStyle(isProminent: true))
                 .accessibilityIdentifier("keyboard.voiceInput")
-                .accessibilityLabel("Voice dictation")
+                .accessibilityLabel(
+                    model.dictationPhase == .recording
+                        ? "Stop dictation"
+                        : "Voice dictation"
+                )
                 .accessibilityHint(
-                    "Starts ElevenLabs dictation in the BuddyGrammar app."
+                    "BuddyGrammar records; the transcript is inserted here."
                 )
             }
 

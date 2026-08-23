@@ -55,7 +55,10 @@ final class IOSAppModel {
     var alert: AppAlert?
     var notice: AppNotice?
     let isSharedContainerReady: Bool
+    private(set) var keyboardDictationSessionID: UUID?
 
+    @ObservationIgnored private var keyboardStopMonitorTask: Task<Void, Never>?
+    @ObservationIgnored private var backgroundTaskIdentifier: UIBackgroundTaskIdentifier = .invalid
     private let preferences: SharedPreferences?
     private let adaptiveStore: AdaptiveLearningStore?
     private let audioRecorder: IOSAudioRecorder
@@ -84,15 +87,6 @@ final class IOSAppModel {
         var loadedSettings = sharedPreferences?.loadSettings() ?? .default
         var loadedTranscript = sharedPreferences?.loadPendingTranscript()
         var loadedDictation = sharedPreferences?.loadSavedDictation()
-
-        // Keyboard-triggered microphone readiness relied on keeping the
-        // containing app alive, which is not a supported custom-keyboard
-        // contract. Migrate existing installs to the honest app-started flow.
-        if loadedSettings.enablesQuickDictation {
-            loadedSettings.enablesQuickDictation = false
-            loadedSettings.quickDictationExpiresAt = nil
-            try? sharedPreferences?.saveSettings(loadedSettings)
-        }
 
         #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
@@ -136,10 +130,27 @@ final class IOSAppModel {
             )
         }
 
-        Task { [dynamicIslandController] in
-            await dynamicIslandController.deactivate()
+        dynamicIslandController.onStartRequested = { [weak self] sessionID in
+            Task { @MainActor [weak self] in
+                guard let self,
+                      !dictationPhase.isRecording,
+                      !dictationPhase.isProcessing else { return }
+                await startDictation(keyboardSessionID: sessionID)
+            }
         }
-
+        dynamicIslandController.onStopRequested = { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, dictationPhase.isRecording else { return }
+                await finishDictation()
+            }
+        }
+        dynamicIslandController.onExpired = { [weak self] in
+            guard let self else { return }
+            settings.enablesQuickDictation = false
+            settings.quickDictationExpiresAt = nil
+            persistSettings(successMessage: nil)
+            showNotice("Dynamic Island dictation readiness ended", kind: .information)
+        }
     }
 
     var isCloudReady: Bool {
@@ -147,14 +158,17 @@ final class IOSAppModel {
             && settings.hasAcceptedCloudProcessing
     }
 
+    /// True while a keyboard-initiated dictation owns the recorder. The
+    /// Dictate tab uses this to tell the user they can return to the app
+    /// they were typing in while the recording continues.
+    var isKeyboardDictationActive: Bool {
+        keyboardDictationSessionID != nil
+            && (dictationPhase.isRecording || dictationPhase.isProcessing)
+    }
+
     func refresh() {
         if let preferences {
             settings = preferences.loadSettings()
-            if settings.enablesQuickDictation {
-                settings.enablesQuickDictation = false
-                settings.quickDictationExpiresAt = nil
-                try? preferences.saveSettings(settings)
-            }
             pendingTranscript = preferences.loadPendingTranscript()
             if transcriptDraft.isEmpty {
                 let savedDictation = preferences.loadSavedDictation()
@@ -163,7 +177,46 @@ final class IOSAppModel {
                     ?? savedDictation?.languageCode
             }
         }
-        Task { [dynamicIslandController] in
+        Task { [weak self] in
+            guard let self else { return }
+            await dynamicIslandController.restoreIfNeeded(settings: settings)
+        }
+    }
+
+    func setQuickDictation(
+        enabled: Bool,
+        duration: QuickDictationDuration
+    ) async {
+        if enabled {
+            guard settings.hasAcceptedCloudProcessing else {
+                showAlert(
+                    title: "Cloud processing is off",
+                    message: "Allow cloud processing before enabling keyboard voice dictation."
+                )
+                return
+            }
+            do {
+                let expiresAt = try await dynamicIslandController.activate(
+                    duration: duration
+                )
+                settings.enablesQuickDictation = true
+                settings.quickDictationDuration = duration
+                settings.quickDictationExpiresAt = expiresAt
+                persistSettings(successMessage: "Dynamic Island dictation is ready")
+            } catch {
+                settings.enablesQuickDictation = false
+                settings.quickDictationExpiresAt = nil
+                persistSettings(successMessage: nil)
+                showAlert(
+                    title: "Couldn’t enable Dynamic Island dictation",
+                    message: error.localizedDescription
+                )
+            }
+        } else {
+            settings.enablesQuickDictation = false
+            settings.quickDictationDuration = duration
+            settings.quickDictationExpiresAt = nil
+            persistSettings(successMessage: "Dynamic Island dictation turned off")
             await dynamicIslandController.deactivate()
         }
     }
@@ -211,13 +264,11 @@ final class IOSAppModel {
         settings.adaptiveTypingEnabled = adaptiveTypingEnabled
         settings.personalizedPracticeEnabled = personalizedPracticeEnabled
         settings.hasAcceptedCloudProcessing = acceptsCloudProcessing
-        settings.enablesQuickDictation = false
-        settings.quickDictationExpiresAt = nil
         settings.copiesCompletedDictationToClipboard = copiesCompletedDictationToClipboard
         persistSettings(successMessage: "Preferences saved")
     }
 
-    func startDictation() async {
+    func startDictation(keyboardSessionID: UUID? = nil) async {
         guard settings.hasAcceptedCloudProcessing else {
             showAlert(
                 title: "Cloud processing is off",
@@ -226,12 +277,15 @@ final class IOSAppModel {
             return
         }
 
-        // A recording begins only while the containing app is visibly active.
-        await dynamicIslandController.deactivate()
+        // Hand the audio session from the readiness engine to the recorder.
+        if dynamicIslandController.isReady {
+            await dynamicIslandController.prepareForRecording()
+        }
 
         do {
             let startedAt = try await audioRecorder.start()
             dictationPhase = .recording(startedAt: startedAt)
+            await dynamicIslandController.prepareForRecording(startedAt: startedAt)
             if settings.autoCorrectDictation {
                 let canUseOnDevice = UIApplication.shared.applicationState == .active
                 Task { [textPolisher] in
@@ -239,30 +293,72 @@ final class IOSAppModel {
                 }
             }
             detectedLanguageCode = nil
+            self.keyboardDictationSessionID = keyboardSessionID
+            if let keyboardSessionID {
+                let session = try preferences?.updateKeyboardDictationSession(
+                    id: keyboardSessionID,
+                    phase: .recording
+                )
+                guard session != nil else {
+                    audioRecorder.cancel()
+                    self.keyboardDictationSessionID = nil
+                    dictationPhase = transcriptDraft.isEmpty ? .idle : .ready
+                    throw SharedContainerError.unavailable
+                }
+                monitorKeyboardStopRequest(sessionID: keyboardSessionID)
+            }
         } catch {
             dictationPhase = .idle
+            if let keyboardSessionID {
+                _ = try? preferences?.updateKeyboardDictationSession(
+                    id: keyboardSessionID,
+                    phase: .failed,
+                    errorMessage: error.localizedDescription
+                )
+            }
+            self.keyboardDictationSessionID = nil
             showAlert(title: "Couldn’t start recording", message: error.localizedDescription)
-            await dynamicIslandController.deactivate()
+            await dynamicIslandController.resumeAfterRecording(settings: settings)
         }
     }
 
     /// The keyboard hands off to this app because extensions cannot record
     /// audio. Open the Dictate tab and begin capturing immediately so the
-    /// user can speak without extra taps.
-    func handleKeyboardDictationHandoff() {
+    /// user can speak without extra taps, swipe back to the app they were
+    /// typing in, and stop from the keyboard when done.
+    func handleKeyboardDictationHandoff(sessionID: UUID?) {
         // Acknowledge the keyboard's pending request so it can tell the
         // difference between a successful launch and a blocked one.
-        preferences?.consumeDictationHandoffRequest()
+        _ = preferences?.consumeDictationHandoffRequest()
         selectedTab = .dictation
         guard settings.hasCompletedOnboarding,
-              !dictationPhase.isRecording else { return }
+              !dictationPhase.isRecording,
+              !dictationPhase.isProcessing else { return }
+        let keyboardSessionID = sessionID.flatMap { id in
+            preferences?.loadKeyboardDictationSession()?.id == id ? id : nil
+        }
         Task { [weak self] in
-            await self?.startDictation()
+            await self?.startDictation(keyboardSessionID: keyboardSessionID)
         }
     }
 
     func finishDictation() async {
         guard dictationPhase.isRecording else { return }
+        let keyboardSessionID = self.keyboardDictationSessionID
+        keyboardStopMonitorTask?.cancel()
+        keyboardStopMonitorTask = nil
+        if let keyboardSessionID {
+            beginBackgroundProcessing()
+            _ = try? preferences?.updateKeyboardDictationSession(
+                id: keyboardSessionID,
+                phase: .transcribing
+            )
+        }
+        await dynamicIslandController.showProcessing()
+        defer {
+            endBackgroundProcessing()
+            self.keyboardDictationSessionID = nil
+        }
 
         do {
             let recordingURL = try audioRecorder.stop()
@@ -311,6 +407,14 @@ final class IOSAppModel {
                 text: finalText,
                 languageCode: transcript.languageCode
             )
+            if let keyboardSessionID {
+                try preferences?.updateKeyboardDictationSession(
+                    id: keyboardSessionID,
+                    phase: .ready,
+                    transcript: finalText,
+                    languageCode: transcript.languageCode
+                )
+            }
             let copiedToClipboard = settings.copiesCompletedDictationToClipboard
             if copiedToClipboard {
                 copyToClipboard(finalText)
@@ -334,20 +438,88 @@ final class IOSAppModel {
                 )
             }
         } catch {
+            if let keyboardSessionID {
+                _ = try? preferences?.updateKeyboardDictationSession(
+                    id: keyboardSessionID,
+                    phase: .failed,
+                    errorMessage: error.localizedDescription
+                )
+            }
             dictationPhase = transcriptDraft.isEmpty ? .idle : .ready
             showAlert(title: "Dictation failed", message: error.localizedDescription)
         }
-        await dynamicIslandController.deactivate()
+        await dynamicIslandController.resumeAfterRecording(settings: settings)
     }
 
     func cancelRecording() {
+        let keyboardSessionID = self.keyboardDictationSessionID
+        keyboardStopMonitorTask?.cancel()
+        keyboardStopMonitorTask = nil
         audioRecorder.cancel()
+        if let keyboardSessionID {
+            _ = try? preferences?.updateKeyboardDictationSession(
+                id: keyboardSessionID,
+                phase: .failed,
+                errorMessage: "Voice dictation was canceled."
+            )
+        }
+        self.keyboardDictationSessionID = nil
         dictationPhase = transcriptDraft.isEmpty ? .idle : .ready
         showNotice("Recording discarded", kind: .information)
         Task { [weak self] in
             guard let self else { return }
-            await dynamicIslandController.deactivate()
+            await dynamicIslandController.resumeAfterRecording(settings: settings)
         }
+    }
+
+    /// Poll fallback for the keyboard's stop request. The Darwin signal is
+    /// delivered instantly while this process runs, but shared state is the
+    /// source of truth in case a signal is missed.
+    private func monitorKeyboardStopRequest(sessionID: UUID) {
+        keyboardStopMonitorTask?.cancel()
+        keyboardStopMonitorTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard !Task.isCancelled, let self else { return }
+                guard let session = preferences?.loadKeyboardDictationSession(),
+                      session.id == sessionID else {
+                    cancelRecording()
+                    return
+                }
+                if session.phase == .stopRequested {
+                    await finishDictation()
+                    return
+                }
+            }
+        }
+    }
+
+    /// Transcription and correction outlive the audio session once the
+    /// recording stops, so ask iOS for the standard finite background window
+    /// to finish the network round-trips.
+    private func beginBackgroundProcessing() {
+        guard backgroundTaskIdentifier == .invalid else { return }
+        backgroundTaskIdentifier = UIApplication.shared.beginBackgroundTask(
+            withName: "BuddyGrammar keyboard transcription"
+        ) { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if let sessionID = keyboardDictationSessionID {
+                    _ = try? preferences?.updateKeyboardDictationSession(
+                        id: sessionID,
+                        phase: .failed,
+                        errorMessage: "Voice dictation took too long to finish."
+                    )
+                }
+                endBackgroundProcessing()
+            }
+        }
+    }
+
+    private func endBackgroundProcessing() {
+        guard backgroundTaskIdentifier != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTaskIdentifier)
+        backgroundTaskIdentifier = .invalid
     }
 
     func saveDraftForKeyboard() {

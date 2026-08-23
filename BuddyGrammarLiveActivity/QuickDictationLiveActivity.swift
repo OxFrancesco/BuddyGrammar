@@ -19,7 +19,7 @@ struct QuickDictationLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: "keyboard.badge.ellipsis")
+                    Image(systemName: "waveform.circle.fill")
                         .font(.title2)
                         .foregroundStyle(statusColor(for: context.state.phase))
                         .accessibilityHidden(true)
@@ -33,9 +33,16 @@ struct QuickDictationLiveActivity: Widget {
                             .foregroundStyle(.secondary)
                     }
                 }
-                DynamicIslandExpandedRegion(.trailing) { EmptyView() }
+                DynamicIslandExpandedRegion(.trailing) {
+                    if let startedAt = context.state.startedAt,
+                       context.state.phase == .recording {
+                        Text(timerInterval: startedAt...Date.distantFuture, countsDown: false)
+                            .font(.caption.monospacedDigit())
+                            .frame(maxWidth: 54)
+                    }
+                }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Text("Use Apple Dictation for same-field input, or start a visible recording in BuddyGrammar.")
+                    Text(footer(for: context.state.phase))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -44,9 +51,16 @@ struct QuickDictationLiveActivity: Widget {
                     .foregroundStyle(statusColor(for: context.state.phase))
                     .accessibilityLabel(title(for: context.state.phase))
             } compactTrailing: {
-                Image(systemName: compactSymbol(for: context.state.phase))
-                    .foregroundStyle(statusColor(for: context.state.phase))
-                    .accessibilityHidden(true)
+                if context.state.phase == .recording,
+                   let startedAt = context.state.startedAt {
+                    Text(timerInterval: startedAt...Date.distantFuture, countsDown: false)
+                        .font(.caption2.monospacedDigit())
+                        .frame(maxWidth: 38)
+                } else {
+                    Image(systemName: compactSymbol(for: context.state.phase))
+                        .foregroundStyle(statusColor(for: context.state.phase))
+                        .accessibilityHidden(true)
+                }
             } minimal: {
                 Image(systemName: compactSymbol(for: context.state.phase))
                     .foregroundStyle(statusColor(for: context.state.phase))
@@ -62,7 +76,7 @@ private struct LockScreenDictationView: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: "keyboard.badge.ellipsis")
+            Image(systemName: "waveform.circle.fill")
                 .font(.largeTitle)
                 .foregroundStyle(statusColor(for: state.phase))
                 .accessibilityHidden(true)
@@ -74,6 +88,11 @@ private struct LockScreenDictationView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 12)
+            if state.phase == .recording, let startedAt = state.startedAt {
+                Text(timerInterval: startedAt...Date.distantFuture, countsDown: false)
+                    .font(.body.monospacedDigit())
+                    .frame(maxWidth: 70)
+            }
         }
         .padding(.horizontal, 4)
         .accessibilityElement(children: .combine)
@@ -81,25 +100,54 @@ private struct LockScreenDictationView: View {
 }
 
 private func title(
-    for _: QuickDictationActivityAttributes.ContentState.Phase
+    for phase: QuickDictationActivityAttributes.ContentState.Phase
 ) -> String {
-    "Keyboard dictation session ended"
+    switch phase {
+    case .ready: "BuddyGrammar is ready"
+    case .recording: "Listening"
+    case .processing: "Preparing your text"
+    }
 }
 
 private func detail(
-    for _: QuickDictationActivityAttributes.ContentState.Phase
+    for phase: QuickDictationActivityAttributes.ContentState.Phase
 ) -> String {
-    "Open BuddyGrammar to record, or use Apple Dictation from the system keyboard"
+    switch phase {
+    case .ready: "Microphone ready for keyboard dictation"
+    case .recording: "Stop from the BuddyGrammar keyboard when done"
+    case .processing: "Transcribing and correcting"
+    }
+}
+
+private func footer(
+    for phase: QuickDictationActivityAttributes.ContentState.Phase
+) -> String {
+    switch phase {
+    case .ready:
+        "Tap the BuddyGrammar mic in any enabled keyboard to dictate."
+    case .recording:
+        "Keep talking in any app. Stop from the BuddyGrammar keyboard to insert your words."
+    case .processing:
+        "Your transcript will appear in the BuddyGrammar keyboard in a moment."
+    }
 }
 
 private func compactSymbol(
-    for _: QuickDictationActivityAttributes.ContentState.Phase
+    for phase: QuickDictationActivityAttributes.ContentState.Phase
 ) -> String {
-    "keyboard.badge.ellipsis"
+    switch phase {
+    case .ready: "mic.fill"
+    case .recording: "waveform"
+    case .processing: "ellipsis"
+    }
 }
 
 private func statusColor(
-    for _: QuickDictationActivityAttributes.ContentState.Phase
+    for phase: QuickDictationActivityAttributes.ContentState.Phase
 ) -> Color {
-    .secondary
+    switch phase {
+    case .ready: .cyan
+    case .recording: .red
+    case .processing: .yellow
+    }
 }

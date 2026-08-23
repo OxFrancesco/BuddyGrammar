@@ -101,21 +101,26 @@ final class BuddyGrammarIOSUITests: XCTestCase {
     }
 
     @MainActor
-    func testUnsupportedKeyboardDictationReadinessIsAbsent() {
+    func testKeyboardDictationReadinessControlsAreAvailable() {
         let app = launchApp()
 
+        // The retired Picture in Picture companion must stay gone.
         XCTAssertFalse(app.descendants(matching: .any)["home.quickDictation"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["companion.bar"].exists)
 
         app.tabBars.buttons["Settings"].tap()
 
-        XCTAssertFalse(app.descendants(matching: .any)["settings.quickDictation"].exists)
-        XCTAssertFalse(
+        let readinessToggle = app.descendants(matching: .any)["settings.quickDictation"]
+        for _ in 0..<4 where !readinessToggle.exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(readinessToggle.waitForExistence(timeout: 5))
+        XCTAssertTrue(
             app.descendants(matching: .any)["settings.quickDictationDuration"].exists
         )
         XCTAssertFalse(app.descendants(matching: .any)["companion.enterPip"].exists)
         XCTAssertFalse(app.staticTexts["Picture in picture"].exists)
-        attachScreenshot(named: "Supported dictation settings", app: app)
+        attachScreenshot(named: "Keyboard dictation readiness settings", app: app)
     }
 
     @MainActor
