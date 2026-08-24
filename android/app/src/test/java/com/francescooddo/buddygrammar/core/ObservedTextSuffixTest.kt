@@ -32,4 +32,12 @@ class ObservedTextSuffixTest {
 
         assertTrue(suffix.consumeIfUnchanged("A different prefix hello"))
     }
+
+    @Test
+    fun `tracks an accepted suggestion together with its appended whitespace`() {
+        val suffix = ObservedTextSuffix(maximumCharacters = 16)
+        suffix.observe(committedText = "hello ", contextBeforeCursor = "Say hello ")
+
+        assertTrue(suffix.consumeIfUnchanged("Say hello "))
+    }
 }

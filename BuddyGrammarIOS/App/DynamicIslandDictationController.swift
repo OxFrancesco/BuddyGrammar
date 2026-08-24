@@ -26,6 +26,17 @@ enum DynamicIslandDictationError: LocalizedError {
     }
 }
 
+/// Owns the dictation Live Activity and the optional Dynamic Island
+/// readiness mode.
+///
+/// Two flows share this controller:
+/// - **Session flow (default):** the keyboard opens the app, a real recording
+///   starts, and a Live Activity spans that recording only. `UIBackgroundModes
+///   audio` keeps the genuine recording alive after the user swipes back to
+///   the app they were typing in.
+/// - **Readiness flow (opt-in):** the user explicitly keeps an audio-input
+///   session active for a chosen window so a keyboard mic tap can start a
+///   recording without switching apps. Idle audio is discarded in memory.
 @MainActor
 final class DynamicIslandDictationController {
     var onStartRequested: ((UUID) -> Void)?
@@ -51,6 +62,8 @@ final class DynamicIslandDictationController {
             }
         }
     }
+
+    // MARK: - Readiness mode (opt-in)
 
     func activate(
         duration: QuickDictationDuration,
@@ -112,12 +125,28 @@ final class DynamicIslandDictationController {
         }
     }
 
+    // MARK: - Recording session (both flows)
+
+    /// Reflects a genuine recording in the Live Activity. In the readiness
+    /// flow the idle engine is stopped first so the recorder owns the audio
+    /// session; in the session flow a new activity is created for the
+    /// recording (the app is foreground at that moment, having just been
+    /// opened by the keyboard handoff).
     func prepareForRecording(startedAt: Date = .now) async {
         stopReadinessAudio(deactivateSession: false)
-        await updateActivity(
-            .init(phase: .recording, startedAt: startedAt),
-            staleDate: expirationDate
+        let state = QuickDictationActivityAttributes.ContentState(
+            phase: .recording,
+            startedAt: startedAt
         )
+        if activityID == nil {
+            try? await showActivity(
+                state: state,
+                activatedAt: startedAt,
+                staleDate: expirationDate
+            )
+        } else {
+            await updateActivity(state, staleDate: expirationDate)
+        }
     }
 
     func showProcessing() async {
@@ -127,6 +156,8 @@ final class DynamicIslandDictationController {
         )
     }
 
+    /// Restores the post-recording state: back to readiness when the window
+    /// is still open, otherwise the Live Activity ends with the session.
     func resumeAfterRecording(settings: BuddyGrammarSettings, now: Date = .now) async {
         guard settings.enablesQuickDictation,
               settings.quickDictationExpiresAt.map({ $0 > now }) ?? true else {
@@ -160,8 +191,10 @@ final class DynamicIslandDictationController {
         for existingActivity in activities {
             await existingActivity.end(nil, dismissalPolicy: .immediate)
         }
-        dynamicIslandLog.notice("Dynamic Island readiness stopped")
+        dynamicIslandLog.notice("Dynamic Island dictation activity ended")
     }
+
+    // MARK: - Private
 
     private func requestMicrophonePermission() async -> Bool {
         await withCheckedContinuation { continuation in
@@ -170,6 +203,11 @@ final class DynamicIslandDictationController {
             }
         }
     }
+
+    nonisolated private static func discardedReadinessTap(
+        _ buffer: AVAudioPCMBuffer,
+        _ time: AVAudioTime
+    ) {}
 
     private func startReadinessAudio() throws {
         guard !audioEngine.isRunning else { return }
@@ -189,11 +227,16 @@ final class DynamicIslandDictationController {
             throw DynamicIslandDictationError.microphoneUnavailable
         }
         if !inputTapInstalled {
+            // AVAudio invokes taps on its realtime thread. A closure literal
+            // here would inherit this @MainActor class's isolation and trap
+            // on the runtime isolation assert, so pass a nonisolated
+            // function instead. Readiness audio is deliberately discarded;
+            // only audio captured after a keyboard mic tap is recorded.
             input.installTap(
                 onBus: 0,
                 bufferSize: 1_024,
                 format: format,
-                block: Self.discardReadinessAudio
+                block: Self.discardedReadinessTap
             )
             inputTapInstalled = true
         }
@@ -204,15 +247,6 @@ final class DynamicIslandDictationController {
             stopReadinessAudio(deactivateSession: true)
             throw error
         }
-    }
-
-    private nonisolated static func discardReadinessAudio(
-        _: AVAudioPCMBuffer,
-        _: AVAudioTime
-    ) {
-        // AVFAudio invokes tap callbacks on a realtime queue, not MainActor.
-        // Readiness audio is deliberately discarded. Only audio captured after
-        // a keyboard mic tap is written to a recording file.
     }
 
     private func stopReadinessAudio(deactivateSession: Bool) {

@@ -13,8 +13,9 @@ class ObservedTextSuffix(private val maximumCharacters: Int = 64) {
     }
 
     fun observe(committedText: String, contextBeforeCursor: String) {
+        val wordEndingText = committedText.trimEnd()
         suffix = if (
-            committedText.lastOrNull()?.isLetterOrDigit() == true &&
+            wordEndingText.lastOrNull()?.isLetterOrDigit() == true &&
             contextBeforeCursor.isNotEmpty()
         ) {
             contextBeforeCursor.takeLast(maximumCharacters)

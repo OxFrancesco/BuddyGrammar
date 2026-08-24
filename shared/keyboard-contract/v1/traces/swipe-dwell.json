@@ -1,0 +1,106 @@
+{
+  "$schema": "../trace-suite.schema.json",
+  "schemaVersion": 1,
+  "catalogRevision": "2026.07.1",
+  "suite": "swipe-dwell",
+  "cases": [
+    {
+      "id": "english-book-dwell-repeats-o",
+      "description": "Dwelling on O long enough emits the repeated letter in book.",
+      "input": {
+        "languageId": "en",
+        "samples": [
+          { "key": "b", "atMilliseconds": 0, "x": 4.75, "y": 2.0 },
+          { "key": "o", "atMilliseconds": 70, "x": 8.0, "y": 0.0 },
+          { "key": "o", "atMilliseconds": 140, "x": 8.05, "y": 0.02 },
+          { "key": "o", "atMilliseconds": 255, "x": 7.98, "y": -0.03 },
+          { "key": "o", "atMilliseconds": 280, "x": 8.02, "y": 0.01 },
+          { "key": "k", "atMilliseconds": 350, "x": 7.25, "y": 1.0 }
+        ]
+      },
+      "expect": { "keySequence": "book", "repeatedRuns": ["o"] }
+    },
+    {
+      "id": "english-bot-short-o-does-not-repeat",
+      "description": "A normal pass through O remains a single letter.",
+      "input": {
+        "languageId": "en",
+        "samples": [
+          { "key": "b", "atMilliseconds": 0, "x": 4.75, "y": 2.0 },
+          { "key": "o", "atMilliseconds": 70, "x": 8.0, "y": 0.0 },
+          { "key": "o", "atMilliseconds": 125, "x": 8.03, "y": 0.01 },
+          { "key": "t", "atMilliseconds": 190, "x": 4.0, "y": 0.0 }
+        ]
+      },
+      "expect": { "keySequence": "bot", "repeatedRuns": [] }
+    },
+    {
+      "id": "english-coffee-two-dwell-runs",
+      "description": "Independent dwells can represent both repeated runs in coffee.",
+      "input": {
+        "languageId": "en",
+        "samples": [
+          { "key": "c", "atMilliseconds": 0, "x": 2.75, "y": 2.0 },
+          { "key": "o", "atMilliseconds": 60, "x": 8.0, "y": 0.0 },
+          { "key": "f", "atMilliseconds": 120, "x": 3.25, "y": 1.0 },
+          { "key": "f", "atMilliseconds": 190, "x": 3.28, "y": 1.0 },
+          { "key": "f", "atMilliseconds": 310, "x": 3.23, "y": 1.02 },
+          { "key": "f", "atMilliseconds": 330, "x": 3.26, "y": 0.99 },
+          { "key": "e", "atMilliseconds": 400, "x": 2.0, "y": 0.0 },
+          { "key": "e", "atMilliseconds": 475, "x": 2.02, "y": 0.02 },
+          { "key": "e", "atMilliseconds": 590, "x": 1.98, "y": -0.01 },
+          { "key": "e", "atMilliseconds": 610, "x": 2.01, "y": 0.01 }
+        ]
+      },
+      "expect": { "keySequence": "coffee", "repeatedRuns": ["f", "e"] }
+    },
+    {
+      "id": "italian-anno-dwell-repeats-n",
+      "description": "Italian uses the same geometry-independent dwell contract for anno.",
+      "input": {
+        "languageId": "it",
+        "samples": [
+          { "key": "a", "atMilliseconds": 0, "x": 0.25, "y": 1.0 },
+          { "key": "n", "atMilliseconds": 70, "x": 5.75, "y": 2.0 },
+          { "key": "n", "atMilliseconds": 150, "x": 5.79, "y": 2.01 },
+          { "key": "n", "atMilliseconds": 260, "x": 5.74, "y": 1.98 },
+          { "key": "n", "atMilliseconds": 280, "x": 5.76, "y": 2.0 },
+          { "key": "o", "atMilliseconds": 350, "x": 8.0, "y": 0.0 }
+        ]
+      },
+      "expect": { "keySequence": "anno", "repeatedRuns": ["n"] }
+    },
+    {
+      "id": "italian-pizza-dwell-repeats-z",
+      "description": "Italian z doubling is represented by a stable dwell rather than duplicate coordinates.",
+      "input": {
+        "languageId": "it",
+        "samples": [
+          { "key": "p", "atMilliseconds": 0, "x": 9.0, "y": 0.0 },
+          { "key": "i", "atMilliseconds": 60, "x": 7.0, "y": 0.0 },
+          { "key": "z", "atMilliseconds": 120, "x": 0.75, "y": 2.0 },
+          { "key": "z", "atMilliseconds": 195, "x": 0.78, "y": 2.02 },
+          { "key": "z", "atMilliseconds": 305, "x": 0.73, "y": 1.98 },
+          { "key": "z", "atMilliseconds": 325, "x": 0.76, "y": 2.01 },
+          { "key": "a", "atMilliseconds": 390, "x": 0.25, "y": 1.0 }
+        ]
+      },
+      "expect": { "keySequence": "pizza", "repeatedRuns": ["z"] }
+    },
+    {
+      "id": "drifting-run-does-not-repeat",
+      "description": "Time alone is insufficient when the pointer drifts outside the key dwell radius.",
+      "input": {
+        "languageId": "en",
+        "samples": [
+          { "key": "b", "atMilliseconds": 0, "x": 4.75, "y": 2.0 },
+          { "key": "o", "atMilliseconds": 70, "x": 8.0, "y": 0.0 },
+          { "key": "o", "atMilliseconds": 150, "x": 8.2, "y": 0.1 },
+          { "key": "o", "atMilliseconds": 265, "x": 8.55, "y": 0.15 },
+          { "key": "k", "atMilliseconds": 340, "x": 7.25, "y": 1.0 }
+        ]
+      },
+      "expect": { "keySequence": "bok", "repeatedRuns": [] }
+    }
+  ]
+}

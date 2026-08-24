@@ -1,3 +1,4 @@
+import BuddyGrammarKit
 import SwiftUI
 
 struct AppRootView: View {
@@ -17,7 +18,8 @@ struct AppRootView: View {
             model.refresh()
         }
         .onOpenURL { url in
-            model.handleDeepLink(url)
+            guard let sessionID = KeyboardDictationHandoff.sessionID(from: url) else { return }
+            model.handleKeyboardDictationHandoff(sessionID: sessionID)
         }
         .alert(item: $model.alert) { alert in
             Alert(

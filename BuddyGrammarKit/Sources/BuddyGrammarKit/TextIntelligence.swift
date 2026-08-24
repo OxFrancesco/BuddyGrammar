@@ -10,11 +10,18 @@ public struct TextSuggestion: Equatable, Sendable {
     public let text: String
     public let kind: TextSuggestionKind
     public let replacementLength: Int
+    public let automaticCorrectionSource: AutomaticCorrectionSource?
 
-    public init(text: String, kind: TextSuggestionKind, replacementLength: Int) {
+    public init(
+        text: String,
+        kind: TextSuggestionKind,
+        replacementLength: Int,
+        automaticCorrectionSource: AutomaticCorrectionSource? = nil
+    ) {
         self.text = text
         self.kind = kind
         self.replacementLength = replacementLength
+        self.automaticCorrectionSource = automaticCorrectionSource
     }
 }
 
@@ -24,6 +31,7 @@ public struct TextSuggestion: Equatable, Sendable {
 public final class TextIntelligence {
     private let personalLanguageModel: PersonalLanguageModel
     private let lexicon: WordFrequencyLexicon
+    private let fuzzyEngine: FuzzySpellingEngine
 
     public init(
         personalLanguageModel: PersonalLanguageModel = PersonalLanguageModel(),
@@ -31,6 +39,7 @@ public final class TextIntelligence {
     ) {
         self.personalLanguageModel = personalLanguageModel
         self.lexicon = lexicon
+        self.fuzzyEngine = FuzzySpellingEngine(lexicon: lexicon)
     }
 
     public func observeCommittedText(
@@ -64,8 +73,56 @@ public final class TextIntelligence {
         )
     }
 
+    @discardableResult
+    public func addToDictionary(
+        _ word: String,
+        languageCode: String? = nil
+    ) -> Bool {
+        let changed = personalLanguageModel.addToDictionary(
+            word,
+            languageCode: languageCode
+        )
+        if changed { personalLanguageModel.persist() }
+        return changed
+    }
+
+    @discardableResult
+    public func neverSuggestCorrection(
+        typed: String,
+        suggestion: String,
+        languageCode: String? = nil
+    ) -> Bool {
+        let changed = personalLanguageModel.suppressCorrection(
+            typed: typed,
+            suggestion: suggestion,
+            languageCode: languageCode
+        )
+        if changed { personalLanguageModel.persist() }
+        return changed
+    }
+
+    public func isCorrectionSuppressed(
+        typed: String,
+        suggestion: String,
+        languageCode: String? = nil
+    ) -> Bool {
+        personalLanguageModel.isCorrectionSuppressed(
+            typed: typed,
+            suggestion: suggestion,
+            languageCode: languageCode
+        )
+    }
+
     public func persist() {
         personalLanguageModel.persist()
+    }
+
+    public func discardInMemoryPersonalization() {
+        personalLanguageModel.discardInMemoryPersonalization()
+    }
+
+    public func reloadPersonalization() {
+        personalLanguageModel.reloadPersonalization()
     }
 
     public func suggestions(
@@ -73,6 +130,7 @@ public final class TextIntelligence {
         shortcutReplacement: String? = nil,
         spellingCandidates: [String] = [],
         completionCandidates: [String] = [],
+        isPlatformWordFlagged: Bool = false,
         languageCode: String? = nil,
         limit: Int = 3
     ) -> [TextSuggestion] {
@@ -84,11 +142,16 @@ public final class TextIntelligence {
 
         switch analysis.mode {
         case .typingWord(let partial):
+            let trailingWords = TextWordTokenizer.trailingSentenceWords(in: context ?? "")
+            let precedingWord =
+                trailingWords.count >= 2 ? trailingWords[trailingWords.count - 2] : nil
             return wordSuggestions(
                 for: partial,
                 shortcutReplacement: shortcutReplacement,
                 spellingCandidates: spellingCandidates,
                 completionCandidates: completionCandidates,
+                isPlatformWordFlagged: isPlatformWordFlagged,
+                precedingWord: precedingWord,
                 languageCode: languageCode,
                 usesEnglishPriors: usesEnglishPriors,
                 limit: limit
@@ -120,6 +183,8 @@ public final class TextIntelligence {
         shortcutReplacement: String?,
         spellingCandidates: [String],
         completionCandidates: [String],
+        isPlatformWordFlagged: Bool,
+        precedingWord: String?,
         languageCode: String?,
         usesEnglishPriors: Bool,
         limit: Int
@@ -129,12 +194,18 @@ public final class TextIntelligence {
 
         if let shortcutReplacement,
            !shortcutReplacement.isEmpty,
-           shortcutReplacement.caseInsensitiveCompare(partial) != .orderedSame {
+           shortcutReplacement.caseInsensitiveCompare(partial) != .orderedSame,
+           !personalLanguageModel.isCorrectionSuppressed(
+               typed: partial,
+               suggestion: shortcutReplacement,
+               languageCode: languageCode
+           ) {
             append(
                 TextSuggestion(
                     text: shortcutReplacement,
                     kind: .correction,
-                    replacementLength: partial.count
+                    replacementLength: partial.count,
+                    automaticCorrectionSource: .shortcut
                 ),
                 to: &suggestions,
                 limit: limit
@@ -146,16 +217,25 @@ public final class TextIntelligence {
                for: partial,
                languageCode: languageCode
            ) < 3,
-           let correction = LocalWordCorrector.bestCorrection(
+           let correction = spellingCorrection(
                for: partial,
-               candidates: spellingCandidates
+               platformCandidates: spellingCandidates,
+               isPlatformWordFlagged: isPlatformWordFlagged,
+               precedingWord: precedingWord,
+               languageCode: languageCode
+           ),
+           !personalLanguageModel.isCorrectionSuppressed(
+               typed: partial,
+               suggestion: correction,
+               languageCode: languageCode
            ),
            !correction.lowercased().hasPrefix(normalizedPartial) {
             append(
                 TextSuggestion(
                     text: correction,
                     kind: .correction,
-                    replacementLength: partial.count
+                    replacementLength: partial.count,
+                    automaticCorrectionSource: .spelling
                 ),
                 to: &suggestions,
                 limit: limit
@@ -167,8 +247,12 @@ public final class TextIntelligence {
             languageCode: languageCode,
             limit: limit
         )
-        if usesEnglishPriors {
-            completions += lexicon.completions(forPrefix: partial, limit: limit + 1)
+        if lexicon.supports(languageCode: languageCode) {
+            completions += lexicon.completions(
+                forPrefix: partial,
+                languageCode: languageCode,
+                limit: limit + 1
+            )
         }
         completions += completionCandidates
         completions += spellingCandidates.filter {
@@ -190,6 +274,139 @@ public final class TextIntelligence {
             if suggestions.count == limit { break }
         }
         return suggestions
+    }
+
+    /// Ranks platform spell-check guesses together with corrections proposed
+    /// directly from the bundled frequency lexicon, re-weighted by the word
+    /// preceding the typo when one exists.
+    ///
+    /// The lexicon channel engages only once the platform checker has flagged
+    /// the word (non-empty candidates): without that confirmation, a partial
+    /// like "hom" or "perc" is simply an unfinished word heading for its
+    /// completions, not a typo to rewrite. When both channels contribute,
+    /// frequency-ranked lexicon entries compete on equal footing with — and
+    /// usually outrank — the platform's unranked guesses. Apostrophe and
+    /// accent restoration ("dont" → "don’t") comes free from QWERTY geometry:
+    /// the display forms differ, but their geometries match exactly.
+    private func spellingCorrection(
+        for partial: String,
+        platformCandidates: [String],
+        isPlatformWordFlagged: Bool,
+        precedingWord: String?,
+        languageCode: String?
+    ) -> String? {
+        let normalizedPartial = partial.lowercased()
+        // A pure continuation among the platform candidates means the word is
+        // still being formed; completions own that case, corrections stand down.
+        guard !platformCandidates.contains(where: {
+            $0.lowercased().hasPrefix(normalizedPartial)
+        }) else {
+            return nil
+        }
+
+        let adjustment = contextAdjustment(
+            precedingWord: precedingWord,
+            languageCode: languageCode
+        )
+
+        // Channel one — platform guesses stay authoritative. They are ranked
+        // by bundled frequency and the preceding-word context (the corrector
+        // breaks distance ties by candidate order, so frequency ordering
+        // resolves ties toward the common word). If the user rejected this
+        // exact pair, the whole correction stands down instead of sneaking
+        // in a substitute.
+        if !platformCandidates.isEmpty {
+            let ordered = Self.frequencyOrdered(
+                platformCandidates,
+                lexicon: lexicon,
+                languageCode: languageCode
+            )
+            let eligible = ordered.filter {
+                !$0.lowercased().hasPrefix(normalizedPartial)
+            }
+            guard let best = LocalWordCorrector.rankedCorrections(
+                for: partial,
+                candidates: eligible,
+                limit: 1,
+                contextAdjustment: adjustment
+            ).first else {
+                return nil
+            }
+            let display = matchingCase(best.word, toTyped: partial)
+            return personalLanguageModel.isCorrectionSuppressed(
+                typed: partial,
+                suggestion: display,
+                languageCode: languageCode
+            ) ? nil : display
+        }
+
+        // Channel two — the checker flagged the word but produced no usable
+        // guesses, so the bundled lexicon supplies fixes the platform could
+        // not: apostrophe and accent restoration are exact QWERTY-geometry
+        // matches ("perche" → "perché"). A prior rejection silences the word.
+        guard isPlatformWordFlagged,
+              !personalLanguageModel.hasSuppressedCorrections(
+                  typed: partial,
+                  languageCode: languageCode
+              ),
+              lexicon.match(for: partial, languageCode: languageCode)?
+                  .display.caseInsensitiveCompare(partial) != .orderedSame,
+              let best = LocalWordCorrector.rankedCorrections(
+                  for: partial,
+                  candidates: fuzzyEngine.corrections(
+                      for: partial,
+                      languageCode: languageCode,
+                      limit: 6
+                  ).map(\.display),
+                  limit: 1,
+                  contextAdjustment: adjustment
+              ).first else {
+            return nil
+        }
+        return matchingCase(best.word, toTyped: partial)
+    }
+
+    /// Stable sort by bundled frequency rank (unknown words keep their
+    /// relative order at the end).
+    private static func frequencyOrdered(
+        _ candidates: [String],
+        lexicon: WordFrequencyLexicon,
+        languageCode: String?
+    ) -> [String] {
+        candidates.enumerated().sorted { lhs, rhs in
+            let lhsRank = lexicon.rank(of: lhs.element, languageCode: languageCode)
+                ?? Int.max
+            let rhsRank = lexicon.rank(of: rhs.element, languageCode: languageCode)
+                ?? Int.max
+            if lhsRank != rhsRank { return lhsRank < rhsRank }
+            return lhs.offset < rhs.offset
+        }
+        .map(\.element)
+    }
+
+    /// Negative ordering bonus for candidates that plausibly continue the
+    /// word before the typo. Blends the personal bigram model with the static
+    /// continuation table through ``NextWordPredictor``.
+    private func contextAdjustment(
+        precedingWord: String?,
+        languageCode: String?
+    ) -> ((String) -> Double)? {
+        guard let preceding = precedingWord?.lowercased(), !preceding.isEmpty else {
+            return nil
+        }
+        let continuations = NextWordPredictor.predictions(
+            after: preceding,
+            personal: personalLanguageModel,
+            languageCode: languageCode,
+            limit: 3
+        ).map { $0.lowercased() }
+        let bonuses: [Double] = [-0.12, -0.08, -0.05]
+        return { candidate in
+            guard let index = continuations.firstIndex(of: candidate.lowercased()) else {
+                return 0
+            }
+            return bonuses[index]
+        }
     }
 
     private func predictionSuggestions(
@@ -255,7 +472,9 @@ public final class TextIntelligence {
 
 public enum TextWordTokenizer {
     public static func words(in text: String) -> [String] {
-        text.split(whereSeparator: { !$0.isLetter && $0 != "'" }).map(String.init)
+        text
+            .split(whereSeparator: { !WordTokenNormalizer.isWordCharacter($0) })
+            .map { WordTokenNormalizer.canonicalized(String($0)) }
     }
 
     public static func trailingSentenceWords(in text: String) -> [String] {

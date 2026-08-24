@@ -12,64 +12,81 @@ object LocalWordCorrector {
         val source = typedWord.lowercase()
         if (source.length < 2) return null
         val maximumLengthDelta = if (source.length >= 6) 2 else 1
+        val seen = HashSet<String>()
+        var best: RankedCandidate? = null
+        var runnerUp: RankedCandidate? = null
 
-        val candidateWords = candidates
-            .asSequence()
-            .filter { it.isNotEmpty() }
-            .filter { abs(it.length - source.length) <= maximumLengthDelta }
-            .distinctBy { it.lowercase() }
-            .toList()
-        if (candidateWords.any { it.equals(typedWord, ignoreCase = true) }) return null
-
-        val ranked = candidateWords
-            .asSequence()
+        for (candidate in candidates) {
+            if (candidate.isEmpty() || abs(candidate.length - source.length) > maximumLengthDelta) {
+                continue
+            }
+            val normalizedCandidate = candidate.lowercase()
+            if (!seen.add(normalizedCandidate)) continue
+            if (normalizedCandidate == source) return null
             // Prefix extensions belong in the completion lane and must never
             // be offered or auto-applied as typo corrections.
-            .filterNot { it.lowercase().startsWith(source) }
-            .map { candidate -> candidate to normalizedDistance(source, candidate.lowercase()) }
-            .filter { (candidate, distance) ->
-                distance <= acceptanceThreshold(maxOf(source.length, candidate.length))
-            }
-            .sortedWith(
-                compareBy<Pair<String, Double>> { it.second }
-                    .thenBy { it.first.length }
-                    .thenBy { it.first },
+            if (normalizedCandidate.startsWith(source)) continue
+
+            val ranked = RankedCandidate(
+                word = candidate,
+                distance = normalizedDistance(source, normalizedCandidate),
             )
-            .toList()
-        val best = ranked.firstOrNull() ?: return null
-        val runnerUp = ranked.getOrNull(1)
-        if (runnerUp != null && abs(best.second - runnerUp.second) < MINIMUM_SCORE_MARGIN) return null
-        return matchingCapitalization(typedWord, best.first)
+            if (ranked.distance > acceptanceThreshold(maxOf(source.length, candidate.length))) {
+                continue
+            }
+            when {
+                best == null || ranked < best -> {
+                    runnerUp = best
+                    best = ranked
+                }
+                runnerUp == null || ranked < runnerUp -> runnerUp = ranked
+            }
+        }
+
+        val winner = best ?: return null
+        if (
+            runnerUp != null &&
+            abs(winner.distance - runnerUp.distance) < MINIMUM_SCORE_MARGIN
+        ) return null
+        return matchingCapitalization(typedWord, winner.word)
     }
 
     private fun normalizedDistance(source: String, target: String): Double {
-        val lhs = source.toList()
-        val rhs = target.toList()
-        if (lhs.isEmpty() || rhs.isEmpty()) return 1.0
+        if (source.isEmpty() || target.isEmpty()) return 1.0
 
-        val matrix = Array(lhs.size + 1) { DoubleArray(rhs.size + 1) }
-        for (index in 0..lhs.size) matrix[index][0] = index * INSERT_DELETE_COST
-        for (index in 0..rhs.size) matrix[0][index] = index * INSERT_DELETE_COST
-
-        for (sourceIndex in 1..lhs.size) {
-            for (targetIndex in 1..rhs.size) {
-                val substitution = matrix[sourceIndex - 1][targetIndex - 1] +
-                    substitutionCost(lhs[sourceIndex - 1], rhs[targetIndex - 1])
-                val deletion = matrix[sourceIndex - 1][targetIndex] + INSERT_DELETE_COST
-                val insertion = matrix[sourceIndex][targetIndex - 1] + INSERT_DELETE_COST
+        var twoRowsBack = DoubleArray(target.length + 1)
+        var previousRow = DoubleArray(target.length + 1) { index -> index * INSERT_DELETE_COST }
+        for (sourceIndex in 1..source.length) {
+            val currentRow = DoubleArray(target.length + 1)
+            currentRow[0] = sourceIndex * INSERT_DELETE_COST
+            for (targetIndex in 1..target.length) {
+                val substitution = previousRow[targetIndex - 1] +
+                    substitutionCost(source[sourceIndex - 1], target[targetIndex - 1])
+                val deletion = previousRow[targetIndex] + INSERT_DELETE_COST
+                val insertion = currentRow[targetIndex - 1] + INSERT_DELETE_COST
                 var best = minOf(substitution, deletion, insertion)
 
                 if (
                     sourceIndex > 1 && targetIndex > 1 &&
-                    lhs[sourceIndex - 1] == rhs[targetIndex - 2] &&
-                    lhs[sourceIndex - 2] == rhs[targetIndex - 1]
+                    source[sourceIndex - 1] == target[targetIndex - 2] &&
+                    source[sourceIndex - 2] == target[targetIndex - 1]
                 ) {
-                    best = minOf(best, matrix[sourceIndex - 2][targetIndex - 2] + TRANSPOSE_COST)
+                    best = minOf(best, twoRowsBack[targetIndex - 2] + TRANSPOSE_COST)
                 }
-                matrix[sourceIndex][targetIndex] = best
+                currentRow[targetIndex] = best
             }
+            twoRowsBack = previousRow
+            previousRow = currentRow
         }
-        return matrix[lhs.size][rhs.size] / maxOf(lhs.size, rhs.size)
+        return previousRow[target.length] / maxOf(source.length, target.length)
+    }
+
+    private data class RankedCandidate(
+        val word: String,
+        val distance: Double,
+    ) : Comparable<RankedCandidate> {
+        override fun compareTo(other: RankedCandidate): Int =
+            compareValuesBy(this, other, RankedCandidate::distance, { it.word.length }, { it.word })
     }
 
     private fun substitutionCost(lhs: Char, rhs: Char): Double {

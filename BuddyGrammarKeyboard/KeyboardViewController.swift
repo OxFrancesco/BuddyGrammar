@@ -20,20 +20,35 @@ final class KeyboardControllerBridge {
     var needsInputModeSwitchKey: Bool {
         controller?.needsInputModeSwitchKey ?? false
     }
+
+    func playInputClick() {
+        UIDevice.current.playInputClick()
+    }
 }
 
 @MainActor
-final class KeyboardViewController: UIInputViewController {
+final class KeyboardViewController: UIInputViewController, UIInputViewAudioFeedback {
     private let model = KeyboardModel()
     private lazy var controllerBridge = KeyboardControllerBridge(controller: self)
     private var hostingController: UIHostingController<KeyboardRootView>?
     private var heightConstraint: NSLayoutConstraint?
     private var documentGeneration: UInt64 = 0
+    private let fallbackEditorFieldIdentifier = UUID().uuidString
+
+    /// UIKit declares `documentIdentifier` as nonnull, but the keyboard proxy can
+    /// return Objective-C `nil` while a document is still being attached. Reading
+    /// it through the Swift property traps before application code can recover.
+    private var currentDocumentIdentifier: UUID? {
+        (textDocumentProxy as? NSObject)?.value(forKey: "documentIdentifier") as? UUID
+    }
+
+    var enableInputClicksWhenVisible: Bool { true }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         primaryLanguage = Locale.preferredLanguages.first ?? "en-US"
         hasDictationKey = false
+        setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
 
         let rootView = KeyboardRootView(model: model, controllerBridge: controllerBridge)
         let hostingController = UIHostingController(rootView: rootView)
@@ -72,15 +87,57 @@ final class KeyboardViewController: UIInputViewController {
         requestSupplementaryLexicon(completion: lexiconCompletion)
     }
 
+    /// The keyboard spans the full screen width, so its outermost keys sit on
+    /// the system screen-edge gesture zones. iOS otherwise holds touches near
+    /// those edges (Q, A, Z, shift, delete, return) while deciding whether the
+    /// user is performing an edge swipe, which shows up as dropped or
+    /// second-late keystrokes on real devices.
+    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge {
+        [.left, .right]
+    }
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
         updatePreferredHeight()
         model.activate()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        unlockWindowTouchDelivery()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         model.deactivate()
         super.viewWillDisappear(animated)
+    }
+
+    /// Window-level system gesture recognizers (the app-switcher and
+    /// notification gates) delay touch delivery to the keyboard while they
+    /// disambiguate. They never claim these touches from a keyboard, so the
+    /// delay is pure latency on every keystroke; opting them out is the
+    /// documented remedy for edge keys that respond a beat late.
+    ///
+    /// Only the window and its ancestors are touched — the keyboard's own
+    /// hosted SwiftUI content keeps its recognizers untouched.
+    private func unlockWindowTouchDelivery() {
+        guard let window = view.window else { return }
+        var systemContainers: [UIView] = [window]
+        var next: UIView? = window.superview
+        while let current = next {
+            systemContainers.append(current)
+            next = current.superview
+        }
+        for container in systemContainers {
+            for recognizer in container.gestureRecognizers ?? [] {
+                recognizer.delaysTouchesBegan = false
+                recognizer.delaysTouchesEnded = false
+                if recognizer is UIScreenEdgePanGestureRecognizer {
+                    recognizer.isEnabled = false
+                }
+            }
+        }
     }
 
     override func viewWillTransition(
@@ -127,54 +184,121 @@ extension KeyboardViewController: KeyboardModelDelegate {
         textDocumentProxy.documentContextBeforeInput
     }
 
+    var contextAfterInput: String? {
+        textDocumentProxy.documentContextAfterInput
+    }
+
     var keyboardLanguage: String {
         primaryLanguage ?? Locale.preferredLanguages.first ?? "en-US"
     }
 
-    var allowsAutomaticTextCorrection: Bool {
+    var editorReturnIntent: String? {
+        switch textDocumentProxy.returnKeyType ?? .default {
+        case .default:
+            return nil
+        case .go, .join, .route:
+            return "go"
+        case .google, .search, .yahoo:
+            return "search"
+        case .next, .continue:
+            return "next"
+        case .send:
+            return "send"
+        case .done, .emergencyCall:
+            return "done"
+        @unknown default:
+            return nil
+        }
+    }
+
+    var editorFieldIdentifier: String {
+        currentDocumentIdentifier?.uuidString ?? fallbackEditorFieldIdentifier
+    }
+
+    var editorFieldTraits: EditorFieldTraits {
         let proxy = textDocumentProxy
-        guard proxy.autocorrectionType != .no,
-              proxy.spellCheckingType != .no,
-              proxy.isSecureTextEntry != true else {
-            return false
-        }
+        let isSecure = proxy.isSecureTextEntry == true
+        let suggestionsDisabled = proxy.autocorrectionType == .no
+            || proxy.spellCheckingType == .no
 
-        switch proxy.keyboardType {
-        case .URL, .emailAddress, .phonePad, .namePhonePad,
-             .numberPad, .decimalPad, .asciiCapableNumberPad:
-            return false
+        return EditorFieldTraits(
+            kind: Self.editorFieldKind(
+                keyboardType: proxy.keyboardType ?? .default,
+                contentType: proxy.textContentType ?? nil,
+                returnKeyType: proxy.returnKeyType ?? .default,
+                isSecure: isSecure
+            ),
+            isSecure: isSecure,
+            suggestionsDisabled: suggestionsDisabled,
+            personalizedLearningDisabled: suggestionsDisabled,
+            autoCapitalization: Self.editorAutoCapitalizationMode(
+                proxy.autocapitalizationType ?? .sentences
+            )
+        )
+    }
+
+    private static func editorAutoCapitalizationMode(
+        _ type: UITextAutocapitalizationType
+    ) -> EditorAutoCapitalizationMode {
+        switch type {
+        case .none:
+            .none
+        case .words:
+            .words
+        case .sentences:
+            .sentences
+        case .allCharacters:
+            .allCharacters
+        @unknown default:
+            .sentences
+        }
+    }
+
+    private static func editorFieldKind(
+        keyboardType: UIKeyboardType,
+        contentType: UITextContentType?,
+        returnKeyType: UIReturnKeyType,
+        isSecure: Bool
+    ) -> EditorFieldKind {
+        if isSecure { return .password }
+        if contentType == .oneTimeCode { return .oneTimeCode }
+        if contentType == .password || contentType == .newPassword { return .password }
+        if contentType == .dateTime { return .dateTime }
+        if contentType == .URL { return .url }
+        if contentType == .emailAddress { return .emailAddress }
+        if contentType == .telephoneNumber { return .phoneNumber }
+        if contentType == .creditCardNumber { return .number }
+        if contentType == .flightNumber || contentType == .shipmentTrackingNumber {
+            return .code
+        }
+        if let contentType, identityContentTypes.contains(contentType) {
+            return .personName
+        }
+        if returnKeyType == .search { return .search }
+
+        switch keyboardType {
+        case .URL:
+            return .url
+        case .emailAddress:
+            return .emailAddress
+        case .phonePad:
+            return .phoneNumber
+        case .namePhonePad:
+            return .personName
+        case .numberPad, .asciiCapableNumberPad:
+            return .number
+        case .decimalPad:
+            return .decimal
+        case .webSearch:
+            return .search
         default:
-            break
+            return .plainText
         }
-
-        guard let contentType = proxy.textContentType ?? nil else { return true }
-        return !Self.correctionSensitiveContentTypes.contains(contentType)
     }
 
-    var allowsPersonalizedLearning: Bool {
-        // iOS already replaces custom keyboards in secure fields. Mirror the
-        // stricter correction policy as defense in depth for structured,
-        // identity, contact, and credential fields.
-        allowsAutomaticTextCorrection
-    }
-
-    private static let correctionSensitiveContentTypes: [UITextContentType] = [
-        .URL,
-        .emailAddress,
-        .telephoneNumber,
-        .name,
-        .givenName,
-        .middleName,
-        .familyName,
-        .namePrefix,
-        .nameSuffix,
-        .nickname,
-        .organizationName,
-        .username,
-        .password,
-        .newPassword,
-        .oneTimeCode,
-        .creditCardNumber,
+    private static let identityContentTypes: [UITextContentType] = [
+        .name, .givenName, .middleName, .familyName, .namePrefix,
+        .nameSuffix, .nickname, .organizationName, .username,
     ]
 
     func insertText(_ text: String) {
@@ -185,6 +309,16 @@ extension KeyboardViewController: KeyboardModelDelegate {
     func deleteBackward() {
         documentGeneration &+= 1
         textDocumentProxy.deleteBackward()
+    }
+
+    func moveCursor(byUTF16Offset offset: Int) {
+        guard offset != 0 else { return }
+        documentGeneration &+= 1
+        textDocumentProxy.adjustTextPosition(byCharacterOffset: offset)
+    }
+
+    func playInputClick() {
+        UIDevice.current.playInputClick()
     }
 
     func openHostApplication(
@@ -208,12 +342,36 @@ extension KeyboardViewController: KeyboardModelDelegate {
         }
     }
 
+    /// Opens the containing app from the extension. `extensionContext.open`
+    /// is Today-widget-only, so this walks the responder chain to the host
+    /// process's UIApplication and invokes the *modern* Open URL entry point.
+    ///
+    /// The legacy `openURL:` selector is force-failed by UIKit since iOS 18
+    /// ("BUG IN CLIENT OF UIKIT … Force returning false"), which silently
+    /// swallowed earlier handoff attempts. `openURL:options:completionHandler:`
+    /// still works when all three arguments are passed explicitly, so the
+    /// method implementation is invoked directly through its IMP instead of
+    /// `perform`, which cannot supply the third parameter.
     private func openHostApplicationThroughResponderChain(_ url: URL) -> Bool {
-        let selector = NSSelectorFromString("openURL:")
+        guard let applicationClass = NSClassFromString("UIApplication") else {
+            return false
+        }
+        let selector = NSSelectorFromString("openURL:options:completionHandler:")
         var responder: UIResponder? = self
         while let current = responder {
-            if current.responds(to: selector), !(current is UIInputViewController) {
-                current.perform(selector, with: url)
+            // Only the host process's UIApplication owns a real
+            // implementation of this selector. Intermediate responders such
+            // as UIScene/UIWindowScene merely forward it, and invoking their
+            // forwarding stub aborts with an unrecognized-selector crash.
+            if current.isKind(of: applicationClass),
+               current.responds(to: selector) {
+                let implementation = current.method(for: selector)
+                typealias OpenURLEntryPoint = @convention(c) (
+                    NSObject, Selector, URL, [UIApplication.OpenExternalURLOptionsKey: Any],
+                    ((Bool) -> Void)?
+                ) -> Void
+                let open = unsafeBitCast(implementation, to: OpenURLEntryPoint.self)
+                open(current, selector, url, [:], nil)
                 return true
             }
             responder = current.next
@@ -221,14 +379,16 @@ extension KeyboardViewController: KeyboardModelDelegate {
         return false
     }
 
-    func captureCorrectionSnapshot() -> DocumentCorrectionSnapshot? {
+    func captureCorrectionSnapshot(
+        requestScope: DocumentCorrectionRequestScope
+    ) -> DocumentCorrectionSnapshot? {
         let proxy = textDocumentProxy
-        let identifier = proxy.documentIdentifier as UUID
+        guard let identifier = currentDocumentIdentifier else { return nil }
         let before = proxy.documentContextBeforeInput
         let selected = proxy.selectedText
         let after = proxy.documentContextAfterInput
 
-        if let selected {
+        if requestScope == .currentText, let selected {
             guard let candidate = TextCorrectionCandidate(capturedText: selected) else {
                 return nil
             }
@@ -240,6 +400,27 @@ extension KeyboardViewController: KeyboardModelDelegate {
                 contextAfterInput: after,
                 target: .selection,
                 candidate: candidate
+            )
+        }
+
+        if requestScope == .allText {
+            guard let allText = TextContextExtractor.allAccessibleText(
+                contextBeforeCursor: before ?? "",
+                selectedText: selected,
+                contextAfterCursor: after ?? ""
+            ) else {
+                return nil
+            }
+            return DocumentCorrectionSnapshot(
+                documentIdentifier: identifier,
+                generation: documentGeneration,
+                contextBeforeInput: before,
+                selectedText: selected,
+                contextAfterInput: after,
+                target: .allText(
+                    charactersAfterCursor: allText.textAfterCursor.utf16.count
+                ),
+                candidate: allText.candidate
             )
         }
 
@@ -271,8 +452,9 @@ extension KeyboardViewController: KeyboardModelDelegate {
         to snapshot: DocumentCorrectionSnapshot
     ) -> AppliedCorrection? {
         let proxy = textDocumentProxy
-        guard snapshot.generation == documentGeneration,
-              proxy.documentIdentifier as UUID == snapshot.documentIdentifier,
+        guard let documentIdentifier = currentDocumentIdentifier,
+              snapshot.generation == documentGeneration,
+              documentIdentifier == snapshot.documentIdentifier,
               proxy.documentContextBeforeInput == snapshot.contextBeforeInput,
               proxy.selectedText == snapshot.selectedText,
               proxy.documentContextAfterInput == snapshot.contextAfterInput else {
@@ -283,7 +465,14 @@ extension KeyboardViewController: KeyboardModelDelegate {
         switch snapshot.target {
         case .selection:
             proxy.insertText(replacement)
-        case .currentSentence(let charactersAfterCursor):
+        case .currentSentence(let charactersAfterCursor),
+             .allText(let charactersAfterCursor):
+            if case .allText = snapshot.target, let selected = snapshot.selectedText {
+                // Reinsert the selection unchanged to collapse it at its end;
+                // replacement can then use the same bounded suffix algorithm
+                // as a cursor-only field.
+                proxy.insertText(selected)
+            }
             if charactersAfterCursor > 0 {
                 // Move to the end of the sentence before replacing the
                 // bounded captured range.
@@ -296,7 +485,7 @@ extension KeyboardViewController: KeyboardModelDelegate {
         }
 
         return AppliedCorrection(
-            documentIdentifier: proxy.documentIdentifier as UUID,
+            documentIdentifier: documentIdentifier,
             contextBeforeInput: proxy.documentContextBeforeInput,
             selectedText: proxy.selectedText,
             contextAfterInput: proxy.documentContextAfterInput,
@@ -307,7 +496,8 @@ extension KeyboardViewController: KeyboardModelDelegate {
 
     func canUndoCorrection(_ correction: AppliedCorrection) -> Bool {
         let proxy = textDocumentProxy
-        return proxy.documentIdentifier as UUID == correction.documentIdentifier
+        guard let documentIdentifier = currentDocumentIdentifier else { return false }
+        return documentIdentifier == correction.documentIdentifier
             && proxy.documentContextBeforeInput == correction.contextBeforeInput
             && proxy.selectedText == correction.selectedText
             && proxy.documentContextAfterInput == correction.contextAfterInput

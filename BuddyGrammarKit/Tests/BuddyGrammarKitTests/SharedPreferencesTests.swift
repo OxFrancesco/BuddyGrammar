@@ -11,6 +11,25 @@ final class SharedPreferencesTests: XCTestCase {
         )
     }
 
+    func testLearningResetGenerationsPersistAndAdvanceIndependently() {
+        let preferences = SharedPreferences(defaults: defaults)
+
+        XCTAssertEqual(
+            preferences.loadLearningResetGenerations(),
+            LearningResetGenerations()
+        )
+        XCTAssertEqual(preferences.advanceLanguageLearningResetGeneration(), 1)
+        XCTAssertEqual(
+            SharedPreferences(defaults: defaults).loadLearningResetGenerations(),
+            LearningResetGenerations(language: 1, typing: 0)
+        )
+        XCTAssertEqual(preferences.advanceTypingLearningResetGeneration(), 1)
+        XCTAssertEqual(
+            preferences.loadLearningResetGenerations(),
+            LearningResetGenerations(language: 1, typing: 1)
+        )
+    }
+
     private var suiteName: String!
     private var defaults: UserDefaults!
 
@@ -190,6 +209,46 @@ final class SharedPreferencesTests: XCTestCase {
                 )
             )
         )
+    }
+
+    func testClearKeyboardDictationSessionIgnoresMismatchedIdentifier() throws {
+        let preferences = SharedPreferences(defaults: defaults)
+        let session = try preferences.beginKeyboardDictationSession()
+
+        preferences.clearKeyboardDictationSession(id: UUID())
+        XCTAssertEqual(preferences.loadKeyboardDictationSession()?.id, session.id)
+
+        preferences.clearKeyboardDictationSession(id: session.id)
+        XCTAssertNil(preferences.loadKeyboardDictationSession())
+    }
+
+    func testCompanionHeartbeatReportsAliveOnlyWithinTolerance() {
+        let preferences = SharedPreferences(defaults: defaults)
+        // The heartbeat is stored as timeIntervalSinceReferenceDate and only
+        // positive values count, so the fixture must be after 2001.
+        let now = Date(timeIntervalSinceReferenceDate: 5_000)
+
+        XCTAssertFalse(preferences.isCompanionAlive(now: now))
+
+        preferences.recordCompanionHeartbeat(now: now)
+        XCTAssertTrue(preferences.isCompanionAlive(now: now))
+        XCTAssertTrue(
+            preferences.isCompanionAlive(
+                now: now.addingTimeInterval(
+                    BuddyGrammarConfiguration.companionHeartbeatTolerance
+                )
+            )
+        )
+        XCTAssertFalse(
+            preferences.isCompanionAlive(
+                now: now.addingTimeInterval(
+                    BuddyGrammarConfiguration.companionHeartbeatTolerance + 1
+                )
+            )
+        )
+
+        preferences.clearCompanionHeartbeat()
+        XCTAssertFalse(preferences.isCompanionAlive(now: now))
     }
 
     func testPendingTranscriptRoundTripAndClear() throws {

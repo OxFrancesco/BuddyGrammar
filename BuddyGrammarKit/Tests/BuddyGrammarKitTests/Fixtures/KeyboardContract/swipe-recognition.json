@@ -1,0 +1,154 @@
+{
+  "$schema": "../trace-suite.schema.json",
+  "schemaVersion": 1,
+  "catalogRevision": "2026.07.1",
+  "suite": "swipe-recognition",
+  "cases": [
+    {
+      "id": "italian-accented-perche",
+      "description": "An accented candidate keeps its display spelling while using perche QWERTY geometry.",
+      "input": {
+        "languageId": "it",
+        "vocabulary": ["perché", "perdere", "perciò"],
+        "samples": [
+          { "key": "p", "atMilliseconds": 0, "x": 9.12, "y": 0.12 },
+          { "key": "e", "atMilliseconds": 70, "x": 2.0, "y": 0.0 },
+          { "key": "r", "atMilliseconds": 140, "x": 3.0, "y": 0.0 },
+          { "key": "c", "atMilliseconds": 210, "x": 2.75, "y": 2.0 },
+          { "key": "h", "atMilliseconds": 280, "x": 5.25, "y": 1.0 },
+          { "key": "e", "atMilliseconds": 350, "x": 2.08, "y": -0.08 }
+        ]
+      },
+      "expect": { "displayWord": "perché", "geometryKey": "perche" }
+    },
+    {
+      "id": "italian-apostrophe-lho",
+      "description": "An internal apostrophe is omitted from gesture geometry and preserved in the candidate.",
+      "input": {
+        "languageId": "it",
+        "vocabulary": ["l’ho", "loro", "lato"],
+        "samples": [
+          { "key": "l", "atMilliseconds": 0, "x": 8.25, "y": 1.0 },
+          { "key": "h", "atMilliseconds": 95, "x": 5.25, "y": 1.0 },
+          { "key": "o", "atMilliseconds": 190, "x": 8.0, "y": 0.0 }
+        ]
+      },
+      "expect": { "displayWord": "l’ho", "geometryKey": "lho" }
+    },
+    {
+      "id": "italian-apostrophe-ce-short",
+      "description": "A two-key contraction remains swipeable after removing its apostrophe.",
+      "input": {
+        "languageId": "it",
+        "vocabulary": ["c’è", "cioè", "come"],
+        "samples": [
+          { "key": "c", "atMilliseconds": 0, "x": 2.75, "y": 2.0 },
+          { "key": "e", "atMilliseconds": 130, "x": 2.0, "y": 0.0 }
+        ]
+      },
+      "expect": { "displayWord": "c’è", "geometryKey": "ce" }
+    },
+    {
+      "id": "italian-apostrophe-po-short",
+      "description": "The common short form po’ returns the canonical apostrophe.",
+      "input": {
+        "languageId": "it",
+        "vocabulary": ["po’", "poi", "poco"],
+        "samples": [
+          { "key": "p", "atMilliseconds": 0, "x": 9.0, "y": 0.0 },
+          { "key": "o", "atMilliseconds": 130, "x": 8.0, "y": 0.0 }
+        ]
+      },
+      "expect": { "displayWord": "po’", "geometryKey": "po" }
+    },
+    {
+      "id": "italian-accented-si-short",
+      "description": "A short accented word uses the same S-to-I path without losing its accent.",
+      "input": {
+        "languageId": "it",
+        "vocabulary": ["sì", "sei", "so"],
+        "samples": [
+          { "key": "s", "atMilliseconds": 0, "x": 1.25, "y": 1.0 },
+          { "key": "i", "atMilliseconds": 140, "x": 7.0, "y": 0.0 }
+        ]
+      },
+      "expect": { "displayWord": "sì", "geometryKey": "si" }
+    },
+    {
+      "id": "italian-accent-and-dwell-caffe",
+      "description": "A stable F dwell selects caffè while its final accent remains display-only.",
+      "input": {
+        "languageId": "it",
+        "vocabulary": ["caffè", "cane", "case"],
+        "samples": [
+          { "key": "c", "atMilliseconds": 0, "x": 2.75, "y": 2.0 },
+          { "key": "a", "atMilliseconds": 60, "x": 0.25, "y": 1.0 },
+          { "key": "f", "atMilliseconds": 120, "x": 3.25, "y": 1.0 },
+          { "key": "f", "atMilliseconds": 195, "x": 3.28, "y": 1.02 },
+          { "key": "f", "atMilliseconds": 305, "x": 3.22, "y": 0.98 },
+          { "key": "f", "atMilliseconds": 325, "x": 3.26, "y": 1.01 },
+          { "key": "e", "atMilliseconds": 400, "x": 2.0, "y": 0.0 }
+        ]
+      },
+      "expect": { "displayWord": "caffè", "geometryKey": "caffe" }
+    },
+    {
+      "id": "italian-name-noisy-francesco",
+      "description": "A common name tolerates realistic start and end offsets without changing its spelling.",
+      "input": {
+        "languageId": "it",
+        "vocabulary": ["francesco", "francese", "francesca"],
+        "samples": [
+          { "key": "f", "atMilliseconds": 0, "x": 3.68, "y": 1.24 },
+          { "key": "r", "atMilliseconds": 65, "x": 3.0, "y": 0.0 },
+          { "key": "a", "atMilliseconds": 130, "x": 0.25, "y": 1.0 },
+          { "key": "n", "atMilliseconds": 195, "x": 5.75, "y": 2.0 },
+          { "key": "c", "atMilliseconds": 260, "x": 2.75, "y": 2.0 },
+          { "key": "e", "atMilliseconds": 325, "x": 2.0, "y": 0.0 },
+          { "key": "s", "atMilliseconds": 390, "x": 1.25, "y": 1.0 },
+          { "key": "c", "atMilliseconds": 455, "x": 2.75, "y": 2.0 },
+          { "key": "o", "atMilliseconds": 520, "x": 7.58, "y": -0.24 }
+        ]
+      },
+      "expect": { "displayWord": "francesco", "geometryKey": "francesco" }
+    },
+    {
+      "id": "italian-code-switch-feedback-dwell",
+      "description": "A common code-switch term participates in Italian recognition and keeps double-E dwell evidence.",
+      "input": {
+        "languageId": "it",
+        "vocabulary": ["feedback", "facebook", "fallback"],
+        "samples": [
+          { "key": "f", "atMilliseconds": 0, "x": 3.25, "y": 1.0 },
+          { "key": "e", "atMilliseconds": 60, "x": 2.0, "y": 0.0 },
+          { "key": "e", "atMilliseconds": 130, "x": 2.03, "y": 0.02 },
+          { "key": "e", "atMilliseconds": 245, "x": 1.98, "y": -0.02 },
+          { "key": "e", "atMilliseconds": 265, "x": 2.01, "y": 0.01 },
+          { "key": "d", "atMilliseconds": 330, "x": 2.25, "y": 1.0 },
+          { "key": "b", "atMilliseconds": 395, "x": 4.75, "y": 2.0 },
+          { "key": "a", "atMilliseconds": 460, "x": 0.25, "y": 1.0 },
+          { "key": "c", "atMilliseconds": 525, "x": 2.75, "y": 2.0 },
+          { "key": "k", "atMilliseconds": 590, "x": 7.25, "y": 1.0 }
+        ]
+      },
+      "expect": { "displayWord": "feedback", "geometryKey": "feedback" }
+    },
+    {
+      "id": "italian-code-switch-call-dwell",
+      "description": "A final-key dwell carries the repeated L in the common code-switch word call.",
+      "input": {
+        "languageId": "it",
+        "vocabulary": ["call", "calo", "cavo"],
+        "samples": [
+          { "key": "c", "atMilliseconds": 0, "x": 2.75, "y": 2.0 },
+          { "key": "a", "atMilliseconds": 75, "x": 0.25, "y": 1.0 },
+          { "key": "l", "atMilliseconds": 145, "x": 8.25, "y": 1.0 },
+          { "key": "l", "atMilliseconds": 220, "x": 8.28, "y": 1.01 },
+          { "key": "l", "atMilliseconds": 335, "x": 8.22, "y": 0.98 },
+          { "key": "l", "atMilliseconds": 355, "x": 8.26, "y": 1.0 }
+        ]
+      },
+      "expect": { "displayWord": "call", "geometryKey": "call" }
+    }
+  ]
+}

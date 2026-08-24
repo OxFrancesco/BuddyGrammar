@@ -1,9 +1,10 @@
 package com.francescooddo.buddygrammar.core.adaptive
 
 import com.francescooddo.buddygrammar.core.LanguageSupport
+import com.francescooddo.buddygrammar.core.RankedLanguageLexicon
 import com.francescooddo.buddygrammar.core.SuggestionEngine
 import com.francescooddo.buddygrammar.core.SuggestionKind
-import com.francescooddo.buddygrammar.core.WordList
+import com.francescooddo.buddygrammar.core.WordTokenNormalizer
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.exp
@@ -66,7 +67,9 @@ data class TapWordDecodingResult(
  * Deterministic, bounded beam search over adjacent per-key substitutions.
  * The decoder owns no mutable history and persists neither taps nor text.
  */
-class TapWordDecoder {
+class TapWordDecoder(
+    private val lexicon: RankedLanguageLexicon = RankedLanguageLexicon.legacyEnglish,
+) {
     fun decode(
         taps: List<TapWordLatticeTap>,
         previousWord: String? = null,
@@ -109,21 +112,44 @@ class TapWordDecoder {
         insertBest(forcedPath(literal, rows), pathsByWord)
         insertBest(forcedPath(resolved, rows), pathsByWord)
 
-        val contextualScores = contextScores(previousWord, languageTag)
-        val scored = pathsByWord.values.map { path ->
-            ScoredPath(
-                path = path,
-                score = path.spatialLogScore + languageScore(
-                    word = path.word,
-                    languageTag = languageTag,
-                    contextScores = contextualScores,
-                ),
-                isLiteral = path.word == literal,
-                isResolved = path.word == resolved,
-            )
-        }.sortedWith(SCORED_PATH_COMPARATOR)
-
         val requiredWords = setOf(literal, resolved)
+        val contextualScores = contextScores(previousWord, languageTag)
+        val scoredByWord = mutableMapOf<String, ScoredPath>()
+        fun insertScored(candidate: ScoredPath) {
+            val existing = scoredByWord[candidate.path.word]
+            if (existing == null || SCORED_PATH_COMPARATOR.compare(candidate, existing) < 0) {
+                scoredByWord[candidate.path.word] = candidate
+            }
+        }
+        pathsByWord.values.forEach { path ->
+            val match = lexicon.match(path.word, languageTag)
+            if (match != null) {
+                val displayWord = matchingCapitalization(match.display, path.word)
+                insertScored(
+                    ScoredPath(
+                        path = Path(displayWord, path.spatialLogScore),
+                        score = path.spatialLogScore + languageScore(match, contextualScores),
+                        isLiteral = displayWord == literal,
+                        isResolved = displayWord == resolved,
+                    ),
+                )
+                // Canonical spelling is an extra hypothesis. Keep exact
+                // literal/resolved anchors available for fallback and undo.
+                if (path.word !in requiredWords || displayWord == path.word) {
+                    return@forEach
+                }
+            }
+            insertScored(
+                ScoredPath(
+                    path = path,
+                    score = path.spatialLogScore + outOfVocabularyScore(languageTag),
+                    isLiteral = path.word == literal,
+                    isResolved = path.word == resolved,
+                ),
+            )
+        }
+        val scored = scoredByWord.values.sortedWith(SCORED_PATH_COMPARATOR)
+
         val requestedCount = max(
             requiredWords.size,
             min(limit.coerceAtLeast(1), MAXIMUM_RESULTS),
@@ -255,21 +281,20 @@ class TapWordDecoder {
     }
 
     private fun languageScore(
-        word: String,
-        languageTag: String?,
+        match: RankedLanguageLexicon.Match,
         contextScores: Map<String, Double>,
     ): Double {
-        if (languageTag == null || !LanguageSupport.usesEnglishPriors(languageTag)) return 0.0
-        val normalizedWord = word.lowercase(Locale.ROOT)
-        val rank = EnglishFrequencyLexicon.rank(normalizedWord)
-        var score = if (rank == null) {
-            OUT_OF_VOCABULARY_SCORE
-        } else {
-            max(MINIMUM_IN_VOCABULARY_SCORE, 0.9 - 0.25 * log10(rank.toDouble() + 1.0))
-        }
+        val normalizedWord = match.display.lowercase(Locale.ROOT)
+        var score = max(
+            MINIMUM_IN_VOCABULARY_SCORE,
+            0.9 - 0.25 * log10(match.rank.toDouble() + 1.0),
+        )
         score += contextScores[normalizedWord] ?: 0.0
         return score
     }
+
+    private fun outOfVocabularyScore(languageTag: String?): Double =
+        if (lexicon.supports(languageTag)) OUT_OF_VOCABULARY_SCORE else 0.0
 
     private fun contextScores(
         previousWord: String?,
@@ -281,12 +306,14 @@ class TapWordDecoder {
         val normalizedPrevious = previousWord
             ?.takeLast(MAXIMUM_CONTEXT_CHARACTERS)
             ?.trim()
-            ?.takeLastWhile { it.isLetterOrDigit() || it == '\'' }
+            ?.takeLastWhile(WordTokenNormalizer::isWordCharacter)
+            ?.let(WordTokenNormalizer::canonicalize)
             ?.takeIf(String::isNotEmpty)
             ?: return emptyMap()
         return SuggestionEngine.suggest(
             textBeforeCursor = "$normalizedPrevious ",
             languageTag = languageTag,
+            lexicon = lexicon,
         ).asSequence()
             .filter { it.kind == SuggestionKind.PREDICTION }
             .take(CONTEXT_BOOSTS.size)
@@ -327,6 +354,10 @@ class TapWordDecoder {
         private const val COMPARISON_EPSILON = 0.000_000_001
         private const val MAXIMUM_CONTEXT_CHARACTERS = 32
         private val CONTEXT_BOOSTS = listOf(0.9, 0.55, 0.3)
+
+        /** Letter-key sample count for display text after accent/apostrophe folding. */
+        fun expectedTapCount(visibleWord: String): Int? =
+            WordTokenNormalizer.tapGeometry(visibleWord)?.length
 
         private val PATH_COMPARATOR = Comparator<Path> { left, right ->
             compareScoresThenWords(
@@ -374,6 +405,14 @@ class TapWordDecoder {
         private fun render(normalized: Char, literal: Char): Char =
             if (literal.isUpperCase()) normalized.uppercaseChar() else normalized
 
+        private fun matchingCapitalization(word: String, typed: String): String = when {
+            typed.any(Char::isLetter) && typed.all { !it.isLetter() || it.isUpperCase() } ->
+                word.uppercase(Locale.ROOT)
+            typed.firstOrNull()?.isUpperCase() == true ->
+                word.lowercase(Locale.ROOT).replaceFirstChar(Char::uppercaseChar)
+            else -> word
+        }
+
         private fun insertBest(path: Path, paths: MutableMap<String, Path>) {
             val existing = paths[path.word]
             if (existing == null || path.spatialLogScore > existing.spatialLogScore) {
@@ -399,14 +438,6 @@ class TapWordDecoder {
             margin = 1.0,
         )
     }
-}
-
-private object EnglishFrequencyLexicon {
-    private val ranks: Map<String, Int> = WordList.words
-        .withIndex()
-        .associate { (index, word) -> word to index }
-
-    fun rank(word: String): Int? = ranks[word]
 }
 
 private object DecoderQwertyLayout {

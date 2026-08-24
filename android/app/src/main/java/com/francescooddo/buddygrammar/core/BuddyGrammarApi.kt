@@ -115,6 +115,34 @@ class BuddyGrammarApi(
         }
     }
 
+    suspend fun recognizeHandwriting(
+        imagePng: ByteArray,
+        clientId: UUID,
+        modelId: String,
+        languageCode: String? = null,
+    ): String {
+        require(imagePng.isNotEmpty()) { "There is no handwriting to recognize." }
+        val headers = buildMap {
+            put(CLIENT_HEADER, clientId.toString())
+            put(MODEL_HEADER, modelId)
+            if (!languageCode.isNullOrBlank()) put(LANGUAGE_HEADER, languageCode)
+        }
+        val result = transport.post(
+            HttpRequest(
+                url = "$baseUrl/v1/handwriting",
+                contentType = "image/png",
+                headers = headers,
+                body = imagePng,
+                timeoutMillis = 30_000,
+            ),
+        )
+        val payload = result.body.toString(Charsets.UTF_8)
+        if (result.statusCode !in 200..299) throw IOException(serverMessage(payload, result.statusCode))
+        return runCatching { JSONObject(payload).getString("text").trim() }
+            .getOrElse { throw IOException("The handwriting service returned an unreadable response.") }
+            .ifEmpty { throw IOException("BuddyGrammar could not read that handwriting.") }
+    }
+
     private fun serverMessage(payload: String, statusCode: Int): String = runCatching {
         JSONObject(payload).getJSONObject("error").getString("message")
     }.getOrDefault("The processing service returned HTTP $statusCode.")
@@ -122,5 +150,6 @@ class BuddyGrammarApi(
     companion object {
         const val CLIENT_HEADER = "X-BuddyGrammar-Client-ID"
         const val LANGUAGE_HEADER = "X-Buddy-Language-Code"
+        const val MODEL_HEADER = "X-Buddy-Model-ID"
     }
 }

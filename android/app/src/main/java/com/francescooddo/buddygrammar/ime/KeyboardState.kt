@@ -3,7 +3,6 @@ package com.francescooddo.buddygrammar.ime
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.francescooddo.buddygrammar.core.SuggestionEngine
 
 enum class KeyboardLayer {
     LETTERS,
@@ -13,6 +12,30 @@ enum class KeyboardLayer {
     EMOJI,
     HANDWRITING,
     VOICE,
+}
+
+data class KeyboardRefreshPlan(
+    val shouldReadContext: Boolean,
+    val shouldQueryCursorCapsMode: Boolean,
+    val shouldShowSuggestions: Boolean,
+) {
+    fun shouldUseCursorCapsMode(contextReadSucceeded: Boolean): Boolean =
+        shouldQueryCursorCapsMode || !contextReadSucceeded
+}
+
+object KeyboardRefreshPolicy {
+    fun plan(
+        suggestionsAllowed: Boolean,
+        readContextAllowed: Boolean,
+        practiceActive: Boolean,
+    ): KeyboardRefreshPlan {
+        val shouldReadContext = suggestionsAllowed && readContextAllowed
+        return KeyboardRefreshPlan(
+            shouldReadContext = shouldReadContext,
+            shouldQueryCursorCapsMode = !shouldReadContext,
+            shouldShowSuggestions = shouldReadContext && !practiceActive,
+        )
+    }
 }
 
 /**
@@ -39,7 +62,8 @@ class KeyboardState(private val nowMillis: () -> Long = System::currentTimeMilli
     /** Single tap toggles shift; a quick double tap enables caps lock. */
     fun onShiftTapped() {
         val now = nowMillis()
-        val doubleTap = now - lastShiftTapMillis <= DOUBLE_TAP_WINDOW_MS
+        val doubleTap = lastShiftTapMillis != Long.MIN_VALUE &&
+            now - lastShiftTapMillis in 0..DOUBLE_TAP_WINDOW_MS
         lastShiftTapMillis = now
         when {
             capsLock -> {
@@ -59,16 +83,31 @@ class KeyboardState(private val nowMillis: () -> Long = System::currentTimeMilli
         if (!capsLock) shift = false
     }
 
-    /** Auto-enables shift at the start of a sentence (unless caps lock is on). */
-    fun updateAutoShift(textBeforeCursor: String) {
-        if (!capsLock) shift = SuggestionEngine.isSentenceStart(textBeforeCursor)
+    /** Applies the active editor's declared capitalization behavior. */
+    fun updateAutoShift(
+        textBeforeCursor: String?,
+        mode: EditorCapitalizationMode,
+    ) {
+        // Unknown InputConnection context is not equivalent to document start.
+        if (textBeforeCursor == null) return
+        if (!capsLock) shift = mode.shouldShift(textBeforeCursor)
+    }
+
+    /** Applies the editor's privacy-preserving capitalization signal. */
+    fun updateAutoShiftFromCursorCapsMode(cursorCapsMode: Int?) {
+        // A missing editor signal is unknown, not a request to capitalize.
+        if (cursorCapsMode == null) return
+        if (!capsLock) shift = cursorCapsMode != 0
     }
 
     /** Resets the state for a new input field. */
-    fun configureForNewInput(startOnNumbers: Boolean) {
+    fun configureForNewInput(
+        startOnNumbers: Boolean,
+        autoCapitalize: Boolean = !startOnNumbers,
+    ) {
         layer = if (startOnNumbers) KeyboardLayer.NUMBERS else KeyboardLayer.LETTERS
         capsLock = false
-        shift = !startOnNumbers
+        shift = !startOnNumbers && autoCapitalize
         lastShiftTapMillis = Long.MIN_VALUE
     }
 

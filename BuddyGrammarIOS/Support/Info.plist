@@ -16,27 +16,27 @@
 	<string>BuddyGrammar</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>$(MARKETING_VERSION)</string>
-	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.francescooddo.BuddyGrammar</string>
+			<string>com.francescooddo.BuddyGrammar.dictation</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>buddygrammar</string>
 			</array>
 		</dict>
 	</array>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>BuddyGrammar uses the microphone for speech transcription and, when you explicitly enable Dynamic Island readiness, keeps it active while discarding idle audio so keyboard dictation can start without switching apps.</string>
+	<string>BuddyGrammar uses the microphone for speech transcription. A recording starts only when you visibly begin one, and it can continue while you return to the app you were typing in. If you explicitly enable Dynamic Island readiness, BuddyGrammar keeps an audio-input session active for the selected period, discarding idle audio, so keyboard dictation can start without switching apps.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIBackgroundModes</key>

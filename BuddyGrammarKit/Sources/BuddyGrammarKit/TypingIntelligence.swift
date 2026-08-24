@@ -361,25 +361,30 @@ public struct TypingIntelligence: Sendable {
         return (fixedCenter.x + offsetX, fixedCenter.y + offsetY)
     }
 
-    /// Applies a language prior only when English is explicitly selected and
-    /// one continuation is materially stronger. Weak or tied evidence leaves
-    /// the spatial/literal ordering untouched.
+    /// Applies a language prior whenever a frequency pack exists for the
+    /// active language and one continuation is materially stronger. Weak or
+    /// tied evidence leaves the spatial/literal ordering untouched.
     private func languageBoosts(
         for candidates: [Character],
         context: TypingContext
     ) -> [Character: Double] {
-        guard Self.isEnglish(context.languageCode) else { return [:] }
+        guard lexicon.supports(languageCode: context.languageCode) else { return [:] }
         let prefix = Self.currentASCIIWord(in: context.rawText)
         guard prefix.count >= 2 else { return [:] }
 
         let evidence = candidates.map { key -> (key: Character, evidence: Double) in
             let proposedPrefix = prefix + String(key)
             var value = 0.0
-            if let rank = lexicon.rank(of: proposedPrefix) {
+            if let rank = lexicon.rank(of: proposedPrefix, languageCode: context.languageCode) {
                 value += 2 + Self.frequencyWeight(rank: rank)
             }
-            for completion in lexicon.completions(forPrefix: proposedPrefix, limit: 3) {
-                let rank = lexicon.rank(of: completion) ?? 10_000
+            for completion in lexicon.completions(
+                forPrefix: proposedPrefix,
+                languageCode: context.languageCode,
+                limit: 3
+            ) {
+                let rank = lexicon.rank(of: completion, languageCode: context.languageCode)
+                    ?? 10_000
                 value += 0.35 + 0.45 * Self.frequencyWeight(rank: rank)
             }
             return (key, value)

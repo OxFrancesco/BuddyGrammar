@@ -5,6 +5,18 @@ import org.junit.Test
 
 class TextInsertionFormatterTest {
     @Test
+    fun `unknown editor context inserts recognized text literally`() {
+        assertEquals(
+            TextInsertionFormatter.InsertionPlan(text = "world", deleteBeforeCursor = 0),
+            TextInsertionFormatter.planInsertion("world", null),
+        )
+        assertEquals(
+            TextInsertionFormatter.InsertionPlan(text = ", thanks", deleteBeforeCursor = 0),
+            TextInsertionFormatter.planInsertion(", thanks", null),
+        )
+    }
+
+    @Test
     fun `adds a word separator only where sentence context needs one`() {
         assertEquals(" world", TextInsertionFormatter.textForInsertion("world", "Hello"))
         assertEquals("world", TextInsertionFormatter.textForInsertion("world", "Hello "))

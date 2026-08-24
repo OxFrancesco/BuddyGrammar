@@ -18,7 +18,8 @@ let package = Package(
         ),
         .testTarget(
             name: "BuddyGrammarKitTests",
-            dependencies: ["BuddyGrammarKit"]
+            dependencies: ["BuddyGrammarKit"],
+            resources: [.copy("Fixtures/KeyboardContract")]
         ),
     ]
 )

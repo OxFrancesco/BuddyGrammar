@@ -6,6 +6,14 @@ import org.junit.Test
 class HandwritingTextFormatterTest {
 
     @Test
+    fun `unknown editor context preserves recognized casing verbatim`() {
+        assertEquals(
+            "HELLO i",
+            HandwritingTextFormatter.textForInsertion("HELLO i", null, "en-US"),
+        )
+    }
+
+    @Test
     fun `lowercases all caps recognition inside a sentence`() {
         assertEquals(
             "hello world",

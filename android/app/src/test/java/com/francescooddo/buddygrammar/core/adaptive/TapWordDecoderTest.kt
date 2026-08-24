@@ -1,5 +1,6 @@
 package com.francescooddo.buddygrammar.core.adaptive
 
+import com.francescooddo.buddygrammar.core.contractLexicon
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -186,6 +187,113 @@ class TapWordDecoderTest {
         assertEquals('r', tap.literalKey)
         assertEquals('e', tap.resolvedKey)
         assertEquals(resolution.candidates, tap.candidates)
+    }
+
+    @Test
+    fun `language scoped priors choose date in English and dare in Italian`() {
+        val taps = literalTaps("da") + TapWordLatticeTap(
+            literalKey = 't',
+            resolvedKey = 't',
+            candidates = listOf(KeyCandidate('t', 0.5), KeyCandidate('r', 0.5)),
+        ) + literalTap('e')
+        val decoder = TapWordDecoder(contractLexicon())
+
+        assertEquals("date", decoder.decode(taps, languageTag = "en-GB").candidates.first().word)
+        val italian = decoder.decode(taps, languageTag = "it-CH")
+        assertEquals("dare", italian.candidates.first().word)
+        assertTrue(italian.candidates.any { it.word == "date" && it.isLiteralPath })
+    }
+
+    @Test
+    fun `Italian geometry restores canonical accent and apostrophe`() {
+        val decoder = TapWordDecoder(contractLexicon())
+        val accented = decoder.decode(
+            taps = literalTaps("perch") + TapWordLatticeTap(
+                literalKey = 'r',
+                resolvedKey = 'r',
+                candidates = listOf(KeyCandidate('r', 0.52), KeyCandidate('e', 0.48)),
+            ),
+            languageTag = "it-IT",
+        )
+        val elision = decoder.decode(
+            taps = literalTaps("lh") + TapWordLatticeTap(
+                literalKey = 'p',
+                resolvedKey = 'p',
+                candidates = listOf(KeyCandidate('p', 0.52), KeyCandidate('o', 0.48)),
+            ),
+            languageTag = "it",
+        )
+
+        assertEquals("perché", accented.candidates.first().word)
+        assertTrue(accented.candidates.any { it.word == "perchr" && it.isLiteralPath })
+        assertEquals("l’ho", elision.candidates.first().word)
+        assertTrue(elision.candidates.any { it.word == "lhp" && it.isLiteralPath })
+    }
+
+    @Test
+    fun `automatic policy abstains from balanced out of vocabulary lattice`() {
+        val taps = literalTaps("qwe") + TapWordLatticeTap(
+            literalKey = 'r',
+            resolvedKey = 'r',
+            candidates = listOf(KeyCandidate('r', 0.5), KeyCandidate('t', 0.5)),
+        )
+        val result = TapWordDecoder(contractLexicon()).decode(taps, languageTag = "en")
+
+        assertEquals("qwer", result.candidates.first().word)
+        assertEquals(null, TapWordAcceptancePolicy.AUTOMATIC.acceptedCandidate(result))
+        assertEquals(null, TapWordAcceptancePolicy.SUGGESTION.acceptedCandidate(result))
+    }
+
+    @Test
+    fun acceptedTapReplacementRespectsNeverSuggestSuppression() {
+        val result = TapWordDecodingResult(
+            literalWord = "dste",
+            resolvedWord = "date",
+            candidates = listOf(
+                TapWordCandidate(
+                    word = "date",
+                    score = 1.0,
+                    confidence = 0.85,
+                    isLiteralPath = false,
+                    isResolvedPath = true,
+                ),
+                TapWordCandidate(
+                    word = "dste",
+                    score = 0.1,
+                    confidence = 0.15,
+                    isLiteralPath = true,
+                    isResolvedPath = false,
+                ),
+            ),
+            margin = 0.70,
+        )
+
+        assertEquals(
+            null,
+            TapWordAcceptancePolicy.AUTOMATIC.acceptedReplacement(
+                result = result,
+                visibleWord = "dste",
+                isSuppressed = { typed, suggestion ->
+                    typed == "dste" && suggestion == "date"
+                },
+            ),
+        )
+        assertEquals(
+            "date",
+            TapWordAcceptancePolicy.AUTOMATIC.acceptedReplacement(
+                result = result,
+                visibleWord = "dste",
+                isSuppressed = { _, _ -> false },
+            ),
+        )
+    }
+
+    @Test
+    fun straightAndCurlyApostrophesUseLetterOnlyTapGeometry() {
+        assertEquals(3, TapWordDecoder.expectedTapCount("l'ho"))
+        assertEquals(3, TapWordDecoder.expectedTapCount("l’ho"))
+        assertEquals(6, TapWordDecoder.expectedTapCount("perché"))
+        assertEquals(null, TapWordDecoder.expectedTapCount("abc123"))
     }
 
     private fun literalTaps(word: String): List<TapWordLatticeTap> = word.map { character ->

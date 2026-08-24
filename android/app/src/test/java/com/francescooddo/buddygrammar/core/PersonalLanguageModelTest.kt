@@ -1,9 +1,26 @@
 package com.francescooddo.buddygrammar.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PersonalLanguageModelTest {
+    @Test
+    fun `Italian apostrophe variants share canonical personal model keys`() {
+        val model = PersonalLanguageModel()
+        repeat(3) {
+            model.learn("io", "l'ho", "it-IT")
+            model.learn("qui", "c’è", "it-IT")
+            model.learn("aspetta", "po’", "it-IT")
+        }
+
+        assertEquals(3, model.usageCount("l’ho", "it-CH"))
+        assertEquals(3, model.usageCount("l'ho", "it-IT"))
+        assertEquals(listOf("l’ho"), model.predictions("io", 1, "it-IT"))
+        assertEquals(listOf("c’è"), model.completions("c'", 1, "it-IT"))
+        assertEquals(3, model.usageCount("po'", "it-IT"))
+    }
 
     @Test
     fun `predicts repeated continuations most frequent first`() {
@@ -27,6 +44,27 @@ class PersonalLanguageModelTest {
         model.learn(null, "fabulous")
         assertEquals(listOf("francesco"), model.completions("f", 2))
         assertEquals(listOf("francesco"), model.completions("fra", 2))
+    }
+
+    @Test
+    fun `explicit dictionary words are immediate and language scoped`() {
+        val model = PersonalLanguageModel()
+
+        assertTrue(model.addToDictionary("Caffè", "it-IT"))
+        assertEquals(3, model.usageCount("caffè", "it-CH"))
+        assertEquals(listOf("caffè"), model.completions("caf", 1, "it"))
+        assertEquals(emptyList<String>(), model.completions("caf", 1, "en-US"))
+        assertFalse(model.addToDictionary("Caffè", "it-CH"))
+    }
+
+    @Test
+    fun `suppressed correction is exact and language scoped`() {
+        val model = PersonalLanguageModel()
+
+        assertTrue(model.suppressCorrection("teh", "the", "en-US"))
+        assertTrue(model.isCorrectionSuppressed("TEH", "The", "en-GB"))
+        assertFalse(model.isCorrectionSuppressed("teh", "ten", "en-US"))
+        assertFalse(model.isCorrectionSuppressed("teh", "the", "it-IT"))
     }
 
     @Test
@@ -123,6 +161,21 @@ class PersonalLanguageModelTest {
         val reloaded = PersonalLanguageModel(initialData = persisted)
         assertEquals(listOf("bella"), reloaded.predictions("ciao", 1))
         assertEquals(listOf("bella"), reloaded.completions("b", 1))
+    }
+
+    @Test
+    fun `dictionary and correction preferences round trip`() {
+        var persisted: String? = null
+        val model = PersonalLanguageModel(onPersist = { persisted = it })
+        assertTrue(model.addToDictionary("buddyword", "en-US"))
+        assertTrue(model.suppressCorrection("buddywrod", "buddyword", "en-US"))
+        assertFalse(model.suppressCorrection("buddyword", "buddy word", "en-US"))
+        model.persist()
+
+        val reloaded = PersonalLanguageModel(initialData = persisted)
+        assertEquals(3, reloaded.usageCount("buddyword", "en-GB"))
+        assertTrue(reloaded.isCorrectionSuppressed("buddywrod", "buddyword", "en-US"))
+        assertFalse(reloaded.isCorrectionSuppressed("buddyword", "buddy word", "en-US"))
     }
 
     @Test

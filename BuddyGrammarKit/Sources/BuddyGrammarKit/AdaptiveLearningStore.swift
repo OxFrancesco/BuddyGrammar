@@ -48,6 +48,11 @@ public final class AdaptiveLearningStore: @unchecked Sendable {
         static let activePracticeSession = "BuddyGrammar.adaptive.session.v1"
     }
 
+    private struct VersionedTypingProfile: Codable {
+        let resetGeneration: UInt64
+        let profile: TypingProfile
+    }
+
     private let defaults: UserDefaults
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -67,11 +72,56 @@ public final class AdaptiveLearningStore: @unchecked Sendable {
     }
 
     public func loadTypingProfile() -> TypingProfile {
-        load(TypingProfile.self, forKey: Key.typingProfile) ?? TypingProfile()
+        withLock {
+            guard let data = defaults.data(forKey: Key.typingProfile) else {
+                return TypingProfile()
+            }
+            let generation = SharedPreferences(defaults: defaults)
+                .loadLearningResetGenerations().typing
+            if let versioned = try? decoder.decode(
+                VersionedTypingProfile.self,
+                from: data
+            ) {
+                guard versioned.resetGeneration == generation else {
+                    defaults.removeObject(forKey: Key.typingProfile)
+                    return TypingProfile()
+                }
+                return versioned.profile
+            }
+            // Generation zero is the only epoch that may contain the legacy
+            // unwrapped profile. After any reset, a legacy write is stale.
+            if generation == 0,
+               let legacy = try? decoder.decode(TypingProfile.self, from: data) {
+                return legacy
+            }
+            defaults.removeObject(forKey: Key.typingProfile)
+            return TypingProfile()
+        }
     }
 
-    public func saveTypingProfile(_ profile: TypingProfile) throws {
-        try save(profile, forKey: Key.typingProfile)
+    @discardableResult
+    public func saveTypingProfile(
+        _ profile: TypingProfile,
+        expectedResetGeneration: UInt64? = nil
+    ) throws -> Bool {
+        try withLock {
+            let preferences = SharedPreferences(defaults: defaults)
+            let generation = preferences.loadLearningResetGenerations().typing
+            guard expectedResetGeneration == nil
+                    || expectedResetGeneration == generation else {
+                return false
+            }
+            defaults.set(
+                try encoder.encode(
+                    VersionedTypingProfile(
+                        resetGeneration: generation,
+                        profile: profile
+                    )
+                ),
+                forKey: Key.typingProfile
+            )
+            return preferences.loadLearningResetGenerations().typing == generation
+        }
     }
 
     public func loadPracticeProfile() -> PracticeProfile {
@@ -124,6 +174,8 @@ public final class AdaptiveLearningStore: @unchecked Sendable {
         withLock {
             switch scope {
             case .typing:
+                SharedPreferences(defaults: defaults)
+                    .advanceTypingLearningResetGeneration()
                 defaults.removeObject(forKey: Key.typingProfile)
             case .language:
                 break
@@ -131,6 +183,8 @@ public final class AdaptiveLearningStore: @unchecked Sendable {
                 defaults.removeObject(forKey: Key.practiceProfile)
                 defaults.removeObject(forKey: Key.activePracticeSession)
             case .all:
+                SharedPreferences(defaults: defaults)
+                    .advanceTypingLearningResetGeneration()
                 defaults.removeObject(forKey: Key.typingProfile)
                 defaults.removeObject(forKey: Key.practiceProfile)
                 defaults.removeObject(forKey: Key.activePracticeSession)

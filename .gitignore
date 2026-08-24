@@ -10,4 +10,6 @@ BuddyGrammar.xcodeproj/project.xcworkspace/xcuserdata/
 BuddyGrammar.xcodeproj/xcuserdata/
 
 # codeview reference codebases
-resources/
+/resources/
+!BuddyGrammarKit/Sources/BuddyGrammarKit/Resources/
+!BuddyGrammarKit/Sources/BuddyGrammarKit/Resources/EmojiCatalog.json

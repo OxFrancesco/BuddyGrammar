@@ -63,14 +63,21 @@ data class TypingOutcome(
 )
 
 /** Safe persistence value: aggregate calibration only, never text or tap history. */
+data class KeyOffsetAggregate(
+    val observationCount: Int = 0,
+    val meanOffsetX: Double = 0.0,
+    val meanOffsetY: Double = 0.0,
+)
+
 data class TypingProfileSnapshot(
     val version: Int = CURRENT_PROFILE_VERSION,
     val observationCount: Int = 0,
     val meanOffsetX: Double = 0.0,
     val meanOffsetY: Double = 0.0,
+    val keyOffsets: Map<String, KeyOffsetAggregate> = emptyMap(),
 ) {
     companion object {
-        const val CURRENT_PROFILE_VERSION = 1
+        const val CURRENT_PROFILE_VERSION = 2
     }
 }
 
@@ -82,6 +89,10 @@ data class TypingProfileSnapshot(
 class TypingIntelligence(
     initialProfile: TypingProfileSnapshot = TypingProfileSnapshot(),
 ) {
+    private val usesLegacyGlobalFallback =
+        initialProfile.version == TypingProfileSnapshot.CURRENT_PROFILE_VERSION &&
+            initialProfile.observationCount >= MIN_PERSONAL_OBSERVATIONS &&
+            initialProfile.keyOffsets.isEmpty()
     private var observationCount = initialProfile
         .takeIf { it.version == TypingProfileSnapshot.CURRENT_PROFILE_VERSION }
         ?.observationCount
@@ -97,6 +108,17 @@ class TypingIntelligence(
         ?.meanOffsetY
         ?.coerceIn(-MAX_ABS_OBSERVED_OFFSET, MAX_ABS_OBSERVED_OFFSET)
         ?: 0.0
+    private val keyOffsets = initialProfile
+        .takeIf { it.version == TypingProfileSnapshot.CURRENT_PROFILE_VERSION }
+        ?.keyOffsets
+        .orEmpty()
+        .mapNotNull { (key, aggregate) ->
+            val character = key.singleOrNull()?.lowercaseChar()
+                ?.takeIf { QwertyGeometry.keyFor(it) != null }
+                ?: return@mapNotNull null
+            character to aggregate.normalized()
+        }
+        .toMap(mutableMapOf())
 
     fun resolve(
         tap: TapPoint,
@@ -112,11 +134,6 @@ class TypingIntelligence(
 
         val usesPersonalProfile = context.policy != TypingPolicy.GENERIC &&
             observationCount >= MIN_PERSONAL_OBSERVATIONS
-        val calibratedTap = if (usesPersonalProfile) {
-            TapPoint(x = tap.x - meanOffsetX, y = tap.y - meanOffsetY)
-        } else {
-            tap
-        }
         val priors = PrefixPriors.forContext(context)
         val candidateKeys = QwertyGeometry.adjacentTo(literalKey)
         val rankedPriors = priors?.let { values ->
@@ -135,8 +152,10 @@ class TypingIntelligence(
 
         val ranked = candidateKeys
             .map { key ->
+                val expectedCenter = expectedCenter(key, usesPersonalProfile)
                 val spatialLogLikelihood =
-                    -key.squaredDistanceTo(calibratedTap) / (2.0 * SPATIAL_SIGMA * SPATIAL_SIGMA)
+                    -key.squaredDistanceTo(tap, expectedCenter) /
+                        (2.0 * SPATIAL_SIGMA * SPATIAL_SIGMA)
                 val languageLogLikelihood = if (hasStrongPrior) {
                     ln(priors[key.character] ?: PRIOR_FLOOR) * LANGUAGE_WEIGHT
                 } else {
@@ -148,7 +167,13 @@ class TypingIntelligence(
         val winner = ranked.first()
         val runnerUp = ranked.getOrNull(1)
         val scoreMargin = winner.second - (runnerUp?.second ?: winner.second)
-        if (winner.first == literalKey || scoreMargin < MIN_SCORE_MARGIN) return literal(literalKey)
+        val winnerEvidence = keyOffsets[winner.first.character]?.observationCount ?: 0
+        val requiredMargin = if (usesPersonalProfile && winnerEvidence >= MIN_PERSONAL_OBSERVATIONS) {
+            MIN_CALIBRATED_SCORE_MARGIN
+        } else {
+            MIN_SCORE_MARGIN
+        }
+        if (winner.first == literalKey || scoreMargin < requiredMargin) return literal(literalKey)
 
         val rankedCandidates = candidatesFrom(ranked)
 
@@ -178,13 +203,67 @@ class TypingIntelligence(
         meanOffsetX += (offsetX - meanOffsetX) * learningRate
         meanOffsetY += (offsetY - meanOffsetY) * learningRate
         observationCount = nextCount
+
+        val key = outcome.intendedCharacter.lowercaseChar()
+        val current = keyOffsets[key] ?: KeyOffsetAggregate()
+        val keyCount = (current.observationCount + 1).coerceAtMost(MAX_KEY_OBSERVATIONS)
+        val keyLearningRate = 1.0 / keyCount
+        keyOffsets[key] = KeyOffsetAggregate(
+            observationCount = keyCount,
+            meanOffsetX = current.meanOffsetX +
+                (offsetX - current.meanOffsetX) * keyLearningRate,
+            meanOffsetY = current.meanOffsetY +
+                (offsetY - current.meanOffsetY) * keyLearningRate,
+        )
     }
 
     fun snapshot(): TypingProfileSnapshot = TypingProfileSnapshot(
         observationCount = observationCount,
         meanOffsetX = meanOffsetX,
         meanOffsetY = meanOffsetY,
+        keyOffsets = keyOffsets
+            .toSortedMap()
+            .mapKeys { (key, _) -> key.toString() },
     )
+
+    private fun expectedCenter(
+        key: QwertyKey,
+        usesPersonalProfile: Boolean,
+    ): TapPoint {
+        if (!usesPersonalProfile) return TapPoint(key.centerX, key.centerY)
+
+        val aggregate = keyOffsets[key.character]
+        if (aggregate != null && aggregate.observationCount > 0) {
+            val evidence = aggregate.observationCount.toDouble()
+            // Five explicit labels are the minimum before a key can claim an
+            // ambiguous border. One-off evidence stays strongly shrunk toward
+            // fixed QWERTY geometry when observations from other keys make the
+            // broader profile eligible.
+            val shrinkage = (evidence / MIN_PERSONAL_OBSERVATIONS).coerceAtMost(1.0)
+            return TapPoint(
+                x = key.centerX + (aggregate.meanOffsetX * shrinkage)
+                    .coerceIn(-MAX_PERSONAL_CENTER_SHIFT, MAX_PERSONAL_CENTER_SHIFT),
+                y = key.centerY + (aggregate.meanOffsetY * shrinkage)
+                    .coerceIn(-MAX_PERSONAL_CENTER_SHIFT, MAX_PERSONAL_CENTER_SHIFT),
+            )
+        }
+
+        if (!usesLegacyGlobalFallback) return TapPoint(key.centerX, key.centerY)
+
+        // Profiles written before v2 contain one bounded population offset.
+        // Retain it only as a migration fallback. New v2 evidence never lets
+        // one key's bias move unrelated regions.
+        return TapPoint(
+            x = key.centerX + meanOffsetX.coerceIn(
+                -MAX_PERSONAL_CENTER_SHIFT,
+                MAX_PERSONAL_CENTER_SHIFT,
+            ),
+            y = key.centerY + meanOffsetY.coerceIn(
+                -MAX_PERSONAL_CENTER_SHIFT,
+                MAX_PERSONAL_CENTER_SHIFT,
+            ),
+        )
+    }
 
     private fun literal(key: QwertyKey) = KeyResolution(
         character = key.character,
@@ -207,14 +286,23 @@ class TypingIntelligence(
         const val MIN_STRONG_PRIOR = 0.60
         const val MIN_PRIOR_MARGIN = 0.25
         const val MIN_SCORE_MARGIN = 0.35
+        const val MIN_CALIBRATED_SCORE_MARGIN = 0.10
         const val SPATIAL_SIGMA = 0.48
         const val LANGUAGE_WEIGHT = 0.85
         const val MAX_ABS_OBSERVED_OFFSET = 0.50
         const val MAX_PROFILE_OBSERVATIONS = 10_000
+        const val MAX_KEY_OBSERVATIONS = 512
         const val MIN_PERSONAL_OBSERVATIONS = 5
         const val MAX_CANDIDATES = 5
+        const val MAX_PERSONAL_CENTER_SHIFT = 0.35
     }
 }
+
+private fun KeyOffsetAggregate.normalized(): KeyOffsetAggregate = KeyOffsetAggregate(
+    observationCount = observationCount.coerceIn(0, 512),
+    meanOffsetX = meanOffsetX.takeIf(Double::isFinite)?.coerceIn(-0.5, 0.5) ?: 0.0,
+    meanOffsetY = meanOffsetY.takeIf(Double::isFinite)?.coerceIn(-0.5, 0.5) ?: 0.0,
+)
 
 private data class QwertyKey(
     val character: Char,
@@ -224,6 +312,12 @@ private data class QwertyKey(
     fun squaredDistanceTo(point: TapPoint): Double {
         val dx = point.x - centerX
         val dy = point.y - centerY
+        return dx * dx + dy * dy
+    }
+
+    fun squaredDistanceTo(point: TapPoint, expectedCenter: TapPoint): Double {
+        val dx = point.x - expectedCenter.x
+        val dy = point.y - expectedCenter.y
         return dx * dx + dy * dy
     }
 

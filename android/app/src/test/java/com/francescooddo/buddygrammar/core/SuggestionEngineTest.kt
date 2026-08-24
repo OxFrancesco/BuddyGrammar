@@ -112,6 +112,111 @@ class SuggestionEngineTest {
         assertEquals(3, suggestion.replaceBeforeCursor)
         assertTrue(suggestion.appendSpace)
         assertFalse(suggestion.isEmoji)
+        assertEquals(
+            AutomaticSuggestionSource.SPELLING,
+            suggestion.automaticReplacement?.source,
+        )
+        assertEquals("teh", suggestion.automaticReplacement?.originalText)
+    }
+
+    @Test
+    fun `correction metadata preserves the exact rendered apostrophe and context`() {
+        val lexicon = RankedLanguageLexicon(
+            mapOf("it" to listOf("l’ho")),
+        )
+
+        val suggestion = SuggestionEngine.suggest(
+            textBeforeCursor = "Dico l'ha",
+            languageTag = "it-IT",
+            lexicon = lexicon,
+        ).first { it.kind == SuggestionKind.CORRECTION }
+
+        assertEquals("l’ho", suggestion.text)
+        assertEquals(4, suggestion.replaceBeforeCursor)
+        assertEquals("l'ha", suggestion.automaticReplacement?.originalText)
+        assertEquals("Dico ", suggestion.automaticReplacement?.precedingContext)
+        assertEquals(" ", suggestion.automaticReplacement?.boundaryText)
+        assertEquals(
+            AutomaticSuggestionSource.SPELLING,
+            suggestion.automaticReplacement?.source,
+        )
+    }
+
+    @Test
+    fun `correction metadata preserves decomposed editor text for exact rollback`() {
+        val rawTypedWord = "cafe\u0300"
+        val lexicon = RankedLanguageLexicon(
+            mapOf("it" to listOf("café")),
+        )
+
+        val suggestion = SuggestionEngine.suggest(
+            textBeforeCursor = "Un $rawTypedWord",
+            languageTag = "it-IT",
+            lexicon = lexicon,
+        ).first { it.kind == SuggestionKind.CORRECTION }
+
+        assertEquals("café", suggestion.text)
+        assertEquals(rawTypedWord.length, suggestion.replaceBeforeCursor)
+        assertEquals(rawTypedWord, suggestion.automaticReplacement?.originalText)
+        assertEquals("Un ", suggestion.automaticReplacement?.precedingContext)
+    }
+
+    @Test
+    fun `only true corrections carry automatic replacement metadata`() {
+        val ordinarySuggestions = buildList {
+            addAll(SuggestionEngine.suggest("hel"))
+            addAll(SuggestionEngine.suggest("thank "))
+            addAll(SuggestionEngine.suggest("fire"))
+        }
+
+        assertTrue(
+            ordinarySuggestions
+                .filter { it.kind != SuggestionKind.CORRECTION }
+                .all { it.automaticReplacement == null },
+        )
+    }
+
+    @Test
+    fun `never suggest suppresses only the chosen correction pair`() {
+        val model = PersonalLanguageModel()
+        assertTrue(model.suppressCorrection("teh", "the", "en-US"))
+
+        assertTrue(
+            SuggestionEngine.suggest("teh", model, "en-GB")
+                .none { it.kind == SuggestionKind.CORRECTION },
+        )
+        assertEquals(
+            "the",
+            SuggestionEngine.suggest("teh", PersonalLanguageModel(), "en-US").first().text,
+        )
+    }
+
+    @Test
+    fun `add to dictionary immediately protects accepted spelling`() {
+        val model = PersonalLanguageModel()
+        assertTrue(model.addToDictionary("teh", "en-US"))
+
+        assertTrue(
+            SuggestionEngine.suggest("teh", model, "en-US")
+                .none { it.kind == SuggestionKind.CORRECTION },
+        )
+    }
+
+    @Test
+    fun `restored spelling needs repeated evidence before correction is protected`() {
+        val model = PersonalLanguageModel()
+        model.learnCommittedText("teh", languageTag = "en-US")
+
+        assertEquals(
+            "the",
+            SuggestionEngine.suggest("teh", model, "en-US").first().text,
+        )
+
+        repeat(2) { model.learnCommittedText("teh", languageTag = "en-US") }
+        assertTrue(
+            SuggestionEngine.suggest("teh", model, "en-US")
+                .none { it.kind == SuggestionKind.CORRECTION },
+        )
     }
 
     @Test
@@ -151,6 +256,47 @@ class SuggestionEngineTest {
         )
         assertTrue(
             SuggestionEngine.suggest("love", suggestionsAllowed = false).isEmpty(),
+        )
+    }
+
+    @Test
+    fun `shared language packs provide ranked completions without leakage`() {
+        val lexicon = contractLexicon()
+
+        assertEquals(
+            "home",
+            SuggestionEngine.suggest("I went hom", languageTag = "en-US", lexicon = lexicon)
+                .first().text,
+        )
+        assertEquals(
+            "dare",
+            SuggestionEngine.suggest("voglio dar", languageTag = "it-IT", lexicon = lexicon)
+                .first().text,
+        )
+        assertTrue(
+            SuggestionEngine.suggest("voglio hom", languageTag = "it-IT", lexicon = lexicon)
+                .none { it.text.equals("home", ignoreCase = true) },
+        )
+    }
+
+    @Test
+    fun `Italian completions canonicalize accents and apostrophes`() {
+        val lexicon = contractLexicon()
+
+        assertEquals(
+            "perché",
+            SuggestionEngine.suggest("perc", languageTag = "it-IT", lexicon = lexicon)
+                .first().text,
+        )
+        assertEquals(
+            "l’ho",
+            SuggestionEngine.suggest("l'h", languageTag = "it-IT", lexicon = lexicon)
+                .first().text,
+        )
+        assertEquals(
+            "c’è",
+            SuggestionEngine.suggest("c’", languageTag = "it-IT", lexicon = lexicon)
+                .first().text,
         )
     }
 }

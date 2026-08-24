@@ -1,5 +1,9 @@
 import Foundation
 
+/// Cross-process state machine for one keyboard-initiated dictation. The
+/// keyboard creates the session before handing off to the containing app,
+/// the app advances it while recording and transcribing, and the keyboard
+/// consumes the final transcript (or error) and clears it.
 public struct KeyboardDictationSession: Codable, Equatable, Sendable {
     public enum Phase: String, Codable, Equatable, Sendable {
         case launching

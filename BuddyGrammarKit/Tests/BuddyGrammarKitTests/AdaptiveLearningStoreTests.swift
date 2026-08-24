@@ -88,4 +88,60 @@ final class AdaptiveLearningStoreTests: XCTestCase {
 
         XCTAssertEqual(store.loadPracticeProfile(), PracticeProfile())
     }
+
+    func testTypingResetGenerationRejectsDirtyPreResetProfile() throws {
+        let store = AdaptiveLearningStore(defaults: defaults)
+        let preferences = SharedPreferences(defaults: defaults)
+        let staleGeneration = preferences.loadLearningResetGenerations().typing
+        let dirtyProfile = TypingProfile(explicitObservationCount: 9)
+
+        store.reset(.typing)
+
+        let currentGeneration = preferences.loadLearningResetGenerations().typing
+        XCTAssertNotEqual(currentGeneration, staleGeneration)
+        XCTAssertFalse(
+            try store.saveTypingProfile(
+                dirtyProfile,
+                expectedResetGeneration: staleGeneration
+            )
+        )
+        XCTAssertEqual(store.loadTypingProfile(), TypingProfile())
+        XCTAssertTrue(
+            try store.saveTypingProfile(
+                dirtyProfile,
+                expectedResetGeneration: currentGeneration
+            )
+        )
+        XCTAssertEqual(store.loadTypingProfile(), dirtyProfile)
+    }
+
+    func testTypingAndLanguageResetGenerationsRemainIndependent() {
+        let store = AdaptiveLearningStore(defaults: defaults)
+        let preferences = SharedPreferences(defaults: defaults)
+
+        preferences.resetPersonalLanguageLearning()
+        XCTAssertEqual(
+            preferences.loadLearningResetGenerations(),
+            LearningResetGenerations(language: 1, typing: 0)
+        )
+
+        store.reset(.typing)
+        XCTAssertEqual(
+            preferences.loadLearningResetGenerations(),
+            LearningResetGenerations(language: 1, typing: 1)
+        )
+    }
+
+    func testGenerationZeroLoadsLegacyUnwrappedTypingProfile() throws {
+        let legacyProfile = TypingProfile(explicitObservationCount: 3)
+        defaults.set(
+            try JSONEncoder().encode(legacyProfile),
+            forKey: "BuddyGrammar.adaptive.typing.v1"
+        )
+
+        XCTAssertEqual(
+            AdaptiveLearningStore(defaults: defaults).loadTypingProfile(),
+            legacyProfile
+        )
+    }
 }

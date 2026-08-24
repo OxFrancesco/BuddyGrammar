@@ -1,0 +1,89 @@
+name: Keyboard quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keyboard-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shared-contract:
+    name: Shared contract and generated data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Validate behavior contract
+        working-directory: shared/keyboard-contract
+        run: |
+          bun run validate
+          bun test
+
+      - name: Reject generated-data drift
+        run: |
+          bun scripts/sync-keyboard-contract-fixtures.ts --check
+          bun scripts/sync-swipe-lexicons.ts --check
+          bun scripts/generate-emoji-catalog.ts --check
+
+  swift:
+    name: Swift package and iOS build
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Test keyboard core
+        working-directory: BuddyGrammarKit
+        run: swift test --scratch-path "$RUNNER_TEMP/BuddyGrammarKit"
+
+      - name: Build iOS app and extensions without signing
+        run: |
+          xcodebuild \
+            -project BuddyGrammar.xcodeproj \
+            -scheme BuddyGrammarIOS \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath "$RUNNER_TEMP/BuddyGrammarIOS" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+  android:
+    name: Android unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Configure Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Test Android keyboard
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
+      - name: Assemble, compile instrumentation tests, and lint Android keyboard
+        working-directory: android
+        run: >-
+          ./gradlew
+          :app:assembleDebug
+          :app:compileDebugAndroidTestKotlin
+          :app:lintDebug
+          --no-daemon

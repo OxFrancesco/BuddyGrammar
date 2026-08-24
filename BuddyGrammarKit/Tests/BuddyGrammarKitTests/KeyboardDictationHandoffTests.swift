@@ -1,34 +1,42 @@
-import Foundation
-import Testing
+import XCTest
+
 @testable import BuddyGrammarKit
 
-struct KeyboardDictationHandoffTests {
-    @Test
-    func handoffURLRoundTripsItsSessionIdentifier() throws {
-        let sessionID = UUID(uuidString: "6E7DB394-999E-47D1-A8A5-565A74BD6D38")!
+final class KeyboardDictationHandoffTests: XCTestCase {
+    func testURLOpensDictationWithKeyboardSource() throws {
+        let sessionID = UUID()
+        let url = try XCTUnwrap(KeyboardDictationHandoff.url(for: sessionID))
 
-        let url = KeyboardDictationHandoff.url(for: sessionID)
-
-        #expect(url?.absoluteString == "buddygrammar://dictation?source=keyboard&session=6E7DB394-999E-47D1-A8A5-565A74BD6D38")
-        #expect(KeyboardDictationHandoff.sessionID(from: try #require(url)) == sessionID)
+        XCTAssertEqual(url.scheme, "buddygrammar")
+        XCTAssertEqual(url.host, "dictation")
+        XCTAssertTrue(url.absoluteString.contains("source=keyboard"))
     }
 
-    @Test
-    func handoffRejectsUnrelatedOrMalformedURLs() {
-        #expect(
-            KeyboardDictationHandoff.sessionID(
-                from: URL(string: "other://dictation?session=6E7DB394-999E-47D1-A8A5-565A74BD6D38")!
-            ) == nil
+    func testSessionIDRoundTrips() throws {
+        let sessionID = UUID()
+        let url = try XCTUnwrap(KeyboardDictationHandoff.url(for: sessionID))
+
+        XCTAssertEqual(KeyboardDictationHandoff.sessionID(from: url), sessionID)
+    }
+
+    func testRejectsForeignURLs() {
+        XCTAssertNil(
+            KeyboardDictationHandoff.sessionID(from: URL(string: "https://buddygrammar.ai")!)
         )
-        #expect(
+        XCTAssertNil(
             KeyboardDictationHandoff.sessionID(
-                from: URL(string: "buddygrammar://settings?session=6E7DB394-999E-47D1-A8A5-565A74BD6D38")!
-            ) == nil
+                from: URL(string: "buddygrammar://dictation?session=\(UUID().uuidString)")!
+            )
         )
-        #expect(
+        XCTAssertNil(
             KeyboardDictationHandoff.sessionID(
-                from: URL(string: "buddygrammar://dictation?session=not-a-uuid")!
-            ) == nil
+                from: URL(string: "buddygrammar://dictation?source=app")!
+            )
+        )
+        XCTAssertNil(
+            KeyboardDictationHandoff.sessionID(
+                from: URL(string: "buddygrammar://dictation?source=keyboard&session=not-a-uuid")!
+            )
         )
     }
 }

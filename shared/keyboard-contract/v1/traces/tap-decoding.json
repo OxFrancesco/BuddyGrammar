@@ -1,0 +1,163 @@
+{
+  "$schema": "../trace-suite.schema.json",
+  "schemaVersion": 1,
+  "catalogRevision": "2026.07.1",
+  "suite": "tap-decoding",
+  "cases": [
+    {
+      "id": "english-frequency-home",
+      "description": "English frequency evidence repairs an adjacent final-key miss while retaining the literal path.",
+      "input": {
+        "languageId": "en",
+        "policy": "automatic",
+        "taps": [
+          { "literalKey": "h", "resolvedKey": "h", "candidates": [{ "key": "h", "confidence": 1 }] },
+          { "literalKey": "o", "resolvedKey": "o", "candidates": [{ "key": "o", "confidence": 1 }] },
+          { "literalKey": "m", "resolvedKey": "m", "candidates": [{ "key": "m", "confidence": 1 }] },
+          { "literalKey": "r", "resolvedKey": "r", "candidates": [{ "key": "r", "confidence": 0.52 }, { "key": "e", "confidence": 0.48 }] }
+        ]
+      },
+      "expect": {
+        "literalWord": "homr",
+        "resolvedWord": "homr",
+        "topWord": "home",
+        "acceptedWord": "home",
+        "containsWords": ["home", "homr"],
+        "excludesWords": ["perché"]
+      }
+    },
+    {
+      "id": "italian-does-not-use-english-home",
+      "description": "The same lattice has no English frequency boost in the Italian language scope.",
+      "input": {
+        "languageId": "it-IT",
+        "policy": "automatic",
+        "taps": [
+          { "literalKey": "h", "resolvedKey": "h", "candidates": [{ "key": "h", "confidence": 1 }] },
+          { "literalKey": "o", "resolvedKey": "o", "candidates": [{ "key": "o", "confidence": 1 }] },
+          { "literalKey": "m", "resolvedKey": "m", "candidates": [{ "key": "m", "confidence": 1 }] },
+          { "literalKey": "r", "resolvedKey": "r", "candidates": [{ "key": "r", "confidence": 0.52 }, { "key": "e", "confidence": 0.48 }] }
+        ]
+      },
+      "expect": {
+        "literalWord": "homr",
+        "resolvedWord": "homr",
+        "topWord": "homr",
+        "acceptedWord": null,
+        "containsWords": ["homr"],
+        "excludesWords": ["perché"]
+      }
+    },
+    {
+      "id": "english-date-over-italian-dare",
+      "description": "English rank chooses date from an otherwise balanced date/dare lattice.",
+      "input": {
+        "languageId": "en-GB",
+        "policy": "automatic",
+        "taps": [
+          { "literalKey": "d", "resolvedKey": "d", "candidates": [{ "key": "d", "confidence": 1 }] },
+          { "literalKey": "a", "resolvedKey": "a", "candidates": [{ "key": "a", "confidence": 1 }] },
+          { "literalKey": "t", "resolvedKey": "t", "candidates": [{ "key": "t", "confidence": 0.5 }, { "key": "r", "confidence": 0.5 }] },
+          { "literalKey": "e", "resolvedKey": "e", "candidates": [{ "key": "e", "confidence": 1 }] }
+        ]
+      },
+      "expect": {
+        "literalWord": "date",
+        "resolvedWord": "date",
+        "topWord": "date",
+        "acceptedWord": null,
+        "containsWords": ["date"],
+        "excludesWords": ["perché"]
+      }
+    },
+    {
+      "id": "italian-dare-over-english-date",
+      "description": "Italian rank chooses dare from the same balanced lattice without an English prior leak.",
+      "input": {
+        "languageId": "it-CH",
+        "policy": "automatic",
+        "taps": [
+          { "literalKey": "d", "resolvedKey": "d", "candidates": [{ "key": "d", "confidence": 1 }] },
+          { "literalKey": "a", "resolvedKey": "a", "candidates": [{ "key": "a", "confidence": 1 }] },
+          { "literalKey": "t", "resolvedKey": "t", "candidates": [{ "key": "t", "confidence": 0.5 }, { "key": "r", "confidence": 0.5 }] },
+          { "literalKey": "e", "resolvedKey": "e", "candidates": [{ "key": "e", "confidence": 1 }] }
+        ]
+      },
+      "expect": {
+        "literalWord": "date",
+        "resolvedWord": "date",
+        "topWord": "dare",
+        "acceptedWord": "dare",
+        "containsWords": ["dare", "date"],
+        "excludesWords": ["home"]
+      }
+    },
+    {
+      "id": "italian-restores-accented-display",
+      "description": "An ASCII tap path ranks by geometry but emits the canonical accented Italian spelling.",
+      "input": {
+        "languageId": "it",
+        "policy": "automatic",
+        "taps": [
+          { "literalKey": "p", "resolvedKey": "p", "candidates": [{ "key": "p", "confidence": 1 }] },
+          { "literalKey": "e", "resolvedKey": "e", "candidates": [{ "key": "e", "confidence": 1 }] },
+          { "literalKey": "r", "resolvedKey": "r", "candidates": [{ "key": "r", "confidence": 1 }] },
+          { "literalKey": "c", "resolvedKey": "c", "candidates": [{ "key": "c", "confidence": 1 }] },
+          { "literalKey": "h", "resolvedKey": "h", "candidates": [{ "key": "h", "confidence": 1 }] },
+          { "literalKey": "r", "resolvedKey": "r", "candidates": [{ "key": "r", "confidence": 0.52 }, { "key": "e", "confidence": 0.48 }] }
+        ]
+      },
+      "expect": {
+        "literalWord": "perchr",
+        "resolvedWord": "perchr",
+        "topWord": "perché",
+        "acceptedWord": "perché",
+        "containsWords": ["perché", "perchr"],
+        "excludesWords": ["perche"]
+      }
+    },
+    {
+      "id": "italian-restores-elision-apostrophe",
+      "description": "An apostrophe-free tap geometry emits the canonical Italian elision spelling.",
+      "input": {
+        "languageId": "it-IT",
+        "policy": "automatic",
+        "taps": [
+          { "literalKey": "l", "resolvedKey": "l", "candidates": [{ "key": "l", "confidence": 1 }] },
+          { "literalKey": "h", "resolvedKey": "h", "candidates": [{ "key": "h", "confidence": 1 }] },
+          { "literalKey": "p", "resolvedKey": "p", "candidates": [{ "key": "p", "confidence": 0.52 }, { "key": "o", "confidence": 0.48 }] }
+        ]
+      },
+      "expect": {
+        "literalWord": "lhp",
+        "resolvedWord": "lhp",
+        "topWord": "l’ho",
+        "acceptedWord": "l’ho",
+        "containsWords": ["l’ho", "lhp"],
+        "excludesWords": ["lho"]
+      }
+    },
+    {
+      "id": "automatic-policy-abstains-on-balanced-oov",
+      "description": "The production automatic-correction policy abstains when balanced out-of-vocabulary paths have no confidence margin.",
+      "input": {
+        "languageId": "en-US",
+        "policy": "automatic",
+        "taps": [
+          { "literalKey": "q", "resolvedKey": "q", "candidates": [{ "key": "q", "confidence": 1 }] },
+          { "literalKey": "w", "resolvedKey": "w", "candidates": [{ "key": "w", "confidence": 1 }] },
+          { "literalKey": "e", "resolvedKey": "e", "candidates": [{ "key": "e", "confidence": 1 }] },
+          { "literalKey": "r", "resolvedKey": "r", "candidates": [{ "key": "r", "confidence": 0.5 }, { "key": "t", "confidence": 0.5 }] }
+        ]
+      },
+      "expect": {
+        "literalWord": "qwer",
+        "resolvedWord": "qwer",
+        "topWord": "qwer",
+        "acceptedWord": null,
+        "containsWords": ["qwer", "qwet"],
+        "excludesWords": ["home", "dare"]
+      }
+    }
+  ]
+}

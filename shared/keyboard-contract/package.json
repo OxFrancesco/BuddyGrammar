@@ -1,0 +1,10 @@
+{
+  "name": "@buddygrammar/keyboard-contract",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "validate": "bun run src/cli.ts",
+    "sync-native-fixtures": "bun run ../../scripts/sync-keyboard-contract-fixtures.ts"
+  }
+}

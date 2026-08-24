@@ -42,18 +42,25 @@ data class CorrectionUndoState(
             contextAfterCursor == anchorAfter
 }
 
-object TextContextExtractor {
+internal class TextContextExtractor(
+    private val boundaryProvider: GraphemeBoundaryProvider,
+) {
     private val terminators = setOf('.', '!', '?', '\n', '…')
 
     fun precedingSentence(context: String, maximumCharacters: Int = 1_000): TextCorrectionCandidate? {
         if (context.isEmpty() || maximumCharacters <= 0) return null
-        val bounded = context.takeLast(maximumCharacters)
+        val boundedText = boundedSuffix(context, maximumCharacters) ?: return null
+        val bounded = boundedText.value
         val contentEnd = bounded.indexOfLast { !it.isWhitespace() } + 1
         if (contentEnd <= 0) return null
         val lastContentIndex = contentEnd - 1
         val searchEnd = if (bounded[lastContentIndex] in terminators) lastContentIndex else contentEnd
         val previousTerminator = bounded.substring(0, searchEnd).indexOfLast { it in terminators }
-        val start = if (previousTerminator >= 0) previousTerminator + 1 else 0
+        val start = if (previousTerminator >= 0) {
+            boundedText.boundaryAtOrAfter(previousTerminator + 1) ?: return null
+        } else {
+            0
+        }
         return TextCorrectionCandidate.from(bounded.substring(start))
     }
 
@@ -63,8 +70,10 @@ object TextContextExtractor {
         maximumCharacters: Int = 1_000,
     ): CursorCorrectionCandidate? {
         if (maximumCharacters <= 0) return null
-        val before = contextBeforeCursor.takeLast(maximumCharacters)
-        val after = contextAfterCursor.take(maximumCharacters)
+        val boundedBefore = boundedSuffix(contextBeforeCursor, maximumCharacters) ?: return null
+        val boundedAfter = boundedPrefix(contextAfterCursor, maximumCharacters) ?: return null
+        val before = boundedBefore.value
+        val after = boundedAfter.value
         val lastContentIndex = before.indexOfLast { !it.isWhitespace() }
 
         if (lastContentIndex >= 0 && before[lastContentIndex] in terminators) {
@@ -77,15 +86,75 @@ object TextContextExtractor {
         }
 
         val previousTerminator = before.indexOfLast { it in terminators }
-        val left = before.substring(if (previousTerminator >= 0) previousTerminator + 1 else 0)
+        val leftStart = if (previousTerminator >= 0) {
+            boundedBefore.boundaryAtOrAfter(previousTerminator + 1) ?: return null
+        } else {
+            0
+        }
+        val left = before.substring(leftStart)
         val nextTerminator = after.indexOfFirst { it in terminators }
-        val right = after.substring(0, if (nextTerminator >= 0) nextTerminator + 1 else after.length)
+        val rightEnd = if (nextTerminator >= 0) {
+            boundedAfter.boundaryAtOrAfter(nextTerminator + 1) ?: return null
+        } else {
+            after.length
+        }
+        val right = after.substring(0, rightEnd)
         val candidate = TextCorrectionCandidate.from(left + right) ?: return null
         return CursorCorrectionCandidate(
             candidate = candidate,
             textBeforeCursor = left,
             textAfterCursor = right,
         )
+    }
+
+    private fun boundedSuffix(text: String, maximumCharacters: Int): BoundedText? {
+        if (!text.hasWellFormedUtf16()) return null
+        val boundaries = boundaryProvider.validatedBoundaries(text) ?: return null
+        val minimumStart = (text.length - maximumCharacters).coerceAtLeast(0)
+        val start = boundaries.firstOrNull { it >= minimumStart } ?: return null
+        return BoundedText(
+            value = text.substring(start),
+            boundaries = boundaries
+                .asSequence()
+                .filter { it >= start }
+                .map { it - start }
+                .toList()
+                .toIntArray(),
+        )
+    }
+
+    private fun boundedPrefix(text: String, maximumCharacters: Int): BoundedText? {
+        if (!text.hasWellFormedUtf16()) return null
+        val boundaries = boundaryProvider.validatedBoundaries(text) ?: return null
+        val maximumEnd = maximumCharacters.coerceAtMost(text.length)
+        val end = boundaries.lastOrNull { it <= maximumEnd } ?: return null
+        return BoundedText(
+            value = text.substring(0, end),
+            boundaries = boundaries.takeWhile { it <= end }.toIntArray(),
+        )
+    }
+
+    private data class BoundedText(
+        val value: String,
+        val boundaries: IntArray,
+    ) {
+        fun boundaryAtOrAfter(offset: Int): Int? = boundaries.firstOrNull { it >= offset }
+    }
+
+    private fun String.hasWellFormedUtf16(): Boolean {
+        var index = 0
+        while (index < length) {
+            val codeUnit = this[index]
+            when {
+                codeUnit.isHighSurrogate() -> {
+                    if (index + 1 >= length || !this[index + 1].isLowSurrogate()) return false
+                    index += 2
+                }
+                codeUnit.isLowSurrogate() -> return false
+                else -> index += 1
+            }
+        }
+        return true
     }
 }
 

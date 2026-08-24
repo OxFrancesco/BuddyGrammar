@@ -34,6 +34,52 @@ final class PersonalLanguageModelTests: XCTestCase {
         XCTAssertEqual(model.completions(forPrefix: "fra", limit: 2), ["francesco"])
     }
 
+    func testExplicitDictionaryWordsAreImmediateAndLanguageScoped() {
+        let model = makeModel()
+
+        XCTAssertTrue(model.addToDictionary("Caffè", languageCode: "it-IT"))
+        XCTAssertEqual(model.usageCount(for: "caffè", languageCode: "it-CH"), 3)
+        XCTAssertEqual(
+            model.completions(forPrefix: "caf", languageCode: "it-IT", limit: 1),
+            ["caffè"]
+        )
+        XCTAssertEqual(model.completions(forPrefix: "caf", limit: 1), [])
+        XCTAssertFalse(model.addToDictionary("Caffè", languageCode: "it-CH"))
+    }
+
+    func testSuppressedCorrectionIsExactAndLanguageScoped() {
+        let model = makeModel()
+
+        XCTAssertTrue(
+            model.suppressCorrection(
+                typed: "teh",
+                suggestion: "the",
+                languageCode: "en-US"
+            )
+        )
+        XCTAssertTrue(
+            model.isCorrectionSuppressed(
+                typed: "TEH",
+                suggestion: "The",
+                languageCode: "en-GB"
+            )
+        )
+        XCTAssertFalse(
+            model.isCorrectionSuppressed(
+                typed: "teh",
+                suggestion: "ten",
+                languageCode: "en-US"
+            )
+        )
+        XCTAssertFalse(
+            model.isCorrectionSuppressed(
+                typed: "teh",
+                suggestion: "the",
+                languageCode: "it-IT"
+            )
+        )
+    }
+
     func testExplicitRejectionRemovesMistakenVocabularyEvidence() {
         let model = makeModel()
         for _ in 0..<3 {
@@ -86,6 +132,46 @@ final class PersonalLanguageModelTests: XCTestCase {
         XCTAssertEqual(reloaded.predictions(after: "ciao", limit: 1), ["bella"])
     }
 
+    func testPersistsExplicitDictionaryAndCorrectionPreferences() throws {
+        let suiteName = "PersonalLanguageModelPreferenceTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let model = PersonalLanguageModel(defaults: defaults)
+        model.addToDictionary("Buddyword", languageCode: "en-US")
+        model.suppressCorrection(
+            typed: "buddyword",
+            suggestion: "buddy word",
+            languageCode: "en-US"
+        )
+        // Exact replacement phrases are valid because text shortcuts can
+        // expand one token into multiple words. Persist a single-word pair as
+        // well so both preference shapes survive a reload.
+        model.suppressCorrection(
+            typed: "buddywrod",
+            suggestion: "buddyword",
+            languageCode: "en-US"
+        )
+        model.persist()
+
+        let reloaded = PersonalLanguageModel(defaults: defaults)
+        XCTAssertEqual(reloaded.usageCount(for: "buddyword"), 3)
+        XCTAssertTrue(
+            reloaded.isCorrectionSuppressed(
+                typed: "buddywrod",
+                suggestion: "buddyword",
+                languageCode: "en-GB"
+            )
+        )
+        XCTAssertTrue(
+            reloaded.isCorrectionSuppressed(
+                typed: "buddyword",
+                suggestion: "buddy word",
+                languageCode: "en-US"
+            )
+        )
+    }
+
     func testResetDeletesInMemoryAndPersistedVocabulary() throws {
         let suiteName = "PersonalLanguageModelResetTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -102,6 +188,39 @@ final class PersonalLanguageModelTests: XCTestCase {
         XCTAssertEqual(
             PersonalLanguageModel(defaults: defaults).usageCount(for: "privateword"),
             0
+        )
+    }
+
+    func testLiveModelCannotRetainOrResurrectWordsAfterResetGenerationAdvances() throws {
+        let suiteName = "PersonalLanguageModelGenerationTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let preferences = SharedPreferences(defaults: defaults)
+        let liveModel = preferences.makePersonalLanguageModel()
+        for _ in 0..<3 {
+            liveModel.learn(previousWord: nil, word: "persistedsecret")
+        }
+        liveModel.persist()
+        for _ in 0..<3 {
+            liveModel.learn(previousWord: nil, word: "unsavedsecret")
+        }
+
+        preferences.resetPersonalLanguageLearning()
+
+        XCTAssertEqual(liveModel.usageCount(for: "persistedsecret"), 0)
+        XCTAssertEqual(liveModel.usageCount(for: "unsavedsecret"), 0)
+        liveModel.persist()
+        let reloaded = preferences.makePersonalLanguageModel()
+        XCTAssertEqual(reloaded.usageCount(for: "persistedsecret"), 0)
+        XCTAssertEqual(reloaded.usageCount(for: "unsavedsecret"), 0)
+
+        for _ in 0..<3 {
+            liveModel.learn(previousWord: nil, word: "postreset")
+        }
+        liveModel.persist()
+        XCTAssertEqual(
+            preferences.makePersonalLanguageModel().usageCount(for: "postreset"),
+            3
         )
     }
 
@@ -214,6 +333,27 @@ final class PersonalLanguageModelTests: XCTestCase {
         XCTAssertEqual(model.usageCount(for: "bella", languageCode: "it-IT"), 2)
     }
 
+    func testItalianApostropheVariantsShareCanonicalPersonalModelKeys() {
+        let model = makeModel()
+        for _ in 0..<3 {
+            model.learn(previousWord: "io", word: "l'ho", languageCode: "it-IT")
+            model.learn(previousWord: "qui", word: "c’è", languageCode: "it-IT")
+            model.learn(previousWord: "aspetta", word: "po’", languageCode: "it-IT")
+        }
+
+        XCTAssertEqual(model.usageCount(for: "l’ho", languageCode: "it-CH"), 3)
+        XCTAssertEqual(model.usageCount(for: "l'ho", languageCode: "it-IT"), 3)
+        XCTAssertEqual(
+            model.predictions(after: "io", languageCode: "it-IT", limit: 1),
+            ["l’ho"]
+        )
+        XCTAssertEqual(
+            model.completions(forPrefix: "c'", languageCode: "it-IT", limit: 1),
+            ["c’è"]
+        )
+        XCTAssertEqual(model.usageCount(for: "po'", languageCode: "it-IT"), 3)
+    }
+
     func testItalianNamespacePersistsAndDoesNotLeakIntoEnglishCompletions() throws {
         let suiteName = "PersonalLanguageModelLanguageTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -257,5 +397,33 @@ final class WordFrequencyLexiconTests: XCTestCase {
     func testRankOfCommonWordIsLow() throws {
         let rank = try XCTUnwrap(WordFrequencyLexicon.shared.rank(of: "the"))
         XCTAssertLessThan(rank, 10)
+    }
+
+    func testBundledLanguagePacksExposeExpectedCountsWithoutCrossLanguageFallback() {
+        XCTAssertEqual(WordFrequencyLexicon.shared.wordCount(languageCode: "en-US"), 8_000)
+        XCTAssertEqual(WordFrequencyLexicon.shared.wordCount(languageCode: "it-IT"), 1_096)
+        XCTAssertNotNil(WordFrequencyLexicon.shared.rank(of: "home", languageCode: "en"))
+        XCTAssertNil(WordFrequencyLexicon.shared.rank(of: "home", languageCode: "it"))
+        XCTAssertNotNil(WordFrequencyLexicon.shared.rank(of: "dare", languageCode: "it"))
+        XCTAssertNil(WordFrequencyLexicon.shared.rank(of: "dare", languageCode: "en"))
+    }
+
+    func testItalianGeometryLookupPreservesCanonicalDisplay() {
+        XCTAssertEqual(
+            WordFrequencyLexicon.shared.match(for: "perche", languageCode: "it")?.display,
+            "perché"
+        )
+        XCTAssertEqual(
+            WordFrequencyLexicon.shared.match(for: "l'ho", languageCode: "it")?.display,
+            "l’ho"
+        )
+        XCTAssertEqual(
+            WordFrequencyLexicon.shared.completions(
+                forPrefix: "c'",
+                languageCode: "it-IT",
+                limit: 1
+            ),
+            ["c’è"]
+        )
     }
 }

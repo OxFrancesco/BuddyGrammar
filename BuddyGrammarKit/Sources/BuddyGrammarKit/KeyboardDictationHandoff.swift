@@ -1,8 +1,9 @@
 import Foundation
 
 /// The URL contract shared by the keyboard extension and the containing app.
-/// The main app owns microphone capture; the keyboard only initiates the
-/// handoff and later inserts the completed transcript.
+/// The main app owns microphone capture and ElevenLabs transcription; the
+/// keyboard only initiates the handoff and later inserts the completed
+/// transcript from the shared container.
 public enum KeyboardDictationHandoff {
     public static let scheme = "buddygrammar"
     public static let host = "dictation"

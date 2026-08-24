@@ -42,7 +42,7 @@ struct QuickDictationLiveActivity: Widget {
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Text("Tap the BuddyGrammar mic in any enabled keyboard to dictate.")
+                    Text(footer(for: context.state.phase))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -114,8 +114,21 @@ private func detail(
 ) -> String {
     switch phase {
     case .ready: "Microphone ready for keyboard dictation"
-    case .recording: "Tap the keyboard mic again to stop"
+    case .recording: "Stop from the BuddyGrammar keyboard when done"
     case .processing: "Transcribing and correcting"
+    }
+}
+
+private func footer(
+    for phase: QuickDictationActivityAttributes.ContentState.Phase
+) -> String {
+    switch phase {
+    case .ready:
+        "Tap the BuddyGrammar mic in any enabled keyboard to dictate."
+    case .recording:
+        "Keep talking in any app. Stop from the BuddyGrammar keyboard to insert your words."
+    case .processing:
+        "Your transcript will appear in the BuddyGrammar keyboard in a moment."
     }
 }
 

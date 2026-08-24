@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://buddygrammar.app/schemas/keyboard-catalog/v1/trace-suite.schema.json",
+  "title": "BuddyGrammar keyboard conformance trace suite v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "catalogRevision", "suite", "cases"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "catalogRevision": { "type": "string", "minLength": 1 },
+    "suite": {
+      "enum": [
+        "capability-policy",
+        "correction-receipts",
+        "interaction-routing",
+        "swipe-dwell",
+        "swipe-recognition",
+        "tap-decoding"
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "longPressDelayMilliseconds",
+        "swipeDistance",
+        "alternateStep",
+        "cursorActivationMilliseconds",
+        "cursorActivationDistance",
+        "cursorStep",
+        "deleteRepeatDelayMilliseconds",
+        "deleteRepeatIntervalMilliseconds"
+      ],
+      "properties": {
+        "longPressDelayMilliseconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "swipeDistance": { "type": "number", "exclusiveMinimum": 0 },
+        "alternateStep": { "type": "number", "exclusiveMinimum": 0 },
+        "cursorActivationMilliseconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "cursorActivationDistance": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "cursorStep": { "type": "number", "exclusiveMinimum": 0 },
+        "deleteRepeatDelayMilliseconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "deleteRepeatIntervalMilliseconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "input", "expect"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$"
+          },
+          "description": { "type": "string", "minLength": 1 },
+          "input": { "type": "object" },
+          "events": { "type": "array", "items": { "type": "object" } },
+          "expect": { "type": "object" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "tapCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "confidence"],
+      "properties": {
+        "key": { "type": "string", "pattern": "^[A-Za-z]$" },
+        "confidence": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "tap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["literalKey", "resolvedKey", "candidates"],
+      "properties": {
+        "literalKey": { "type": "string", "pattern": "^[A-Za-z]$" },
+        "resolvedKey": { "type": "string", "pattern": "^[A-Za-z]$" },
+        "candidates": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 15,
+          "items": { "$ref": "#/$defs/tapCandidate" }
+        }
+      }
+    },
+    "tapDecodingCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "input", "expect"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$"
+        },
+        "description": { "type": "string", "minLength": 1 },
+        "input": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["languageId", "policy", "taps"],
+          "properties": {
+            "languageId": { "type": "string", "minLength": 2 },
+            "policy": { "enum": ["suggestion", "automatic"] },
+            "taps": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "items": { "$ref": "#/$defs/tap" }
+            }
+          }
+        },
+        "expect": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "literalWord",
+            "resolvedWord",
+            "topWord",
+            "acceptedWord",
+            "containsWords",
+            "excludesWords"
+          ],
+          "properties": {
+            "literalWord": { "type": "string", "minLength": 1 },
+            "resolvedWord": { "type": "string", "minLength": 1 },
+            "topWord": { "type": "string", "minLength": 1 },
+            "acceptedWord": {
+              "oneOf": [
+                { "type": "string", "minLength": 1 },
+                { "type": "null" }
+              ]
+            },
+            "containsWords": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "excludesWords": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "suite": { "const": "interaction-routing" } },
+        "required": ["suite"]
+      },
+      "then": { "required": ["configuration"] }
+    },
+    {
+      "if": {
+        "properties": { "suite": { "const": "tap-decoding" } },
+        "required": ["suite"]
+      },
+      "then": {
+        "properties": {
+          "cases": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/$defs/tapDecodingCase" }
+          }
+        }
+      }
+    }
+  ]
+}

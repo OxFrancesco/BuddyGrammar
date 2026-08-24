@@ -4,7 +4,9 @@ package com.francescooddo.buddygrammar.core
 object TextInsertionFormatter {
     data class InsertionPlan(val text: String, val deleteBeforeCursor: Int)
 
-    fun planInsertion(text: String, contextBeforeCursor: String): InsertionPlan {
+    fun planInsertion(text: String, contextBeforeCursor: String?): InsertionPlan {
+        // Unknown context means literal insertion: infer neither spacing nor deletion.
+        if (contextBeforeCursor == null) return InsertionPlan(text, deleteBeforeCursor = 0)
         val deleteCount = whitespaceToDeleteBefore(contextBeforeCursor, text)
         val contextAfterDeletion = contextBeforeCursor.dropLast(deleteCount)
         return InsertionPlan(

@@ -54,17 +54,17 @@ final class IOSAppModel {
     var detectedLanguageCode: String?
     var alert: AppAlert?
     var notice: AppNotice?
-    private(set) var keyboardDictationSessionID: UUID?
     let isSharedContainerReady: Bool
+    private(set) var keyboardDictationSessionID: UUID?
 
+    @ObservationIgnored private var keyboardStopMonitorTask: Task<Void, Never>?
+    @ObservationIgnored private var backgroundTaskIdentifier: UIBackgroundTaskIdentifier = .invalid
     private let preferences: SharedPreferences?
     private let adaptiveStore: AdaptiveLearningStore?
     private let audioRecorder: IOSAudioRecorder
     private let transcriptionClient: ElevenLabsTranscriptionClient
     private let textPolisher: DictationTextPolisher
     private let dynamicIslandController: DynamicIslandDictationController
-    private var keyboardStopMonitorTask: Task<Void, Never>?
-    private var backgroundTaskIdentifier: UIBackgroundTaskIdentifier = .invalid
 
     init(
         preferences: SharedPreferences? = nil,
@@ -151,7 +151,6 @@ final class IOSAppModel {
             persistSettings(successMessage: nil)
             showNotice("Dynamic Island dictation readiness ended", kind: .information)
         }
-
     }
 
     var isCloudReady: Bool {
@@ -159,6 +158,9 @@ final class IOSAppModel {
             && settings.hasAcceptedCloudProcessing
     }
 
+    /// True while a keyboard-initiated dictation owns the recorder. The
+    /// Dictate tab uses this to tell the user they can return to the app
+    /// they were typing in while the recording continues.
     var isKeyboardDictationActive: Bool {
         keyboardDictationSessionID != nil
             && (dictationPhase.isRecording || dictationPhase.isProcessing)
@@ -235,7 +237,7 @@ final class IOSAppModel {
         adaptiveTypingEnabled: Bool,
         personalizedPracticeEnabled: Bool,
         acceptsCloudProcessing: Bool,
-        quickDictationDuration: QuickDictationDuration
+        copiesCompletedDictationToClipboard: Bool
     ) {
         let trimmedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedInstruction = correctionInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -262,7 +264,7 @@ final class IOSAppModel {
         settings.adaptiveTypingEnabled = adaptiveTypingEnabled
         settings.personalizedPracticeEnabled = personalizedPracticeEnabled
         settings.hasAcceptedCloudProcessing = acceptsCloudProcessing
-        settings.quickDictationDuration = quickDictationDuration
+        settings.copiesCompletedDictationToClipboard = copiesCompletedDictationToClipboard
         persistSettings(successMessage: "Preferences saved")
     }
 
@@ -275,6 +277,7 @@ final class IOSAppModel {
             return
         }
 
+        // Hand the audio session from the readiness engine to the recorder.
         if dynamicIslandController.isReady {
             await dynamicIslandController.prepareForRecording()
         }
@@ -282,14 +285,13 @@ final class IOSAppModel {
         do {
             let startedAt = try await audioRecorder.start()
             dictationPhase = .recording(startedAt: startedAt)
+            await dynamicIslandController.prepareForRecording(startedAt: startedAt)
             if settings.autoCorrectDictation {
-                let canUseOnDevice = keyboardSessionID == nil
-                    && UIApplication.shared.applicationState == .active
+                let canUseOnDevice = UIApplication.shared.applicationState == .active
                 Task { [textPolisher] in
                     await textPolisher.warmUp(canUseOnDevice: canUseOnDevice)
                 }
             }
-            await dynamicIslandController.prepareForRecording(startedAt: startedAt)
             detectedLanguageCode = nil
             self.keyboardDictationSessionID = keyboardSessionID
             if let keyboardSessionID {
@@ -317,6 +319,26 @@ final class IOSAppModel {
             self.keyboardDictationSessionID = nil
             showAlert(title: "Couldn’t start recording", message: error.localizedDescription)
             await dynamicIslandController.resumeAfterRecording(settings: settings)
+        }
+    }
+
+    /// The keyboard hands off to this app because extensions cannot record
+    /// audio. Open the Dictate tab and begin capturing immediately so the
+    /// user can speak without extra taps, swipe back to the app they were
+    /// typing in, and stop from the keyboard when done.
+    func handleKeyboardDictationHandoff(sessionID: UUID?) {
+        // Acknowledge the keyboard's pending request so it can tell the
+        // difference between a successful launch and a blocked one.
+        _ = preferences?.consumeDictationHandoffRequest()
+        selectedTab = .dictation
+        guard settings.hasCompletedOnboarding,
+              !dictationPhase.isRecording,
+              !dictationPhase.isProcessing else { return }
+        let keyboardSessionID = sessionID.flatMap { id in
+            preferences?.loadKeyboardDictationSession()?.id == id ? id : nil
+        }
+        Task { [weak self] in
+            await self?.startDictation(keyboardSessionID: keyboardSessionID)
         }
     }
 
@@ -372,8 +394,7 @@ final class IOSAppModel {
                         modelID: settings.activeOpenRouterModelID,
                         instruction: settings.correctionInstruction,
                         languageCode: transcript.languageCode,
-                        canUseOnDevice: keyboardSessionID == nil
-                            && UIApplication.shared.applicationState == .active
+                        canUseOnDevice: UIApplication.shared.applicationState == .active
                     )
                 } catch {
                     correctionFailure = error
@@ -386,7 +407,6 @@ final class IOSAppModel {
                 text: finalText,
                 languageCode: transcript.languageCode
             )
-            copyToClipboard(finalText)
             if let keyboardSessionID {
                 try preferences?.updateKeyboardDictationSession(
                     id: keyboardSessionID,
@@ -395,15 +415,27 @@ final class IOSAppModel {
                     languageCode: transcript.languageCode
                 )
             }
+            let copiedToClipboard = settings.copiesCompletedDictationToClipboard
+            if copiedToClipboard {
+                copyToClipboard(finalText)
+            }
             dictationPhase = .ready
 
             if let correctionFailure {
+                let savedResult = copiedToClipboard
+                    ? "Transcript saved and copied"
+                    : "Transcript saved locally"
                 showNotice(
-                    "Transcript saved and copied without correction: \(correctionFailure.localizedDescription)",
+                    "\(savedResult) without correction: \(correctionFailure.localizedDescription)",
                     kind: .information
                 )
             } else {
-                showNotice("Saved locally, copied, and ready for the keyboard", kind: .success)
+                showNotice(
+                    copiedToClipboard
+                        ? "Saved locally, copied, and ready for the keyboard"
+                        : "Saved locally and ready for the keyboard",
+                    kind: .success
+                )
             }
         } catch {
             if let keyboardSessionID {
@@ -440,83 +472,9 @@ final class IOSAppModel {
         }
     }
 
-    func saveDraftForKeyboard() {
-        let text = transcriptDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else {
-            showAlert(title: "Nothing to save", message: "Enter or dictate some text first.")
-            return
-        }
-
-        do {
-            try savePendingTranscript(
-                text,
-                languageCode: detectedLanguageCode
-            )
-            try preferences?.saveDictation(
-                SavedDictation(
-                    rawTranscript: text,
-                    text: text,
-                    languageCode: detectedLanguageCode
-                )
-            )
-            copyToClipboard(text)
-            dictationPhase = .ready
-            showNotice("Saved locally, copied, and ready for the keyboard", kind: .success)
-        } catch {
-            showAlert(title: "Couldn’t save transcript", message: error.localizedDescription)
-        }
-    }
-
-    func clearTranscript() {
-        preferences?.clearPendingTranscript()
-        preferences?.clearSavedDictation()
-        pendingTranscript = nil
-        transcriptDraft = ""
-        detectedLanguageCode = nil
-        dictationPhase = .idle
-        showNotice("Transcript cleared", kind: .information)
-    }
-
-    func resetAdaptiveLearning(_ scope: AdaptiveLearningScope) {
-        guard let adaptiveStore else {
-            showAlert(
-                title: "Couldn’t reset learning",
-                message: SharedContainerError.unavailable.localizedDescription
-            )
-            return
-        }
-        adaptiveStore.reset(scope)
-        if scope == .language || scope == .all {
-            let defaults = UserDefaults(
-                suiteName: BuddyGrammarConfiguration.appGroupIdentifier
-            ) ?? .standard
-            PersonalLanguageModel(defaults: defaults).reset()
-        }
-        showNotice(resetMessage(for: scope), kind: .information)
-    }
-
-    private func resetMessage(for scope: AdaptiveLearningScope) -> String {
-        switch scope {
-        case .typing: "Touch calibration reset"
-        case .language: "Learned words reset"
-        case .practice: "Practice history reset"
-        case .all: "All on-device learning reset"
-        }
-    }
-
-    func handleDeepLink(_ url: URL) {
-        guard let sessionID = KeyboardDictationHandoff.sessionID(from: url),
-              preferences?.loadKeyboardDictationSession()?.id == sessionID,
-              !dictationPhase.isRecording,
-              !dictationPhase.isProcessing else {
-            return
-        }
-        selectedTab = .dictation
-        Task { [weak self] in
-            await self?.startDictation(keyboardSessionID: sessionID)
-        }
-    }
-
+    /// Poll fallback for the keyboard's stop request. The Darwin signal is
+    /// delivered instantly while this process runs, but shared state is the
+    /// source of truth in case a signal is missed.
     private func monitorKeyboardStopRequest(sessionID: UUID) {
         keyboardStopMonitorTask?.cancel()
         keyboardStopMonitorTask = Task { [weak self] in
@@ -536,6 +494,9 @@ final class IOSAppModel {
         }
     }
 
+    /// Transcription and correction outlive the audio session once the
+    /// recording stops, so ask iOS for the standard finite background window
+    /// to finish the network round-trips.
     private func beginBackgroundProcessing() {
         guard backgroundTaskIdentifier == .invalid else { return }
         backgroundTaskIdentifier = UIApplication.shared.beginBackgroundTask(
@@ -559,6 +520,75 @@ final class IOSAppModel {
         guard backgroundTaskIdentifier != .invalid else { return }
         UIApplication.shared.endBackgroundTask(backgroundTaskIdentifier)
         backgroundTaskIdentifier = .invalid
+    }
+
+    func saveDraftForKeyboard() {
+        let text = transcriptDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            showAlert(title: "Nothing to save", message: "Enter or dictate some text first.")
+            return
+        }
+
+        do {
+            try savePendingTranscript(
+                text,
+                languageCode: detectedLanguageCode
+            )
+            try preferences?.saveDictation(
+                SavedDictation(
+                    rawTranscript: text,
+                    text: text,
+                    languageCode: detectedLanguageCode
+                )
+            )
+            let copiedToClipboard = settings.copiesCompletedDictationToClipboard
+            if copiedToClipboard {
+                copyToClipboard(text)
+            }
+            dictationPhase = .ready
+            showNotice(
+                copiedToClipboard
+                    ? "Saved locally, copied, and ready for the keyboard"
+                    : "Saved locally and ready for the keyboard",
+                kind: .success
+            )
+        } catch {
+            showAlert(title: "Couldn’t save transcript", message: error.localizedDescription)
+        }
+    }
+
+    func clearTranscript() {
+        preferences?.clearPendingTranscript()
+        preferences?.clearSavedDictation()
+        pendingTranscript = nil
+        transcriptDraft = ""
+        detectedLanguageCode = nil
+        dictationPhase = .idle
+        showNotice("Transcript cleared", kind: .information)
+    }
+
+    func resetAdaptiveLearning(_ scope: AdaptiveLearningScope) {
+        guard let adaptiveStore, let preferences else {
+            showAlert(
+                title: "Couldn’t reset learning",
+                message: SharedContainerError.unavailable.localizedDescription
+            )
+            return
+        }
+        adaptiveStore.reset(scope)
+        if scope == .language || scope == .all {
+            preferences.resetPersonalLanguageLearning()
+        }
+        showNotice(resetMessage(for: scope), kind: .information)
+    }
+
+    private func resetMessage(for scope: AdaptiveLearningScope) -> String {
+        switch scope {
+        case .typing: "Touch calibration reset"
+        case .language: "Learned words reset"
+        case .practice: "Practice history reset"
+        case .all: "All on-device learning reset"
+        }
     }
 
     private func savePendingTranscript(
