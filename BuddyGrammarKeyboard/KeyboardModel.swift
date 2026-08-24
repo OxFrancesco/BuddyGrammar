@@ -248,19 +248,30 @@ private final class KeyboardInputCorrectionEditorAdapter: CorrectionCompositionE
     private weak var delegate: (any KeyboardModelDelegate)?
     private let contextAccess: EditorFeatureAccess
     private let expectedContextBeforeReplacement: String?
+    /// When provided, freshness checks read the keyboard's maintained mirror
+    /// instead of the host proxy. The mirror is invalidated on any external
+    /// edit, in which case this closure falls back to a live read — so the
+    /// value is identical, minus an IPC round trip per keystroke.
+    private let cachedContextProvider: (@MainActor () -> String?)?
 
     init(
         delegate: any KeyboardModelDelegate,
         contextAccess: EditorFeatureAccess,
-        expectedContextBeforeReplacement: String? = nil
+        expectedContextBeforeReplacement: String? = nil,
+        cachedContextProvider: (@MainActor () -> String?)? = nil
     ) {
         self.delegate = delegate
         self.contextAccess = contextAccess
         self.expectedContextBeforeReplacement = expectedContextBeforeReplacement
+        self.cachedContextProvider = cachedContextProvider
     }
 
     var correctionCompositionText: String {
-        EditorContextAccessGate.read(capability: contextAccess) {
+        if let cachedContextProvider,
+           let cached = cachedContextProvider() {
+            return cached ?? ""
+        }
+        return EditorContextAccessGate.read(capability: contextAccess) {
             delegate?.contextBeforeInput
         } ?? ""
     }
@@ -332,19 +343,28 @@ private final class AppliedCorrectionEditorAdapter: CorrectionCompositionEditor 
 struct WordCompletionSource {
     private let checker = UITextChecker()
 
+    /// Supplemental entries pre-sorted once when the lexicon arrives, so the
+    /// per-keystroke completion path filters a sorted array instead of
+    /// sorting a dictionary on every call.
+    private var sortedSupplementalCompletions: [(input: String, replacement: String)] = []
+
+    mutating func updateSupplementalReplacements(_ replacements: [String: String]) {
+        sortedSupplementalCompletions = replacements
+            .map { ($0.key, $0.value) }
+            .sorted { $0.replacement.localizedCaseInsensitiveCompare($1.replacement) == .orderedAscending }
+    }
+
     func completions(
         for partial: String,
-        language: String = "en_US",
-        supplementalReplacements: [String: String]
+        language: String = "en_US"
     ) -> [String] {
         let range = NSRange(location: 0, length: (partial as NSString).length)
-        var candidates = supplementalReplacements
-            .filter { input, replacement in
-                input.hasPrefix(partial.lowercased())
-                    || replacement.lowercased().hasPrefix(partial.lowercased())
-            }
-            .map(\.value)
-            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        let loweredPartial = partial.lowercased()
+        var candidates = sortedSupplementalCompletions.filter { input, replacement in
+            input.hasPrefix(loweredPartial)
+                || replacement.lowercased().hasPrefix(loweredPartial)
+        }
+        .map(\.replacement)
         if let completions = checker.completions(
             forPartialWordRange: range,
             in: partial,
@@ -355,10 +375,17 @@ struct WordCompletionSource {
         return candidates
     }
 
-    func spellingCandidates(
+    struct SpellingProbe {
+        let isWordFlagged: Bool
+        let guesses: [String]
+    }
+
+    /// One pass over the platform checker: whether the word is flagged plus
+    /// any guesses, so callers never pay the misspelling scan twice.
+    func probeSpelling(
         for word: String,
         language: String
-    ) -> [String] {
+    ) -> SpellingProbe {
         let range = NSRange(location: 0, length: (word as NSString).length)
         let misspelledRange = checker.rangeOfMisspelledWord(
             in: word,
@@ -367,15 +394,26 @@ struct WordCompletionSource {
             wrap: false,
             language: language
         )
-        if misspelledRange.location != NSNotFound,
-           misspelledRange.length == range.length {
-            return checker.guesses(
+        let isFlagged = misspelledRange.location != NSNotFound
+            && misspelledRange.length == range.length
+        guard isFlagged else {
+            return SpellingProbe(isWordFlagged: false, guesses: [])
+        }
+        return SpellingProbe(
+            isWordFlagged: true,
+            guesses: checker.guesses(
                 forWordRange: range,
                 in: word,
                 language: language
             ) ?? []
-        }
-        return []
+        )
+    }
+
+    func spellingCandidates(
+        for word: String,
+        language: String
+    ) -> [String] {
+        probeSpelling(for: word, language: language).guesses
     }
 
     /// Supplementary lexicon entries are exact user shortcuts, not fuzzy
@@ -460,6 +498,7 @@ final class KeyboardModel {
     @ObservationIgnored private let keyboardCatalog: KeyboardCatalog?
     @ObservationIgnored private let languageDefaults: UserDefaults
     @ObservationIgnored private lazy var completionSource = WordCompletionSource()
+    @ObservationIgnored private var checkerWarmupTask: Task<Void, Never>?
     @ObservationIgnored private var correctionTask: Task<Void, Never>?
     @ObservationIgnored private var typingRefreshTask: Task<Void, Never>?
     @ObservationIgnored private var correctionRequestID: UUID?
@@ -580,7 +619,44 @@ final class KeyboardModel {
         startDictationMonitor()
         scheduleSuggestionsRefresh()
         warmUpCorrectionConnectionIfNeeded()
+        warmUpPlatformCheckerIfNeeded()
     }
+
+    /// The first spell-check call in a process makes UIKit load its lexicon,
+    /// which costs tens to hundreds of milliseconds. Warming it shortly after
+    /// activation keeps that cost off the first word boundary the user types
+    /// while letting the keyboard's first frame render immediately.
+    private func warmUpPlatformCheckerIfNeeded() {
+        guard !didWarmUpPlatformChecker else { return }
+        didWarmUpPlatformChecker = true
+        let languages = [
+            activeKeyboardLanguageCode.replacingOccurrences(of: "-", with: "_"),
+            "en_US",
+        ]
+        checkerWarmupTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            _ = self // keep model alive through warmup; checker itself is static state
+            let probe = UITextChecker()
+            let range = NSRange(location: 0, length: 3)
+            for language in Set(languages) where !language.isEmpty {
+                _ = probe.rangeOfMisspelledWord(
+                    in: "teh",
+                    range: range,
+                    startingAt: 0,
+                    wrap: false,
+                    language: language
+                )
+                _ = probe.guesses(
+                    forWordRange: range,
+                    in: "teh",
+                    language: language
+                )
+            }
+        }
+    }
+
+    @ObservationIgnored private var didWarmUpPlatformChecker = false
 
     private func warmUpCorrectionConnectionIfNeeded() {
         guard editorCapabilities.cloudCorrection.isAllowed,
@@ -1400,6 +1476,7 @@ final class KeyboardModel {
             lexicon.entries.map { ($0.userInput.lowercased(), $0.documentText) },
             uniquingKeysWith: { first, _ in first }
         )
+        completionSource.updateSupplementalReplacements(supplementalReplacements)
         cachedSwipeEngine = nil
     }
 
@@ -1860,21 +1937,19 @@ final class KeyboardModel {
         }
 
         let checkerLanguage = languageCode.replacingOccurrences(of: "-", with: "_")
+        let probe = completionSource.probeSpelling(for: partial, language: checkerLanguage)
         return textIntelligence.suggestions(
             for: context,
             shortcutReplacement: completionSource.shortcutReplacement(
                 for: partial,
                 supplementalReplacements: supplementalReplacements
             ),
-            spellingCandidates: completionSource.spellingCandidates(
+            spellingCandidates: probe.guesses,
+            completionCandidates: completionSource.completions(
                 for: partial,
                 language: checkerLanguage
             ),
-            completionCandidates: completionSource.completions(
-                for: partial,
-                language: checkerLanguage,
-                supplementalReplacements: supplementalReplacements
-            ),
+            isPlatformWordFlagged: probe.isWordFlagged,
             languageCode: languageCode,
             limit: limit
         )
@@ -2290,11 +2365,21 @@ final class KeyboardModel {
         let effect = correctionCompositionSession.finishActiveReceipt(
             in: KeyboardInputCorrectionEditorAdapter(
                 delegate: delegate,
-                contextAccess: editorCapabilities.readContext
+                contextAccess: editorCapabilities.readContext,
+                cachedContextProvider: { [weak self] in
+                    self?.usableCachedContextBeforeInput()
+                }
             ),
             acceptLearning: acceptLearning
         )
         acceptCompositionLearning(effect)
+    }
+
+    /// The maintained context mirror when it is provably in sync; nil (which
+    /// sends callers to a live proxy read) after any external edit.
+    private func usableCachedContextBeforeInput() -> String? {
+        guard isCachedContextUsable else { return nil }
+        return cachedContextBeforeInput
     }
 
     private func acceptCompositionLearning(_ effect: CorrectionCompositionEffect) {
@@ -2581,8 +2666,18 @@ final class KeyboardModel {
     }
 
     private func refreshKeyboardDictationSession() {
-        guard let preferences,
-              let session = preferences.loadKeyboardDictationSession() else {
+        guard let preferences else {
+            if dictationPhase != .idle {
+                dictationPhase = .idle
+            }
+            return
+        }
+        // The idle poll runs forever; skip the JSON decode entirely until a
+        // session actually exists in the shared container.
+        guard dictationPhase != .idle || preferences.hasKeyboardDictationSessionData() else {
+            return
+        }
+        guard let session = preferences.loadKeyboardDictationSession() else {
             if dictationPhase != .idle {
                 dictationPhase = .idle
             }
@@ -2986,8 +3081,8 @@ final class KeyboardModel {
     }
 
     private func setQuietly(_ newStatus: KeyboardStatus) {
-        status = newStatus
-        isStatusPresented = false
+        if status != newStatus { status = newStatus }
+        if isStatusPresented { isStatusPresented = false }
         statusDismissTask?.cancel()
     }
 
@@ -2999,7 +3094,9 @@ final class KeyboardModel {
         cancelCorrection()
         if hadCorrection {
             setQuietly(baselineStatus)
-        } else {
+        } else if status != baselineStatus {
+            // Assigning identical state still notifies observers, which would
+            // re-evaluate the suggestion bar on every single keystroke.
             status = baselineStatus
         }
     }

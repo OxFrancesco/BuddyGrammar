@@ -28,8 +28,7 @@ struct KeyboardRootView: View {
                         .coordinateSpace(.named(keyboardPointerCoordinateSpace))
                         .overlay {
                             if model.layoutMode == .letters {
-                                SwipeTrail(points: interaction.swipePoints)
-                                    .allowsHitTesting(false)
+                                SwipeTrailLayer(interaction: interaction)
                             }
                         }
                         .overlay {
@@ -78,8 +77,6 @@ struct KeyboardRootView: View {
             .padding(.bottom, 4)
         }
         .background(Color(uiColor: .systemGray5))
-        .sensoryFeedback(.impact(weight: .light), trigger: interaction.keyFeedbackCount)
-        .sensoryFeedback(.selection, trigger: interaction.selectionFeedbackCount)
         .onAppear {
             interaction.connect(
                 model: model,
@@ -969,7 +966,7 @@ struct DeleteKey: View {
             .frame(width: metrics.wideFunctionKeyWidth, height: metrics.keyHeight)
             .foregroundStyle(Color.primary)
             .background(
-                interaction.isPressed(.delete)
+                interaction.visualState(for: "delete").isPressed
                     ? Color(uiColor: .systemGray2)
                     : Color(uiColor: .systemGray3)
             )
@@ -1048,13 +1045,17 @@ private struct RoutedCharacterKey: View {
         .key(output, alternates: alternates, allowsSwipe: allowsSwipe)
     }
 
+    private var pressedState: KeyVisualState {
+        interaction.visualState(for: (id ?? output).lowercased())
+    }
+
     var body: some View {
         Text(displayedOutput)
             .font(.title3)
             .frame(maxWidth: .infinity, minHeight: metrics.keyHeight)
             .foregroundStyle(Color.primary)
             .background(
-                interaction.isPressed(target)
+                pressedState.isPressed
                     ? Color(uiColor: .systemGray3)
                     : Color(uiColor: .systemBackground)
             )
@@ -1075,7 +1076,7 @@ private struct RoutedCharacterKey: View {
             .overlay(alignment: .top) {
                 keyPopup
             }
-            .zIndex(interaction.isPressed(target) ? 5 : 0)
+            .zIndex(pressedState.isPressed ? 5 : 0)
             .accessibilityLabel(accessibilityLabel ?? output)
             .accessibilityHint(alternates.isEmpty ? "" : "Hold for accented characters")
             .accessibilityAddTraits(.isButton)
@@ -1096,7 +1097,7 @@ private struct RoutedCharacterKey: View {
 
     @ViewBuilder
     private var keyPopup: some View {
-        if interaction.isPressed(target), !interaction.alternateOptions.isEmpty {
+        if pressedState.isPressed, !interaction.alternateOptions.isEmpty {
             HStack(spacing: 3) {
                 ForEach(interaction.alternateOptions, id: \.self) { alternate in
                     Text(model.shiftState.isShifted ? alternate.uppercased() : alternate)
@@ -1121,7 +1122,7 @@ private struct RoutedCharacterKey: View {
             .clipShape(.rect(cornerRadius: 8))
             .shadow(radius: 3, y: 1)
             .offset(y: -52)
-        } else if interaction.isPressed(target), interaction.previewText != nil {
+        } else if pressedState.isPressed, interaction.previewText != nil {
             Text(displayedOutput)
                 .font(.title2)
                 .frame(width: max(42, metrics.letterKeyWidth * 1.15), height: 52)
@@ -1225,7 +1226,7 @@ private struct SpaceKey: View {
             .frame(maxWidth: .infinity, minHeight: metrics.keyHeight)
             .foregroundStyle(Color.primary)
             .background(
-                interaction.isPressed(.space)
+                interaction.visualState(for: "space").isPressed
                     ? Color(uiColor: .systemGray3)
                     : Color(uiColor: .systemBackground)
             )
@@ -1345,6 +1346,17 @@ private struct KeyboardPressAndHoldButton<Label: View>: View {
     }
 }
 
+/// Owns the swipe-trail subscription so pointer samples invalidate only this
+/// overlay instead of re-evaluating the entire root keyboard body.
+private struct SwipeTrailLayer: View {
+    let interaction: KeyboardPointerInteraction
+
+    var body: some View {
+        SwipeTrail(points: interaction.swipePoints)
+            .allowsHitTesting(false)
+    }
+}
+
 private struct SwipeTrail: View {
     let points: [CGPoint]
 
@@ -1372,18 +1384,31 @@ struct KeyFramePreferenceKey: PreferenceKey {
     }
 }
 
+/// Per-key press highlight state. Each key view subscribes to its own
+/// instance, so a keystroke invalidates exactly two key views (the newly and
+/// previously pressed keys) instead of re-rendering the entire keyboard tree.
+@MainActor
+@Observable
+final class KeyVisualState {
+    var isPressed = false
+}
+
 @MainActor
 @Observable
 final class KeyboardPointerInteraction {
     private static let maximumLiveSwipeSamples = 256
 
-    private(set) var pressedTarget: KeyboardInteractionTarget?
+    /// Prepared once so haptics fire with zero allocation on the keystroke
+    /// path; `.sensoryFeedback` counters were rejected because observing them
+    /// forced a full root re-render on every press.
+    private static let keyHaptic = UIImpactFeedbackGenerator(style: .light)
+    private static let selectionHaptic = UISelectionFeedbackGenerator()
+
+    @ObservationIgnored private(set) var pressedTarget: KeyboardInteractionTarget?
     private(set) var previewText: String?
     private(set) var alternateOptions: [String] = []
     private(set) var selectedAlternateIndex = 0
     private(set) var swipePoints: [CGPoint] = []
-    private(set) var keyFeedbackCount = 0
-    private(set) var selectionFeedbackCount = 0
     private(set) var isCursorMode = false
 
     @ObservationIgnored private weak var model: KeyboardModel?
@@ -1391,6 +1416,7 @@ final class KeyboardPointerInteraction {
     @ObservationIgnored private var pointerOwner = SinglePointerInteractionOwner<UUID>()
     @ObservationIgnored private var deadlineTasks: [Int: Task<Void, Never>] = [:]
     @ObservationIgnored private var keyFrames: [String: CGRect] = [:]
+    @ObservationIgnored private var keyStates: [String: KeyVisualState] = [:]
     @ObservationIgnored private var activeLiteral: String?
     @ObservationIgnored private var activeOrigin: CGPoint?
     @ObservationIgnored private var activeDownTime: TimeInterval?
@@ -1420,6 +1446,33 @@ final class KeyboardPointerInteraction {
 
     func isPressed(_ target: KeyboardInteractionTarget) -> Bool {
         pressedTarget == target
+    }
+
+    /// Stable per-key press state. Keys read `visualState(for:).isPressed`;
+    /// only the two keys whose pressed status actually changes are notified.
+    func visualState(for identifier: String) -> KeyVisualState {
+        if let state = keyStates[identifier] { return state }
+        let state = KeyVisualState()
+        keyStates[identifier] = state
+        return state
+    }
+
+    private func setVisualPressed(_ pressed: Bool, for identifier: String?) {
+        guard let identifier else { return }
+        visualState(for: identifier).isPressed = pressed
+    }
+
+    private static func identifier(for target: KeyboardInteractionTarget?) -> String? {
+        switch target {
+        case .key(let literal, _, _):
+            return literal.lowercased()
+        case .space:
+            return "space"
+        case .delete:
+            return "delete"
+        case nil:
+            return nil
+        }
     }
 
     @discardableResult
@@ -1536,7 +1589,11 @@ final class KeyboardPointerInteraction {
         for effect in effects {
             switch effect {
             case .pressed(let target):
-                if pressedTarget != target { pressedTarget = target }
+                if pressedTarget != target {
+                    setVisualPressed(false, for: Self.identifier(for: pressedTarget))
+                    pressedTarget = target
+                    setVisualPressed(true, for: Self.identifier(for: target))
+                }
                 if target == nil {
                     if isCursorMode { isCursorMode = false }
                 }
@@ -1572,13 +1629,15 @@ final class KeyboardPointerInteraction {
                 commitSwipe()
             case .feedback(.key):
                 model?.playInputClick()
-                keyFeedbackCount &+= 1
+                Self.keyHaptic.impactOccurred()
+                Self.keyHaptic.prepare()
                 finishFeedbackLatencyMeasurement()
             case .feedback(.selection):
                 if pressedTarget == .space, !isCursorMode {
                     isCursorMode = true
                 }
-                selectionFeedbackCount &+= 1
+                Self.selectionHaptic.selectionChanged()
+                Self.selectionHaptic.prepare()
                 finishFeedbackLatencyMeasurement()
             }
         }
