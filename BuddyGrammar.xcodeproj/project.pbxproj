@@ -48,6 +48,7 @@
 		5FB9EE1C8AAD0B97CB65D604 /* HotkeyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 908D2AE224565B3F3CC3BFE1 /* HotkeyService.swift */; };
 		5FFBE0702C8814DC28E0B20C /* RewriteProviderController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23AE1B90882E13C9E9D4B8A3 /* RewriteProviderController.swift */; };
 		611CF422C61FE0FBAF278C9E /* LaunchAtLoginService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A305BF4FE3856ADA021A9EBF /* LaunchAtLoginService.swift */; };
+		632E59988BBB54B54001E33A /* BuddyGrammarKeyboardEndToEndTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FB4EC1662A334F5C40D9D09 /* BuddyGrammarKeyboardEndToEndTests.swift */; };
 		63F2A849AEB3ADEA7EB9F6CA /* ElevenLabsSpeechEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10CAF292C2E0A85782F6959 /* ElevenLabsSpeechEngine.swift */; };
 		65A9B0B129F7AF3E059474D1 /* BuddyGrammarKit in Frameworks */ = {isa = PBXBuildFile; productRef = D73ED00B5F8BC037B441E0AC /* BuddyGrammarKit */; };
 		6840B5297B8CC48ADFADA06D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9F0C4FCB6E20B4C640E4044B /* PrivacyInfo.xcprivacy */; };
@@ -155,6 +156,7 @@
 		07C21333CC71CEBF1B10F536 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		08847FA7A9628F8E6667AAA8 /* VoiceModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModelStore.swift; sourceTree = "<group>"; };
 		08EFC487E79222678DEBCE2D /* VoiceModelStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModelStoreTests.swift; sourceTree = "<group>"; };
+		0FB4EC1662A334F5C40D9D09 /* BuddyGrammarKeyboardEndToEndTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddyGrammarKeyboardEndToEndTests.swift; sourceTree = "<group>"; };
 		107B1EC7D5A87990BBC88391 /* BuddyGrammarKeyboard.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BuddyGrammarKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		110A9F0B5791E5FE0B6EA441 /* AccessibilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityService.swift; sourceTree = "<group>"; };
 		141E5FE2D6C7CE2647C88CA1 /* KeyboardModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardModel.swift; sourceTree = "<group>"; };
@@ -525,6 +527,7 @@
 			isa = PBXGroup;
 			children = (
 				5C7B107BDBED6F2D8827A0F3 /* BuddyGrammarIOSUITests.swift */,
+				0FB4EC1662A334F5C40D9D09 /* BuddyGrammarKeyboardEndToEndTests.swift */,
 			);
 			path = BuddyGrammarIOSUITests;
 			sourceTree = "<group>";
@@ -835,6 +838,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3FB237812ABACE13D7F7F967 /* BuddyGrammarIOSUITests.swift in Sources */,
+				632E59988BBB54B54001E33A /* BuddyGrammarKeyboardEndToEndTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1096,7 +1100,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = G2442WAF29;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -1318,7 +1322,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = G2442WAF29;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
