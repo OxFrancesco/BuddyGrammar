@@ -98,6 +98,11 @@ public struct WordFrequencyLexicon: Sendable {
         entriesByLanguage[LanguageSupport.primaryCode(for: languageCode)]?.map(\.display) ?? []
     }
 
+    /// All canonical entries for a language, most frequent first.
+    public func matches(languageCode: String?) -> [Match] {
+        entriesByLanguage[LanguageSupport.primaryCode(for: languageCode)] ?? []
+    }
+
     /// Canonical language-pack match for a typed display or ASCII geometry.
     public func match(for word: String, languageCode: String?) -> Match? {
         guard let geometry = Self.geometry(for: word) else { return nil }

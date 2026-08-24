@@ -1,4 +1,4 @@
-import Foundation
+@preconcurrency import Foundation
 
 /// Learns the user's own unigram, bigram, and trigram frequencies from what
 /// they type so predictions and completions adapt to their vocabulary.
@@ -7,7 +7,7 @@ import Foundation
 /// own container, so nothing leaves the device) and capped with periodic
 /// halving so old habits decay instead of dominating forever.
 public final class PersonalLanguageModel {
-    private struct Storage: Codable {
+    private struct Storage: Codable, Sendable {
         var resetGeneration: UInt64 = 0
         var unigrams: [String: Int] = [:]
         var bigrams: [String: [String: Int]] = [:]
@@ -135,7 +135,7 @@ public final class PersonalLanguageModel {
         enforceLimits()
         unsavedChanges += 1
         if unsavedChanges >= Self.saveInterval {
-            persist()
+            scheduleBackgroundPersist()
         }
     }
 
@@ -246,6 +246,22 @@ public final class PersonalLanguageModel {
                 languageCode: languageCode
             )
         )
+    }
+
+    /// Whether the user rejected any correction for this exact typed word.
+    /// Used as a stand-down signal when the platform checker flags a word but
+    /// offers no guesses of its own.
+    public func hasSuppressedCorrections(
+        typed: String,
+        languageCode: String? = nil
+    ) -> Bool {
+        synchronizeResetGenerationIfNeeded()
+        guard let typed = Self.normalizedCorrectionText(typed) else { return false }
+        let prefix = Self.correctionPreferencePrefix(
+            typed: typed,
+            languageCode: languageCode
+        )
+        return storage.suppressedCorrections.contains { $0.hasPrefix(prefix) }
     }
 
     /// Learns every word in committed text, preserving up to two words of
@@ -370,6 +386,21 @@ public final class PersonalLanguageModel {
         if let data = try? JSONEncoder().encode(storage) {
             defaults.set(data, forKey: Self.storageKey)
             unsavedChanges = 0
+        }
+    }
+
+    /// Fire-and-forget persistence for the typing hot path: serializing
+    /// thousands of learned entries is a multi-millisecond stall that must
+    /// never land between keystrokes. Explicit ``persist()`` stays synchronous
+    /// for callers that need the write completed before continuing.
+    private func scheduleBackgroundPersist() {
+        synchronizeResetGenerationIfNeeded()
+        guard unsavedChanges > 0, let defaults else { return }
+        let snapshot = storage
+        unsavedChanges = 0
+        Task.detached(priority: .utility) {
+            guard let data = try? JSONEncoder().encode(snapshot) else { return }
+            defaults.set(data, forKey: Self.storageKey)
         }
     }
 
@@ -545,6 +576,15 @@ public final class PersonalLanguageModel {
             + typed
             + correctionSeparator
             + suggestion
+    }
+
+    private static func correctionPreferencePrefix(
+        typed: String,
+        languageCode: String?
+    ) -> String {
+        namespacePrefix(for: languageCode)
+            + typed
+            + correctionSeparator
     }
 
     private static func normalized(_ word: String) -> String? {
